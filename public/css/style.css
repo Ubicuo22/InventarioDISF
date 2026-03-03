@@ -1,0 +1,48 @@
+/* ── Fuentes ── */
+@font-face {
+  font-family: 'Behmer';
+  src: url('/fonts/Behmer.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Base ── */
+[x-cloak]         { display: none !important; }
+*                 { box-sizing: border-box; }
+body              { background: #0f172a; color: #f1f5f9; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+.font-behmer      { font-family: 'Behmer', sans-serif; letter-spacing: .02em; }
+
+/* ── Componentes ── */
+.card             { background: #1e293b; border: 1px solid #334155; border-radius: 16px; }
+.input-dark       { background: #0f172a; border: 1px solid #334155; color: #f1f5f9;
+                    border-radius: 10px; padding: 10px 14px; width: 100%; font-size: 15px; }
+.input-dark:focus { outline: none; border-color: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,.2); }
+.btn-primary      { background: #10b981; color: #fff; border-radius: 10px; padding: 12px 20px;
+                    font-weight: 600; font-size: 15px; border: none; cursor: pointer; transition: background .15s; }
+.btn-primary:hover  { background: #059669; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-ghost        { background: transparent; border: 1px solid #334155; color: #94a3b8;
+                    border-radius: 10px; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+.btn-ghost:hover  { background: #1e293b; color: #f1f5f9; }
+
+/* ── Badges de stock ── */
+.badge-ok         { background: #052e16; color: #86efac; }
+.badge-low        { background: #422006; color: #fde68a; }
+.badge-zero       { background: #450a0a; color: #fca5a5; }
+
+/* ── Tabs ── */
+.tab-active       { color: #10b981; border-bottom: 2px solid #10b981; }
+.tab-inactive     { color: #64748b; }
+
+/* ── Animaciones ── */
+.slide-up         { animation: slideUp .2s ease; }
+@keyframes slideUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: none; } }
+
+/* ── Modal ── */
+.modal-backdrop   { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
+
+/* ── Scroll ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+select option { background: #1e293b; }
