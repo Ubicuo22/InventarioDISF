@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="es" x-data="bodega()" x-init="init()">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Bodega — Disfruleg</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    /* ── Fuentes ── */
+    @font-face {
+      font-family: 'Behmer';
+      src: url('/fonts/Behmer.otf') format('opentype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    /* ── Base ── */
+    [x-cloak]         { display: none !important; }
+    *                 { box-sizing: border-box; }
+    body              { background: #0f172a; color: #f1f5f9; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    .font-behmer      { font-family: 'Behmer', sans-serif; letter-spacing: .02em; }
+
+    /* ── Componentes ── */
+    .card             { background: #1e293b; border: 1px solid #334155; border-radius: 16px; }
+    .input-dark       { background: #0f172a; border: 1px solid #334155; color: #f1f5f9;
+                        border-radius: 10px; padding: 10px 14px; width: 100%; font-size: 15px; }
+    .input-dark:focus { outline: none; border-color: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,.2); }
+    .btn-primary      { background: #10b981; color: #fff; border-radius: 10px; padding: 12px 20px;
+                        font-weight: 600; font-size: 15px; border: none; cursor: pointer; transition: background .15s; }
+    .btn-primary:hover  { background: #059669; }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-ghost        { background: transparent; border: 1px solid #334155; color: #94a3b8;
+                        border-radius: 10px; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+    .btn-ghost:hover  { background: #1e293b; color: #f1f5f9; }
+
+    /* ── Badges de stock ── */
+    .badge-ok         { background: #052e16; color: #86efac; }
+    .badge-low        { background: #422006; color: #fde68a; }
+    .badge-zero       { background: #450a0a; color: #fca5a5; }
+
+    /* ── Tabs ── */
+    .tab-active       { color: #10b981; border-bottom: 2px solid #10b981; }
+    .tab-inactive     { color: #64748b; }
+
+    /* ── Animaciones ── */
+    .slide-up         { animation: slideUp .2s ease; }
+    @keyframes slideUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: none; } }
+
+    /* ── Modal ── */
+    .modal-backdrop   { background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
+
+    /* ── Scroll ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    select option { background: #1e293b; }
+  </style>
+</head>
+
+<body class="min-h-screen">
+
+<!-- ══════════════════════════════════════════════════════════
+     PANTALLA DE LOGIN
+══════════════════════════════════════════════════════════ -->
+<div x-show="!session" x-cloak class="min-h-screen flex flex-col items-center justify-center p-4 gap-8">
+  <div class="card p-8 w-full max-w-sm slide-up">
+
+    <!-- Logo Disfruleg -->
+    <div class="flex flex-col items-center mb-8 gap-3">
+      <img
+        src="/assets/disfruleg-logo-dark.png"
+        alt="Disfruleg"
+        class="h-14 object-contain"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='block'"
+      />
+      <p class="text-white text-3xl font-bold hidden" style="letter-spacing:.05em">Disfruleg</p>
+      <p class="text-slate-400 text-sm font-medium tracking-wide">Portal Bodega</p>
+    </div>
+
+    <!-- Form de login -->
+    <form @submit.prevent="login()" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Usuario</label>
+        <input
+          x-model="loginForm.username"
+          type="text"
+          placeholder="Escribe tu usuario"
+          class="input-dark"
+          autocomplete="username"
+          autocapitalize="characters"
+          spellcheck="false"
+          :disabled="logging"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Contraseña</label>
+        <div class="relative">
+          <input
+            x-model="loginForm.password"
+            :type="loginForm.showPwd ? 'text' : 'password'"
+            placeholder="••••••••"
+            class="input-dark pr-10"
+            autocomplete="current-password"
+            :disabled="logging"
+          />
+          <button type="button" @click="loginForm.showPwd = !loginForm.showPwd"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5">
+            <!-- Eye icon -->
+            <svg x-show="!loginForm.showPwd" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            <!-- Eye-off icon -->
+            <svg x-show="loginForm.showPwd" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Error de login -->
+      <div x-show="loginError"
+        class="rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2"
+        style="background:rgba(127,29,29,.4); border:1px solid rgba(127,29,29,.8)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span x-text="loginError"></span>
+      </div>
+
+      <button type="submit" class="btn-primary w-full" :disabled="logging">
+        <span x-show="!logging">Iniciar sesión</span>
+        <span x-show="logging" class="flex items-center justify-center gap-2">
+          <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          Verificando...
+        </span>
+      </button>
+    </form>
+  </div>
+
+  <!-- Desarrollado por Ubicuo Studio -->
+  <div class="flex flex-col items-center gap-2 opacity-40">
+    <p class="text-xs text-slate-500 uppercase tracking-widest">Desarrollado por</p>
+    <img
+      src="/assets/ubicuo-logo-negativo.png"
+      alt="Ubicuo Studio"
+      class="h-6 object-contain"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block'"
+    />
+    <!-- Fallback texto con fuente Behmer (marca Ubicuo) -->
+    <p class="font-behmer text-slate-500 text-sm hidden">Ubicuo Studio</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     APP PRINCIPAL (autenticado)
+══════════════════════════════════════════════════════════ -->
+<div x-show="session" x-cloak class="flex flex-col min-h-screen">
+
+  <!-- ── Header ── -->
+  <header class="sticky top-0 z-20 border-b border-slate-700/50" style="background:#0f172a">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+
+      <!-- Logo pequeño en header -->
+      <img src="/assets/disfruleg-logo-dark.png" alt="Disfruleg" class="h-6 object-contain flex-shrink-0"
+        onerror="this.style.display='none'" />
+
+      <div class="flex-1 min-w-0">
+        <p class="font-medium text-white text-sm truncate" x-text="session?.nombre || session?.username"></p>
+        <p class="text-xs text-slate-500 leading-none capitalize" x-text="session?.rol || ''"></p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Indicador conexión DB -->
+        <div class="flex items-center gap-1" :title="dbOk ? 'Conectado a la base de datos' : 'Sin conexión'">
+          <span class="w-2 h-2 rounded-full" :class="dbOk ? 'bg-emerald-400' : 'bg-red-400'"></span>
+        </div>
+
+        <!-- Botón nueva entrada (solo desktop) -->
+        <button @click="abrirModal()"
+          class="hidden sm:flex btn-primary items-center gap-1.5 py-2 px-3 text-sm">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Nueva entrada
+        </button>
+
+        <!-- Logout -->
+        <button @click="logout()" class="text-slate-500 hover:text-slate-300 p-1" title="Cerrar sesión">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Tabs ── -->
+  <nav class="border-b border-slate-700/50 max-w-3xl mx-auto w-full px-4" style="background:#0f172a">
+    <div class="flex">
+      <button @click="tab = 'inventario'"
+        class="px-4 py-3 text-sm font-medium transition-colors flex items-center gap-1.5"
+        :class="tab === 'inventario' ? 'tab-active' : 'tab-inactive'">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        Inventario
+      </button>
+      <button @click="tab = 'entradas'; cargarEntradasRecientes()"
+        class="px-4 py-3 text-sm font-medium transition-colors flex items-center gap-1.5"
+        :class="tab === 'entradas' ? 'tab-active' : 'tab-inactive'">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        Historial
+      </button>
+    </div>
+  </nav>
+
+  <!-- ── Contenido ── -->
+  <main class="flex-1 max-w-3xl mx-auto w-full px-4 pt-4 pb-24">
+
+    <!-- TAB: Inventario -->
+    <div x-show="tab === 'inventario'">
+
+      <!-- Cards estadísticas -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+        <div class="card p-4">
+          <p class="text-[11px] text-slate-400 mb-1 uppercase tracking-wide">Productos</p>
+          <p class="text-2xl font-bold text-white" x-text="resumen.total_productos || '—'"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] text-slate-400 mb-1 uppercase tracking-wide">Con stock</p>
+          <p class="text-2xl font-bold text-emerald-400" x-text="resumen.con_stock || '0'"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] text-slate-400 mb-1 uppercase tracking-wide">Stock bajo</p>
+          <p class="text-2xl font-bold text-yellow-400" x-text="resumen.stock_bajo || '0'"></p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[11px] text-slate-400 mb-1 uppercase tracking-wide">Sin stock</p>
+          <p class="text-2xl font-bold text-red-400" x-text="resumen.sin_stock || '0'"></p>
+        </div>
+      </div>
+
+      <!-- Buscador + filtros -->
+      <div class="flex gap-2 mb-3">
+        <div class="relative flex-1">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input
+            x-model="busqueda" @input="filtrar()"
+            type="text" placeholder="Buscar producto..."
+            class="input-dark pl-9" style="padding-top:9px; padding-bottom:9px"
+          />
+        </div>
+        <select x-model="filtroStock" @change="filtrar()"
+          class="input-dark" style="width:auto; padding:9px 12px; flex-shrink:0">
+          <option value="">Todos</option>
+          <option value="ok">Con stock</option>
+          <option value="low">Stock bajo</option>
+          <option value="zero">Sin stock</option>
+        </select>
+        <button @click="recargar()"
+          class="card px-3 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+          style="min-width:42px" title="Recargar">
+          <svg class="w-4 h-4" :class="cargando ? 'animate-spin text-emerald-400' : ''"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Tabla productos -->
+      <div class="card overflow-hidden">
+        <!-- Loading state -->
+        <div x-show="cargando" class="flex flex-col items-center py-14 text-slate-500">
+          <svg class="animate-spin w-6 h-6 mb-3 text-emerald-500" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          <span class="text-sm">Cargando inventario...</span>
+        </div>
+
+        <table x-show="!cargando" class="w-full text-sm">
+          <thead class="border-b border-slate-700">
+            <tr>
+              <th class="text-left px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Producto</th>
+              <th class="text-center px-3 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide w-20">Stock</th>
+              <th class="w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in filtrados" :key="p.id_producto">
+              <tr class="border-b border-slate-700/40 hover:bg-white/[0.03] transition-colors">
+                <td class="px-4 py-3.5">
+                  <p class="font-medium text-white text-sm leading-snug" x-text="p.nombre_producto"></p>
+                  <p class="text-xs text-slate-500 mt-0.5" x-text="p.unidad_producto || ''"></p>
+                </td>
+                <td class="px-3 py-3.5 text-center">
+                  <span
+                    class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                    :class="p.stock > 5 ? 'badge-ok' : p.stock > 0 ? 'badge-low' : 'badge-zero'"
+                    x-text="p.stock"
+                  ></span>
+                </td>
+                <td class="px-4 py-3.5 text-right">
+                  <button @click="abrirModal(p)"
+                    class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition-colors">
+                    + Entrada
+                  </button>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="!cargando && filtrados.length === 0">
+              <td colspan="3" class="px-4 py-12 text-center text-slate-500 text-sm">
+                No se encontraron productos
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div x-show="!cargando && filtrados.length > 0"
+          class="px-4 py-2 border-t border-slate-700/40">
+          <p class="text-[11px] text-slate-600"
+            x-text="`${filtrados.length} de ${productos.length} productos`"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Historial de entradas -->
+    <div x-show="tab === 'entradas'" x-cloak>
+      <div class="card overflow-hidden">
+        <div x-show="cargandoEntradas" class="py-14 text-center text-slate-500 text-sm">
+          Cargando historial...
+        </div>
+        <table x-show="!cargandoEntradas" class="w-full text-sm">
+          <thead class="border-b border-slate-700">
+            <tr>
+              <th class="text-left px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Fecha</th>
+              <th class="text-left px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Producto</th>
+              <th class="text-center px-3 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Cant.</th>
+              <th class="text-right px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="e in entradas" :key="e.id_compra">
+              <tr class="border-b border-slate-700/40 hover:bg-white/[0.03] transition-colors">
+                <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap" x-text="fmtFecha(e.fecha_compra)"></td>
+                <td class="px-4 py-3">
+                  <p class="text-white font-medium text-sm leading-snug" x-text="e.nombre_producto"></p>
+                  <p class="text-slate-500 text-xs mt-0.5" x-text="e.usuario_registro"></p>
+                </td>
+                <td class="px-3 py-3 text-center font-bold text-white" x-text="e.cantidad_compra"></td>
+                <td class="px-4 py-3 text-right text-emerald-400 font-semibold"
+                  x-text="`$${parseFloat(e.total_con_impuestos).toFixed(2)}`"></td>
+              </tr>
+            </template>
+            <tr x-show="!cargandoEntradas && entradas.length === 0">
+              <td colspan="4" class="px-4 py-12 text-center text-slate-500 text-sm">
+                Sin entradas registradas
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FAB flotante (móvil) -->
+  <button @click="abrirModal()"
+    class="sm:hidden fixed bottom-6 right-5 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-20 transition-transform active:scale-95"
+    style="background:#10b981; box-shadow: 0 8px 30px rgba(16,185,129,.4)">
+    <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+    </svg>
+  </button>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: NUEVA ENTRADA
+══════════════════════════════════════════════════════════ -->
+<div
+  x-show="modalAbierto"
+  x-cloak
+  class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+  @keydown.escape.window="cerrarModal()"
+>
+  <div class="modal-backdrop absolute inset-0" @click="cerrarModal()"></div>
+
+  <!-- Panel: bottom sheet en móvil, dialog en desktop -->
+  <div
+    class="relative w-full sm:max-w-md sm:mx-4 slide-up"
+    style="background:#1e293b; border-top-left-radius:20px; border-top-right-radius:20px; max-height:95vh; overflow-y:auto"
+    @click.stop
+  >
+    <!-- Handle para móvil -->
+    <div class="sm:hidden flex justify-center pt-3 pb-1">
+      <div class="w-10 h-1 rounded-full bg-slate-600"></div>
+    </div>
+
+    <!-- Header modal -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+      <h2 class="font-semibold text-white text-base">Registrar Entrada</h2>
+      <button @click="cerrarModal()" class="text-slate-500 hover:text-slate-300 p-0.5 transition-colors">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <form @submit.prevent="guardarEntrada()" class="px-5 py-5 space-y-4">
+
+      <!-- Búsqueda de producto -->
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
+          Producto *
+        </label>
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input
+            x-model="form.busqueda"
+            @input="buscarProducto()"
+            @focus="dropdownVisible = true"
+            @blur="setTimeout(() => dropdownVisible = false, 200)"
+            type="text"
+            placeholder="Buscar producto..."
+            class="input-dark pl-9"
+            autocomplete="off"
+          />
+          <!-- Dropdown resultados -->
+          <ul
+            x-show="dropdownVisible && dropResults.length > 0"
+            class="absolute z-10 w-full mt-1 rounded-xl overflow-hidden shadow-2xl border border-slate-700"
+            style="background:#0f172a; max-height:200px; overflow-y:auto"
+          >
+            <template x-for="p in dropResults" :key="p.id_producto">
+              <li
+                @mousedown.prevent="seleccionar(p)"
+                class="px-4 py-2.5 hover:bg-slate-700/60 cursor-pointer flex justify-between items-center gap-2 text-sm border-b border-slate-800 last:border-0"
+              >
+                <span class="text-slate-100 truncate" x-text="p.nombre_producto"></span>
+                <span
+                  class="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-semibold"
+                  :class="p.stock > 5 ? 'badge-ok' : p.stock > 0 ? 'badge-low' : 'badge-zero'"
+                  x-text="p.stock"
+                ></span>
+              </li>
+            </template>
+          </ul>
+        </div>
+        <!-- Chip de producto seleccionado -->
+        <div
+          x-show="form.idProducto"
+          class="mt-2 flex items-center gap-2 rounded-xl px-3 py-2"
+          style="background:rgba(6,78,59,.3); border:1px solid rgba(16,185,129,.3)"
+        >
+          <svg class="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+          <span class="text-xs text-emerald-300 font-medium truncate" x-text="form.nombreProducto"></span>
+          <span class="text-xs text-emerald-700 ml-auto flex-shrink-0" x-text="`stock: ${form.stockActual}`"></span>
+          <button type="button" @click="limpiarSeleccion()"
+            class="text-emerald-700 hover:text-emerald-400 ml-1 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Cantidad + Precio -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Cantidad *</label>
+          <input x-model.number="form.cantidad" type="number" min="0.001" step="any"
+            placeholder="0" class="input-dark" required />
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Precio *</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
+            <input x-model.number="form.precio" type="number" min="0" step="any"
+              placeholder="0.00" class="input-dark pl-6" required />
+          </div>
+        </div>
+      </div>
+
+      <!-- Toggle IVA -->
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          @click="form.incluirIva = !form.incluirIva"
+          class="relative w-10 h-5 rounded-full transition-all duration-200 flex-shrink-0"
+          :style="form.incluirIva ? 'background:#10b981' : 'background:#475569'"
+        >
+          <span
+            class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200"
+            :style="form.incluirIva ? 'transform:translateX(20px)' : 'transform:translateX(2px)'"
+          ></span>
+        </button>
+        <span class="text-sm text-slate-300">Precio incluye IVA (16%)</span>
+        <span
+          x-show="form.cantidad && form.precio"
+          class="ml-auto text-xs text-emerald-400 font-semibold"
+          x-text="`= $${calcTotal()}`"
+        ></span>
+      </div>
+
+      <!-- Fecha -->
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Fecha de compra *</label>
+        <input x-model="form.fechaCompra" type="date" class="input-dark" required />
+      </div>
+
+      <!-- Proveedor -->
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Proveedor</label>
+        <select x-model="form.idProveedor" class="input-dark">
+          <option value="">— Sin proveedor —</option>
+          <template x-for="prov in proveedores" :key="prov.id_proveedor">
+            <option :value="prov.id_proveedor" x-text="prov.nombre_proveedor"></option>
+          </template>
+        </select>
+      </div>
+
+      <!-- Folio / Notas (colapsable) -->
+      <details>
+        <summary class="text-xs text-slate-500 hover:text-slate-300 cursor-pointer select-none py-1 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+          </svg>
+          Folio y notas (opcional)
+        </summary>
+        <div class="mt-2 space-y-2">
+          <input x-model="form.folio" type="text" placeholder="Folio de factura" class="input-dark" />
+          <textarea x-model="form.notas" rows="2" placeholder="Notas adicionales..."
+            class="input-dark resize-none"></textarea>
+        </div>
+      </details>
+
+      <!-- Mensaje de error -->
+      <div
+        x-show="errorModal"
+        class="rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2"
+        style="background:rgba(127,29,29,.4); border:1px solid rgba(127,29,29,.8)"
+      >
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span x-text="errorModal"></span>
+      </div>
+
+      <!-- Botones -->
+      <div class="flex gap-3 pt-1">
+        <button type="button" @click="cerrarModal()" class="btn-ghost flex-1">
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          class="btn-primary flex-1"
+          :disabled="guardando || !form.idProducto"
+        >
+          <span x-show="!guardando">Registrar</span>
+          <span x-show="guardando" class="flex items-center justify-center gap-2">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            Guardando...
+          </span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TOAST DE NOTIFICACIONES
+══════════════════════════════════════════════════════════ -->
+<div
+  x-show="toast.visible"
+  x-cloak
+  x-transition:enter="transition ease-out duration-200"
+  x-transition:enter-start="opacity-0 translate-y-4"
+  x-transition:enter-end="opacity-100 translate-y-0"
+  x-transition:leave="transition ease-in duration-150"
+  x-transition:leave-end="opacity-0 translate-y-2"
+  class="fixed bottom-24 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full shadow-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap"
+  :style="toast.error ? 'background:#dc2626; color:white' : 'background:#059669; color:white'"
+>
+  <!-- Check / X icon -->
+  <svg x-show="!toast.error" class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+  </svg>
+  <svg x-show="toast.error" class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+  </svg>
+  <span x-text="toast.msg"></span>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════════════════ -->
+<script src="/js/api.js"></script>
+<script>
+function bodega() {
+  return {
+    // ── Auth ─────────────────────────────────────────────────
+    session: null,
+    logging: false,
+    loginError: '',
+    loginForm: { username: '', password: '', showPwd: false },
+
+    // ── UI global ────────────────────────────────────────────
+    tab: 'inventario',
+    dbOk: false,
+    toast: { visible: false, msg: '', error: false },
+
+    // ── Inventario ───────────────────────────────────────────
+    productos: [],
+    filtrados: [],
+    cargando: false,
+    busqueda: '',
+    filtroStock: '',
+    resumen: {},
+
+    // ── Historial ────────────────────────────────────────────
+    entradas: [],
+    cargandoEntradas: false,
+
+    // ── Proveedores ──────────────────────────────────────────
+    proveedores: [],
+
+    // ── Modal nueva entrada ──────────────────────────────────
+    modalAbierto: false,
+    guardando: false,
+    errorModal: '',
+    dropdownVisible: false,
+    dropResults: [],
+    form: {},
+
+    // ── Inicialización ────────────────────────────────────────
+    async init() {
+      this.resetForm()
+
+      // Restaurar sesión guardada
+      const token = localStorage.getItem('bodega_token')
+      const user  = localStorage.getItem('bodega_user')
+      if (token && user) {
+        try {
+          this.session = JSON.parse(user)
+          await this.cargarTodo()
+        } catch {
+          this.logout()
+        }
+      }
+
+      // Manejar expiración de sesión
+      window.addEventListener('session-expired', () => {
+        this.logout()
+        this.mostrarToast('Sesión expirada — vuelve a iniciar sesión', true)
+      })
+    },
+
+    async cargarTodo() {
+      await Promise.all([
+        this.verificarDB(),
+        this.cargarProductos(),
+        this.cargarResumen(),
+        this.cargarProveedores()
+      ])
+    },
+
+    async verificarDB() {
+      try {
+        const r = await fetch('/api/status').then(r => r.json())
+        this.dbOk = r.ok
+      } catch { this.dbOk = false }
+    },
+
+    // ── Login ─────────────────────────────────────────────────
+    async login() {
+      this.loginError = ''
+      if (!this.loginForm.username || !this.loginForm.password) {
+        this.loginError = 'Completa usuario y contraseña'
+        return
+      }
+      this.logging = true
+      try {
+        const r = await API.login(this.loginForm.username, this.loginForm.password)
+        if (!r.ok) { this.loginError = r.error || 'Error de autenticación'; return }
+        localStorage.setItem('bodega_token', r.token)
+        localStorage.setItem('bodega_user', JSON.stringify(r.user))
+        this.session = r.user
+        this.loginForm = { username: '', password: '', showPwd: false }
+        await this.cargarTodo()
+      } catch {
+        this.loginError = 'No se pudo conectar al servidor'
+      } finally {
+        this.logging = false
+      }
+    },
+
+    logout() {
+      localStorage.removeItem('bodega_token')
+      localStorage.removeItem('bodega_user')
+      this.session = null
+      this.productos = []
+      this.filtrados = []
+      this.entradas  = []
+      this.resumen   = {}
+    },
+
+    // ── Productos ─────────────────────────────────────────────
+    async cargarProductos() {
+      this.cargando = true
+      try {
+        const r = await API.get('/api/productos')
+        this.productos = r.data || []
+        this.filtrar()
+      } finally { this.cargando = false }
+    },
+
+    async cargarResumen() {
+      try {
+        const r = await API.get('/api/productos/resumen')
+        this.resumen = r.data || {}
+      } catch {}
+    },
+
+    async cargarProveedores() {
+      try {
+        const r = await API.get('/api/productos/proveedores')
+        this.proveedores = r.data || []
+      } catch {}
+    },
+
+    filtrar() {
+      let lista = [...this.productos]
+      const b = this.busqueda.toLowerCase().trim()
+      if (b) lista = lista.filter(p => p.nombre_producto.toLowerCase().includes(b))
+      if (this.filtroStock === 'ok')   lista = lista.filter(p => p.stock > 5)
+      if (this.filtroStock === 'low')  lista = lista.filter(p => p.stock > 0 && p.stock <= 5)
+      if (this.filtroStock === 'zero') lista = lista.filter(p => p.stock <= 0)
+      this.filtrados = lista
+    },
+
+    async recargar() {
+      await Promise.all([this.cargarProductos(), this.cargarResumen()])
+    },
+
+    // ── Historial ─────────────────────────────────────────────
+    async cargarEntradasRecientes() {
+      this.cargandoEntradas = true
+      try {
+        const r = await API.get('/api/entradas/recientes')
+        this.entradas = r.data || []
+      } finally { this.cargandoEntradas = false }
+    },
+
+    fmtFecha(f) {
+      if (!f) return '—'
+      const d = new Date(f)
+      const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000)
+      return utc.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+    },
+
+    // ── Modal ─────────────────────────────────────────────────
+    abrirModal(prod = null) {
+      this.resetForm()
+      this.errorModal = ''
+      if (prod) {
+        this.form.idProducto     = prod.id_producto
+        this.form.nombreProducto = prod.nombre_producto
+        this.form.stockActual    = prod.stock
+        this.form.busqueda       = prod.nombre_producto
+      }
+      this.modalAbierto = true
+    },
+
+    cerrarModal() {
+      this.modalAbierto = false
+      this.resetForm()
+    },
+
+    resetForm() {
+      const hoy = new Date().toISOString().slice(0, 10)
+      this.form = {
+        idProducto: null, nombreProducto: '', stockActual: 0,
+        busqueda: '', cantidad: '', precio: '',
+        incluirIva: true, fechaCompra: hoy,
+        idProveedor: '', folio: '', notas: ''
+      }
+      this.dropResults     = []
+      this.dropdownVisible = false
+    },
+
+    buscarProducto() {
+      const s = this.form.busqueda.toLowerCase().trim()
+      if (!s) { this.dropResults = []; return }
+      this.dropResults = this.productos
+        .filter(p => p.nombre_producto.toLowerCase().includes(s))
+        .slice(0, 10)
+      this.dropdownVisible = true
+      if (this.form.idProducto && this.form.busqueda !== this.form.nombreProducto) {
+        this.form.idProducto = null; this.form.nombreProducto = ''; this.form.stockActual = 0
+      }
+    },
+
+    seleccionar(p) {
+      this.form.idProducto     = p.id_producto
+      this.form.nombreProducto = p.nombre_producto
+      this.form.stockActual    = p.stock
+      this.form.busqueda       = p.nombre_producto
+      this.dropdownVisible     = false
+      this.dropResults         = []
+    },
+
+    limpiarSeleccion() {
+      this.form.idProducto = null; this.form.nombreProducto = ''
+      this.form.stockActual = 0;   this.form.busqueda = ''
+    },
+
+    calcTotal() {
+      return ((parseFloat(this.form.cantidad) || 0) * (parseFloat(this.form.precio) || 0)).toFixed(2)
+    },
+
+    // ── Guardar entrada ───────────────────────────────────────
+    async guardarEntrada() {
+      this.errorModal = ''
+      if (!this.form.idProducto) { this.errorModal = 'Selecciona un producto'; return }
+      this.guardando = true
+      try {
+        const r = await API.post('/api/entradas', {
+          idProducto:  this.form.idProducto,
+          idProveedor: this.form.idProveedor || null,
+          cantidad:    this.form.cantidad,
+          precio:      this.form.precio,
+          fechaCompra: this.form.fechaCompra,
+          folio:       this.form.folio || null,
+          incluirIva:  this.form.incluirIva,
+          notas:       this.form.notas || null
+        })
+
+        if (!r.ok) { this.errorModal = r.error || 'Error al guardar'; return }
+
+        // Actualizar stock local sin recargar la lista completa
+        const idx = this.productos.findIndex(p => p.id_producto === this.form.idProducto)
+        if (idx !== -1) {
+          this.productos[idx] = {
+            ...this.productos[idx],
+            stock: parseFloat(this.productos[idx].stock) + parseFloat(this.form.cantidad)
+          }
+        }
+        this.filtrar()
+        await this.cargarResumen()
+
+        const msg = `${this.form.cantidad} × ${this.form.nombreProducto}`
+        this.cerrarModal()
+        this.mostrarToast(msg)
+      } catch (err) {
+        this.errorModal = err.message || 'Error de conexión'
+      } finally {
+        this.guardando = false
+      }
+    },
+
+    // ── Toast ────────────────────────────────────────────────
+    mostrarToast(msg, error = false) {
+      this.toast = { visible: true, msg, error }
+      setTimeout(() => { this.toast.visible = false }, 3500)
+    }
+  }
+}
+</script>
+
+</body>
+</html>
