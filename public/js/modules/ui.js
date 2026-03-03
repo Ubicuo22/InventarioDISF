@@ -1,6 +1,6 @@
 function uiModule() {
   return {
-    tab: 'inventario',
+    tab: 'home',
     dbOk: false,
     pedidosTab: 'activos',
     toast: { visible: false, msg: '', error: false },

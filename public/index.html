@@ -128,8 +128,9 @@
   <header class="sticky top-0 z-20 border-b border-slate-700/50 bg-page">
     <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
 
-      <!-- Logo pequeño en header -->
-      <img src="/assets/icon.png" alt="Disfruleg" class="h-8 w-8 object-contain flex-shrink-0 rounded-lg" />
+      <!-- Logo pequeño en header — click para volver al inicio -->
+      <img src="/assets/icon.png" alt="Disfruleg" @click="tab = 'home'"
+        class="h-8 w-8 object-contain flex-shrink-0 rounded-lg cursor-pointer" />
 
       <div class="flex-1 min-w-0">
         <p class="font-medium text-white text-sm truncate" x-text="session?.nombre || session?.username"></p>
@@ -176,7 +177,7 @@
   </header>
 
   <!-- ── Tabs ── -->
-  <nav class="border-b border-slate-700/50 max-w-3xl mx-auto w-full px-4 bg-page">
+  <nav x-show="tab !== 'home'" class="border-b border-slate-700/50 max-w-3xl mx-auto w-full px-4 bg-page">
     <div class="flex">
       <button @click="tab = 'inventario'"
         class="px-4 py-3 text-sm font-medium transition-colors flex items-center gap-1.5"
@@ -207,6 +208,74 @@
 
   <!-- ── Contenido ── -->
   <main class="flex-1 max-w-3xl mx-auto w-full px-4 pt-4 pb-28" style="padding-bottom: max(7rem, calc(6rem + env(safe-area-inset-bottom)))">
+
+    <!-- TAB: Home -->
+    <div x-show="tab === 'home'" x-cloak>
+
+      <!-- Saludo -->
+      <div class="pt-4 pb-6">
+        <p class="text-2xl font-bold text-white" x-text="`Hola, ${(session?.nombre || session?.username || '').split(' ')[0]}!`"></p>
+        <p class="text-slate-400 text-sm mt-1">¿Qué deseas gestionar hoy?</p>
+      </div>
+
+      <!-- Tarjetas de módulos -->
+      <div class="flex flex-col gap-3">
+
+        <!-- Inventario -->
+        <button @click="tab = 'inventario'"
+          class="card w-full text-left p-5 flex items-center gap-4 border border-transparent hover:border-emerald-500/30 transition-colors active:scale-[0.99]">
+          <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0" style="background: rgba(16,185,129,.12)">
+            <svg class="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-white font-semibold text-base">Inventario</p>
+            <p class="text-slate-400 text-sm mt-0.5">Consulta stock y registra entradas</p>
+            <p class="text-emerald-400 text-xs mt-1.5 font-medium"
+              x-text="resumen.total_productos ? `${resumen.total_productos} productos · ${resumen.con_stock || 0} con stock` : 'Cargando…'"></p>
+          </div>
+          <svg class="w-5 h-5 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+        <!-- Pedidos -->
+        <button @click="tab = 'pedidos'; cargarOrdenes()"
+          class="card w-full text-left p-5 flex items-center gap-4 border border-transparent hover:border-blue-500/30 transition-colors active:scale-[0.99]">
+          <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0" style="background: rgba(59,130,246,.12)">
+            <svg class="w-7 h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-white font-semibold text-base">Pedidos</p>
+            <p class="text-slate-400 text-sm mt-0.5">Gestiona y crea órdenes de pedido</p>
+          </div>
+          <svg class="w-5 h-5 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+        <!-- Historial -->
+        <button @click="tab = 'entradas'; cargarEntradasRecientes()"
+          class="card w-full text-left p-5 flex items-center gap-4 border border-transparent hover:border-purple-500/30 transition-colors active:scale-[0.99]">
+          <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0" style="background: rgba(168,85,247,.12)">
+            <svg class="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-white font-semibold text-base">Historial</p>
+            <p class="text-slate-400 text-sm mt-0.5">Revisa las últimas entradas de inventario</p>
+          </div>
+          <svg class="w-5 h-5 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+      </div>
+    </div>
 
     <!-- TAB: Inventario -->
     <div x-show="tab === 'inventario'">
@@ -422,8 +491,8 @@
 
   </main>
 
-  <!-- FAB flotante (móvil) — contextual según tab -->
-  <button x-show="tab !== 'entradas'"
+  <!-- FAB flotante (móvil) — solo en inventario y pedidos -->
+  <button x-show="tab === 'inventario' || tab === 'pedidos'"
     @click="tab === 'pedidos' ? abrirNuevaOrden() : abrirModal()"
     class="sm:hidden fixed right-5 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-20 transition-transform active:scale-95"
     style="bottom: max(1.5rem, calc(1rem + env(safe-area-inset-bottom))); background:#10b981; box-shadow: 0 8px 30px rgba(16,185,129,.4)">
