@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="es" x-data="bodega()" x-init="init()">
+<html lang="es" x-data="bodega()" x-init="init()" :class="{ light: !darkMode }">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <!-- Anti-FOUC: aplica clase .light antes del primer render si el usuario eligió modo claro -->
+  <script>if(localStorage.getItem('disfruleg-theme')==='light')document.documentElement.classList.add('light')</script>
   <title>Bodega — Disfruleg</title>
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/assets/icon.png" />
@@ -123,7 +125,7 @@
 <div x-show="session" x-cloak class="flex flex-col min-h-screen min-h-dvh">
 
   <!-- ── Header ── -->
-  <header class="sticky top-0 z-20 border-b border-slate-700/50" style="background:#0f172a">
+  <header class="sticky top-0 z-20 border-b border-slate-700/50 bg-page">
     <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
 
       <!-- Logo pequeño en header -->
@@ -140,6 +142,20 @@
         <div class="flex items-center gap-1" :title="dbOk ? 'Conectado a la base de datos' : 'Sin conexión'">
           <span class="w-2 h-2 rounded-full" :class="dbOk ? 'bg-emerald-400' : 'bg-red-400'"></span>
         </div>
+
+        <!-- Toggle modo oscuro/claro -->
+        <button @click="toggleDarkMode()"
+          class="text-slate-500 hover:text-slate-300 p-1 transition-colors"
+          :title="darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'">
+          <!-- Sol (modo claro activo) -->
+          <svg x-show="!darkMode" class="w-5 h-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+          <!-- Luna (modo oscuro activo) -->
+          <svg x-show="darkMode" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </button>
 
         <!-- Botón nueva entrada (solo desktop) -->
         <button @click="abrirModal()"
@@ -161,7 +177,7 @@
   </header>
 
   <!-- ── Tabs ── -->
-  <nav class="border-b border-slate-700/50 max-w-3xl mx-auto w-full px-4" style="background:#0f172a">
+  <nav class="border-b border-slate-700/50 max-w-3xl mx-auto w-full px-4 bg-page">
     <div class="flex">
       <button @click="tab = 'inventario'"
         class="px-4 py-3 text-sm font-medium transition-colors flex items-center gap-1.5"
@@ -432,8 +448,8 @@
 
   <!-- Panel: bottom sheet en móvil, dialog en desktop -->
   <div
-    class="relative w-full sm:max-w-md sm:mx-4 slide-up"
-    style="background:#1e293b; border-top-left-radius:20px; border-top-right-radius:20px; max-height:95vh; overflow-y:auto"
+    class="relative w-full sm:max-w-md sm:mx-4 slide-up bg-modal"
+    style="border-top-left-radius:20px; border-top-right-radius:20px; max-height:95vh; overflow-y:auto"
     @click.stop
   >
     <!-- Handle para móvil -->
@@ -476,8 +492,8 @@
           <!-- Dropdown resultados -->
           <ul
             x-show="dropdownVisible && dropResults.length > 0"
-            class="absolute z-10 w-full mt-1 rounded-xl overflow-hidden shadow-2xl border border-slate-700"
-            style="background:#0f172a; max-height:200px; overflow-y:auto"
+            class="absolute z-10 w-full mt-1 rounded-xl overflow-hidden shadow-2xl border border-slate-700 bg-page"
+            style="max-height:200px; overflow-y:auto"
           >
             <template x-for="p in dropResults" :key="p.id_producto">
               <li
@@ -630,8 +646,8 @@
   @keydown.escape.window="cerrarOrden()">
   <div class="modal-backdrop absolute inset-0" @click="cerrarOrden()"></div>
 
-  <div class="relative w-full sm:max-w-lg sm:mx-4 slide-up"
-    style="background:#1e293b; border-top-left-radius:20px; border-top-right-radius:20px; max-height:93vh; overflow-y:auto"
+  <div class="relative w-full sm:max-w-lg sm:mx-4 slide-up bg-modal"
+    style="border-top-left-radius:20px; border-top-right-radius:20px; max-height:93vh; overflow-y:auto"
     @click.stop>
 
     <!-- Handle móvil -->
@@ -640,8 +656,7 @@
     </div>
 
     <!-- Header sticky -->
-    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700 sticky top-0 z-10"
-      style="background:#1e293b">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700 sticky top-0 z-10 bg-modal">
       <div class="min-w-0">
         <h2 class="font-semibold text-white text-base"
           x-text="ordenForm.folio_numero ? `Pedido #${String(ordenForm.folio_numero).padStart(4,'0')}` : 'Nueva Orden'"></h2>
@@ -682,8 +697,7 @@
 
       <!-- Cliente (solo lectura al editar) -->
       <div x-show="ordenForm.folio_numero"
-        class="rounded-xl px-4 py-3 flex items-center gap-3"
-        style="background:#0f172a; border:1px solid #334155">
+        class="rounded-xl px-4 py-3 flex items-center gap-3 dropdown-themed">
         <svg class="w-4 h-4 text-slate-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
         </svg>
@@ -705,8 +719,8 @@
             class="input-dark pl-9" style="padding-top:9px; padding-bottom:9px" />
           <!-- Resultados -->
           <ul x-show="ordenResultados.length > 0"
-            class="absolute z-20 w-full mt-1 rounded-xl overflow-hidden shadow-2xl"
-            style="background:#0f172a; border:1px solid #334155; max-height:240px; overflow-y:auto">
+            class="absolute z-20 w-full mt-1 rounded-xl overflow-hidden shadow-2xl dropdown-themed"
+            style="max-height:240px; overflow-y:auto">
             <template x-for="p in ordenResultados" :key="p.id_producto">
               <li @click="agregarAlCarrito(p)"
                 class="px-4 py-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-800 active:bg-slate-700 transition-colors border-b border-slate-800">
@@ -753,14 +767,12 @@
                   <td class="px-1 py-2 text-center">
                     <input type="number" min="0.001" step="any"
                       x-model.number="item.cantidad"
-                      class="w-14 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-white"
-                      style="background:#0f172a; border:1px solid #475569" />
+                      class="w-14 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-white input-inline" />
                   </td>
                   <td class="px-1 py-2 text-center">
                     <input type="number" min="0" step="any"
                       x-model.number="item.precio_unitario"
-                      class="w-16 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-emerald-400"
-                      style="background:#0f172a; border:1px solid #475569" />
+                      class="w-16 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-emerald-400 input-inline" />
                   </td>
                   <td class="px-2 py-2 text-right text-xs text-slate-300 font-medium"
                     x-text="`$${((item.cantidad||0)*(item.precio_unitario||0)).toFixed(2)}`"></td>
