@@ -57,6 +57,42 @@ router.get('/resumen', requireAuth, async (req, res) => {
   }
 })
 
+// Búsqueda de productos con precio por grupo (para módulo de pedidos)
+router.get('/buscar', requireAuth, async (req, res) => {
+  try {
+    const { q: query = '', groupId } = req.query
+    const search = `%${query}%`
+    let rows
+    if (groupId) {
+      rows = await q(`
+        SELECT p.id_producto, p.numero_producto, p.nombre_producto,
+               p.unidad_producto, p.stock,
+               COALESCE(pg.precio_base, 0) AS precio_base
+        FROM   producto p
+        LEFT   JOIN precio_por_grupo pg
+               ON p.id_producto = pg.id_producto AND pg.id_grupo = ?
+        WHERE  p.activo = 1
+          AND  p.nombre_producto LIKE ?
+        ORDER  BY p.nombre_producto
+        LIMIT  25
+      `, [groupId, search])
+    } else {
+      rows = await q(`
+        SELECT id_producto, numero_producto, nombre_producto,
+               unidad_producto, stock, 0 AS precio_base
+        FROM   producto
+        WHERE  activo = 1 AND nombre_producto LIKE ?
+        ORDER  BY nombre_producto
+        LIMIT  25
+      `, [search])
+    }
+    res.json({ ok: true, data: rows })
+  } catch (err) {
+    console.error('[productos] GET /buscar:', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // Lista de proveedores
 router.get('/proveedores', requireAuth, async (req, res) => {
   try {

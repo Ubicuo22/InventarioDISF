@@ -31,6 +31,8 @@ app.use(express.static(path.join(__dirname, 'public')))
 app.use('/api/auth',      require('./routes/auth'))
 app.use('/api/productos', require('./routes/productos'))
 app.use('/api/entradas',  require('./routes/entradas'))
+app.use('/api/ordenes',   require('./routes/ordenes'))
+app.use('/api/clientes',  require('./routes/clientes'))
 
 // Health check público
 app.get('/api/status', async (req, res) => {

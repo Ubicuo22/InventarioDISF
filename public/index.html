@@ -222,6 +222,14 @@
         </svg>
         Inventario
       </button>
+      <button @click="tab = 'pedidos'; cargarOrdenes()"
+        class="px-4 py-3 text-sm font-medium transition-colors flex items-center gap-1.5"
+        :class="tab === 'pedidos' ? 'tab-active' : 'tab-inactive'">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+        Pedidos
+      </button>
       <button @click="tab = 'entradas'; cargarEntradasRecientes()"
         class="px-4 py-3 text-sm font-medium transition-colors flex items-center gap-1.5"
         :class="tab === 'entradas' ? 'tab-active' : 'tab-inactive'">
@@ -349,6 +357,67 @@
       </div>
     </div>
 
+    <!-- TAB: Pedidos -->
+    <div x-show="tab === 'pedidos'" x-cloak>
+
+      <!-- Sub-tabs activos / registrados -->
+      <div class="flex gap-1 mb-4">
+        <button @click="pedidosTab = 'activos'; cargarOrdenes()"
+          class="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+          :class="pedidosTab === 'activos' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500 hover:text-slate-300'">
+          Activos
+        </button>
+        <button @click="pedidosTab = 'registrados'; cargarOrdenes()"
+          class="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+          :class="pedidosTab === 'registrados' ? 'bg-slate-700 text-slate-300' : 'text-slate-500 hover:text-slate-300'">
+          Registrados
+        </button>
+      </div>
+
+      <!-- Lista de órdenes -->
+      <div class="card overflow-hidden">
+
+        <!-- Loading -->
+        <div x-show="cargandoOrdenes" class="flex flex-col items-center py-14 text-slate-500">
+          <svg class="animate-spin w-6 h-6 mb-3 text-emerald-500" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+          <p class="text-sm">Cargando pedidos...</p>
+        </div>
+
+        <!-- Empty -->
+        <div x-show="!cargandoOrdenes && ordenes.length === 0"
+          class="py-14 text-center text-slate-500 text-sm">
+          No hay pedidos <span x-text="pedidosTab === 'activos' ? 'activos' : 'registrados'"></span>
+        </div>
+
+        <!-- Rows -->
+        <template x-for="o in ordenes" :key="o.folio_numero">
+          <div @click="abrirEditarOrden(o)"
+            class="border-b border-slate-700/40 px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] active:bg-white/[0.06] cursor-pointer transition-colors">
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-white text-sm"
+                x-text="`#${String(o.folio_numero).padStart(4,'0')} · ${o.nombre_cliente}`"></p>
+              <p class="text-xs text-slate-500 mt-0.5"
+                x-text="`${o.nombre_grupo} · ${fmtFecha(o.fecha_creacion)}`"></p>
+            </div>
+            <div class="text-right flex-shrink-0">
+              <p class="text-sm font-bold text-emerald-400"
+                x-text="`$${Number(o.total_estimado).toFixed(2)}`"></p>
+              <p class="text-[10px] mt-0.5"
+                :class="o.estado === 'guardada' ? 'text-yellow-400' : 'text-slate-600'"
+                x-text="o.estado === 'guardada' ? 'activo' : 'registrado'"></p>
+            </div>
+            <svg class="w-4 h-4 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+          </div>
+        </template>
+
+      </div>
+    </div>
+
     <!-- TAB: Historial de entradas -->
     <div x-show="tab === 'entradas'" x-cloak>
       <div class="card overflow-hidden">
@@ -389,10 +458,11 @@
 
   </main>
 
-  <!-- FAB flotante (móvil) -->
-  <button @click="abrirModal()"
-    class="sm:hidden fixed right-5 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-20 transition-transform active:scale-95" style="bottom: max(1.5rem, calc(1rem + env(safe-area-inset-bottom)))"
-    style="background:#10b981; box-shadow: 0 8px 30px rgba(16,185,129,.4)">
+  <!-- FAB flotante (móvil) — contextual según tab -->
+  <button x-show="tab !== 'entradas'"
+    @click="tab === 'pedidos' ? abrirNuevaOrden() : abrirModal()"
+    class="sm:hidden fixed right-5 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-20 transition-transform active:scale-95"
+    style="bottom: max(1.5rem, calc(1rem + env(safe-area-inset-bottom))); background:#10b981; box-shadow: 0 8px 30px rgba(16,185,129,.4)">
     <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
       <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
     </svg>
@@ -604,6 +674,201 @@
 
 
 <!-- ══════════════════════════════════════════════════════════
+     MODAL: ORDEN / PEDIDO
+══════════════════════════════════════════════════════════ -->
+<div x-show="modalOrdenAbierto" x-cloak
+  class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+  @keydown.escape.window="cerrarOrden()">
+  <div class="modal-backdrop absolute inset-0" @click="cerrarOrden()"></div>
+
+  <div class="relative w-full sm:max-w-lg sm:mx-4 slide-up"
+    style="background:#1e293b; border-top-left-radius:20px; border-top-right-radius:20px; max-height:93vh; overflow-y:auto"
+    @click.stop>
+
+    <!-- Handle móvil -->
+    <div class="sm:hidden flex justify-center pt-3 pb-1">
+      <div class="w-10 h-1 rounded-full bg-slate-600"></div>
+    </div>
+
+    <!-- Header sticky -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700 sticky top-0 z-10"
+      style="background:#1e293b">
+      <div class="min-w-0">
+        <h2 class="font-semibold text-white text-base"
+          x-text="ordenForm.folio_numero ? `Pedido #${String(ordenForm.folio_numero).padStart(4,'0')}` : 'Nueva Orden'"></h2>
+        <p class="text-xs text-slate-500 truncate"
+          x-text="ordenForm.nombreCliente || 'Selecciona cliente'"></p>
+      </div>
+      <button @click="cerrarOrden()" class="text-slate-500 hover:text-slate-300 p-1 ml-3 flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="px-5 py-4 space-y-4">
+
+      <!-- Grupo + Cliente (solo para nuevas órdenes) -->
+      <div x-show="!ordenForm.folio_numero" class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Grupo</label>
+          <select x-model="ordenForm.id_grupo" @change="cargarClientesPorGrupo()" class="input-dark" style="padding:9px 12px">
+            <option value="">— Grupo —</option>
+            <template x-for="g in grupos" :key="g.id_grupo">
+              <option :value="g.id_grupo" x-text="g.nombre_grupo"></option>
+            </template>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Cliente</label>
+          <select x-model="ordenForm.id_cliente" @change="actualizarNombreCliente()" class="input-dark" style="padding:9px 12px"
+            :disabled="!ordenForm.id_grupo">
+            <option value="">— Cliente —</option>
+            <template x-for="c in clientesGrupo" :key="c.id_cliente">
+              <option :value="c.id_cliente" x-text="c.nombre_cliente"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+
+      <!-- Cliente (solo lectura al editar) -->
+      <div x-show="ordenForm.folio_numero"
+        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        style="background:#0f172a; border:1px solid #334155">
+        <svg class="w-4 h-4 text-slate-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-white truncate" x-text="ordenForm.nombreCliente"></p>
+          <p class="text-xs text-slate-500" x-text="ordenForm.nombreGrupo"></p>
+        </div>
+      </div>
+
+      <!-- Buscador de producto -->
+      <div x-show="ordenForm.id_cliente || ordenForm.folio_numero">
+        <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Agregar producto</label>
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input x-model="ordenBusqueda" @input="buscarProductoPedido()" type="text"
+            placeholder="Buscar por nombre..."
+            class="input-dark pl-9" style="padding-top:9px; padding-bottom:9px" />
+          <!-- Resultados -->
+          <ul x-show="ordenResultados.length > 0"
+            class="absolute z-20 w-full mt-1 rounded-xl overflow-hidden shadow-2xl"
+            style="background:#0f172a; border:1px solid #334155; max-height:240px; overflow-y:auto">
+            <template x-for="p in ordenResultados" :key="p.id_producto">
+              <li @click="agregarAlCarrito(p)"
+                class="px-4 py-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-800 active:bg-slate-700 transition-colors border-b border-slate-800">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm text-white font-medium truncate" x-text="p.nombre_producto"></p>
+                  <p class="text-[11px] text-slate-500" x-text="p.unidad_producto"></p>
+                </div>
+                <div class="text-right ml-3 flex-shrink-0">
+                  <p class="text-sm font-semibold text-emerald-400"
+                    x-text="p.precio_base > 0 ? `$${Number(p.precio_base).toFixed(2)}` : '—'"></p>
+                  <p class="text-[10px] text-slate-600" x-text="`stock: ${p.stock}`"></p>
+                </div>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Carrito -->
+      <div x-show="cartItems().length > 0">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Carrito</p>
+          <p class="text-xs text-slate-500"
+            x-text="`${cartItems().length} producto${cartItems().length !== 1 ? 's' : ''}`"></p>
+        </div>
+        <div class="card overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-slate-700">
+                <th class="text-left px-3 py-2 text-[10px] text-slate-500 font-semibold uppercase">Producto</th>
+                <th class="text-center px-2 py-2 text-[10px] text-slate-500 font-semibold uppercase w-16">Cant.</th>
+                <th class="text-center px-2 py-2 text-[10px] text-slate-500 font-semibold uppercase w-20">Precio</th>
+                <th class="text-right px-2 py-2 text-[10px] text-slate-500 font-semibold uppercase w-16">Sub</th>
+                <th class="w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(item, idx) in cartItems()" :key="idx">
+                <tr class="border-b border-slate-700/40">
+                  <td class="px-3 py-2">
+                    <p class="text-white text-xs font-medium leading-snug" x-text="item.nombre_producto"></p>
+                    <p class="text-[10px] text-slate-600" x-text="item.unidad"></p>
+                  </td>
+                  <td class="px-1 py-2 text-center">
+                    <input type="number" min="0.001" step="any"
+                      x-model.number="item.cantidad"
+                      class="w-14 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-white"
+                      style="background:#0f172a; border:1px solid #475569" />
+                  </td>
+                  <td class="px-1 py-2 text-center">
+                    <input type="number" min="0" step="any"
+                      x-model.number="item.precio_unitario"
+                      class="w-16 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-emerald-400"
+                      style="background:#0f172a; border:1px solid #475569" />
+                  </td>
+                  <td class="px-2 py-2 text-right text-xs text-slate-300 font-medium"
+                    x-text="`$${((item.cantidad||0)*(item.precio_unitario||0)).toFixed(2)}`"></td>
+                  <td class="px-2 py-2 text-center">
+                    <button @click="quitarDelCarrito(idx)"
+                      class="text-slate-600 hover:text-red-400 transition-colors p-0.5">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <!-- Total -->
+          <div class="px-4 py-3 border-t border-slate-700/40 flex items-center justify-between">
+            <p class="text-sm font-semibold text-slate-300">Total estimado</p>
+            <p class="text-lg font-bold text-emerald-400"
+              x-text="`$${calcTotalOrden().toFixed(2)}`"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error modal -->
+      <div x-show="errorOrden"
+        class="rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2"
+        style="background:rgba(127,29,29,.4); border:1px solid rgba(127,29,29,.8)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span x-text="errorOrden"></span>
+      </div>
+
+      <!-- Botones -->
+      <div class="flex gap-3 pt-1 pb-2">
+        <button type="button" @click="cerrarOrden()" class="btn-ghost flex-1">Cancelar</button>
+        <button type="button" @click="guardarOrden()"
+          class="btn-primary flex-1"
+          :disabled="guardandoOrden || (!ordenForm.id_cliente && !ordenForm.folio_numero) || cartItems().length === 0">
+          <span x-show="!guardandoOrden">Guardar pedido</span>
+          <span x-show="guardandoOrden" class="flex items-center justify-center gap-2">
+            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            Guardando...
+          </span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
      TOAST DE NOTIFICACIONES
 ══════════════════════════════════════════════════════════ -->
 <div
@@ -657,6 +922,20 @@ function bodega() {
     // ── Historial ────────────────────────────────────────────
     entradas: [],
     cargandoEntradas: false,
+
+    // ── Pedidos ──────────────────────────────────────────────
+    ordenes: [],
+    cargandoOrdenes: false,
+    pedidosTab: 'activos',
+    grupos: [],
+    clientesGrupo: [],
+    modalOrdenAbierto: false,
+    guardandoOrden: false,
+    errorOrden: '',
+    ordenBusqueda: '',
+    ordenResultados: [],
+    ordenForm: {},
+    ordenCarrito: { General: [] },
 
     // ── Proveedores ──────────────────────────────────────────
     proveedores: [],
@@ -893,6 +1172,148 @@ function bodega() {
       } finally {
         this.guardando = false
       }
+    },
+
+    // ── Pedidos ───────────────────────────────────────────────
+    async cargarOrdenes() {
+      this.cargandoOrdenes = true
+      try {
+        const estado = this.pedidosTab === 'registrados' ? 'registrada' : 'guardada'
+        const r = await API.get(`/api/ordenes?estado=${estado}`)
+        this.ordenes = r.data || []
+      } catch { this.ordenes = [] }
+      finally { this.cargandoOrdenes = false }
+    },
+
+    async cargarGrupos() {
+      try {
+        const r = await API.get('/api/clientes/grupos')
+        this.grupos = r.data || []
+      } catch {}
+    },
+
+    async cargarClientesPorGrupo() {
+      this.clientesGrupo = []
+      this.ordenForm.id_cliente = ''
+      if (!this.ordenForm.id_grupo) return
+      try {
+        const r = await API.get(`/api/clientes?groupId=${this.ordenForm.id_grupo}`)
+        this.clientesGrupo = r.data || []
+      } catch {}
+    },
+
+    actualizarNombreCliente() {
+      const c = this.clientesGrupo.find(c => c.id_cliente == this.ordenForm.id_cliente)
+      const g = this.grupos.find(g => g.id_grupo == this.ordenForm.id_grupo)
+      this.ordenForm.nombreCliente = c ? c.nombre_cliente : ''
+      this.ordenForm.nombreGrupo   = g ? g.nombre_grupo   : ''
+    },
+
+    async abrirNuevaOrden() {
+      if (!this.grupos.length) await this.cargarGrupos()
+      this.ordenForm    = { folio_numero: null, id_grupo: '', id_cliente: '', nombreCliente: '', nombreGrupo: '' }
+      this.ordenCarrito = { General: [] }
+      this.errorOrden      = ''
+      this.ordenBusqueda   = ''
+      this.ordenResultados = []
+      this.clientesGrupo   = []
+      this.modalOrdenAbierto = true
+    },
+
+    async abrirEditarOrden(orden) {
+      this.errorOrden      = ''
+      this.ordenBusqueda   = ''
+      this.ordenResultados = []
+      try {
+        const r = await API.get(`/api/ordenes/${orden.folio_numero}`)
+        if (!r.ok) { this.mostrarToast('Error al cargar el pedido', true); return }
+        const o = r.data
+        this.ordenForm = {
+          folio_numero:  o.folio_numero,
+          id_cliente:    o.id_cliente,
+          id_grupo:      o.id_grupo,
+          nombreCliente: o.nombre_cliente,
+          nombreGrupo:   o.nombre_grupo
+        }
+        // Aplanar secciones en General para edición web
+        const cart = (typeof o.datos_carrito === 'string')
+          ? JSON.parse(o.datos_carrito) : (o.datos_carrito || {})
+        const items = []
+        for (const sec of Object.values(cart)) items.push(...sec)
+        this.ordenCarrito = { General: items }
+        this.modalOrdenAbierto = true
+      } catch { this.mostrarToast('Error al cargar el pedido', true) }
+    },
+
+    cerrarOrden() {
+      this.modalOrdenAbierto = false
+      this.ordenForm    = {}
+      this.ordenCarrito = { General: [] }
+      this.errorOrden   = ''
+      this.ordenBusqueda   = ''
+      this.ordenResultados = []
+    },
+
+    async buscarProductoPedido() {
+      const s = this.ordenBusqueda.trim()
+      if (!s) { this.ordenResultados = []; return }
+      try {
+        const gid = this.ordenForm.id_grupo || ''
+        const r = await API.get(`/api/productos/buscar?q=${encodeURIComponent(s)}&groupId=${gid}`)
+        this.ordenResultados = r.data || []
+      } catch { this.ordenResultados = [] }
+    },
+
+    agregarAlCarrito(producto) {
+      const existing = this.ordenCarrito.General.find(i => i.id_producto === producto.id_producto)
+      if (existing) {
+        existing.cantidad += 1
+      } else {
+        this.ordenCarrito.General.push({
+          id_producto:     producto.id_producto,
+          nombre_producto: producto.nombre_producto,
+          unidad:          producto.unidad_producto,
+          cantidad:        1,
+          precio_unitario: parseFloat(producto.precio_base) || 0,
+          seccion:         'General'
+        })
+      }
+      this.ordenBusqueda   = ''
+      this.ordenResultados = []
+    },
+
+    cartItems() {
+      return this.ordenCarrito.General || []
+    },
+
+    quitarDelCarrito(idx) {
+      this.ordenCarrito.General.splice(idx, 1)
+    },
+
+    calcTotalOrden() {
+      return this.ordenCarrito.General.reduce((sum, item) =>
+        sum + ((item.cantidad || 0) * (item.precio_unitario || 0)), 0)
+    },
+
+    async guardarOrden() {
+      this.errorOrden = ''
+      if (!this.ordenForm.id_cliente) { this.errorOrden = 'Selecciona un cliente'; return }
+      if (this.cartItems().length === 0) { this.errorOrden = 'Agrega al menos un producto'; return }
+      this.guardandoOrden = true
+      try {
+        const body = {
+          id_cliente:    this.ordenForm.id_cliente,
+          datos_carrito: this.ordenCarrito
+        }
+        if (this.ordenForm.folio_numero) body.folio_numero = this.ordenForm.folio_numero
+        const r = await API.post('/api/ordenes', body)
+        if (!r.ok) { this.errorOrden = r.error || 'Error al guardar'; return }
+        this.cerrarOrden()
+        this.mostrarToast(`Pedido #${String(r.folio_numero).padStart(4,'0')} guardado`)
+        await this.cargarOrdenes()
+      } catch (e) {
+        this.errorOrden = e.message || 'Error de conexión'
+      } finally { this.guardandoOrden = false }
     },
 
     // ── Toast ────────────────────────────────────────────────
