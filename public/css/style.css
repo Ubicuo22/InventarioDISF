@@ -125,3 +125,56 @@ html.light [class*="hover:bg-slate-7"]:hover  { background: rgba(0,0,0,.05) !imp
 html.light [class*="hover:bg-slate-8"]:hover  { background: rgba(0,0,0,.04) !important; }
 html.light [class*="hover:bg-white"]:hover    { background: rgba(0,0,0,.03) !important; }
 html.light [class*="active:bg-white"]:active  { background: rgba(0,0,0,.06) !important; }
+
+/* Tailwind JIT genera clases como "bg-slate-800/40" que los selectores
+   exactos no capturan — usamos [class*="..."] para cubrirlas */
+html.light [class*="bg-slate-800\/"]          { background: rgba(0,0,0,.04) !important; }
+html.light [class*="bg-slate-700\/"]          { background: rgba(0,0,0,.06) !important; }
+html.light [class*="bg-emerald-900\/"]        { background: rgba(5,150,105,.06) !important; }
+html.light [class*="border-slate-700\/"]      { border-color: var(--border) !important; }
+html.light [class*="border-slate-800\/"]      { border-color: var(--border) !important; }
+
+/* ══════════════════════════════
+   UBICUOAI — cards de resultado
+══════════════════════════════ */
+.ia-card-verde  { background: rgba(16,185,129,.08); border: 1px solid rgba(16,185,129,.30); border-radius: 12px; }
+.ia-card-azul   { background: rgba(59,130,246,.08);  border: 1px solid rgba(59,130,246,.30); border-radius: 12px; }
+.ia-card-rojo   { background: rgba(239,68,68,.08);   border: 1px solid rgba(239,68,68,.30); border-radius: 12px; }
+
+html.light .ia-card-verde { background: rgba(16,185,129,.06); border-color: rgba(16,185,129,.22); }
+html.light .ia-card-azul  { background: rgba(59,130,246,.06);  border-color: rgba(59,130,246,.22); }
+html.light .ia-card-rojo  { background: rgba(239,68,68,.06);   border-color: rgba(239,68,68,.22); }
+
+.ia-section-hdr { background: rgba(139,92,246,.12); border: 1px solid rgba(139,92,246,.28); border-radius: 12px; }
+html.light .ia-section-hdr { background: rgba(139,92,246,.07); border-color: rgba(139,92,246,.18); }
+
+.ia-stats-bar { background: rgba(15,23,42,.55); border: 1px solid rgba(71,85,105,.38); border-radius: 12px; }
+html.light .ia-stats-bar { background: rgba(0,0,0,.04); border-color: var(--border); }
+
+.ia-qty-input {
+  background: var(--bg-raised);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 2px 6px;
+  width: 58px;
+  text-align: center;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.ia-qty-input:focus { outline: none; box-shadow: 0 0 0 2px rgba(16,185,129,.25); }
+
+/* Botón toggle IA — color base (dark), override light */
+.ia-btn-on  { color: #c4b5fd; }
+.ia-btn-off { color: #94a3b8; }
+html.light .ia-btn-on  { background: rgba(139,92,246,.12) !important; border-color: rgba(139,92,246,.4) !important; color: #4c1d95 !important; }
+html.light .ia-btn-off { background: rgba(0,0,0,.07) !important; border-color: rgba(0,0,0,.12) !important; color: var(--text-muted) !important; }
+
+/* Textos violeta claros — invisibles en modo claro sin override */
+html.light .text-violet-200 { color: #4c1d95 !important; }
+html.light .text-violet-300 { color: #5b21b6 !important; }
+html.light .text-violet-400 { color: #6d28d9 !important; }
+
+/* Badge IA (usa clase ia-badge para poder sobreescribir inline colors) */
+.ia-badge { background: rgba(139,92,246,.3); color: #c4b5fd; }
+html.light .ia-badge { background: rgba(139,92,246,.15); color: #4c1d95; }
