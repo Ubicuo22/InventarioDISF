@@ -29,7 +29,7 @@
     <!-- Logo Disfruleg -->
     <div class="flex flex-col items-center mb-8 gap-3">
       <img
-        src="/assets/disfruleg-logo-dark.png"
+        :src="darkMode ? '/assets/disfruleg-logo-dark.png' : '/assets/disfruleg-logo-light.png'"
         alt="Disfruleg"
         class="h-14 object-contain"
         onerror="this.style.display='none'; this.nextElementSibling.style.display='block'"
@@ -624,7 +624,9 @@
             placeholder="0" class="input-dark" required />
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Precio *</label>
+          <label class="block text-[11px] font-semibold mb-1.5 uppercase tracking-wide transition-colors duration-200"
+            :class="form.incluirIva ? 'text-emerald-400' : 'text-slate-400'"
+            x-text="form.incluirIva ? 'Precio c/IVA *' : 'Precio s/IVA *'"></label>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
             <input x-model.number="form.precio" type="number" min="0" step="any"
@@ -633,26 +635,54 @@
         </div>
       </div>
 
-      <!-- Toggle IVA -->
-      <div class="flex items-center gap-3">
-        <button
-          type="button"
-          @click="form.incluirIva = !form.incluirIva"
-          class="relative w-10 h-5 rounded-full transition-all duration-200 flex-shrink-0"
-          :style="form.incluirIva ? 'background:#10b981' : 'background:#475569'"
-        >
-          <span
-            class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200"
-            :style="form.incluirIva ? 'transform:translateX(20px)' : 'transform:translateX(2px)'"
-          ></span>
-        </button>
-        <span class="text-sm text-slate-300">Precio incluye IVA (16%)</span>
-        <span
-          x-show="form.cantidad && form.precio"
-          class="ml-auto text-xs text-emerald-400 font-semibold"
-          x-text="`= $${calcTotal()}`"
-        ></span>
-      </div>
+      <!-- Toggle IVA — botón completo clickable -->
+      <button
+        type="button"
+        @click="form.incluirIva = !form.incluirIva"
+        class="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 text-left"
+        :style="form.incluirIva
+          ? 'background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.3)'
+          : 'background:rgba(71,85,105,.15); border:1px solid rgba(71,85,105,.3)'"
+      >
+        <span class="relative w-10 h-5 rounded-full transition-all duration-200 flex-shrink-0"
+          :style="form.incluirIva ? 'background:#10b981' : 'background:#475569'">
+          <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200"
+            :style="form.incluirIva ? 'transform:translateX(20px)' : 'transform:translateX(2px)'"></span>
+        </span>
+        <span class="text-sm font-medium transition-colors duration-200"
+          :class="form.incluirIva ? 'text-emerald-300' : 'text-slate-400'"
+          x-text="form.incluirIva ? 'El precio ya incluye IVA (16%)' : 'Sin IVA — precio es base neto'">
+        </span>
+      </button>
+
+      <!-- Desglose de costos -->
+      <template x-if="calcDesglose()">
+        <div class="rounded-xl px-3 py-2.5 space-y-1.5"
+          style="background:rgba(15,23,42,.5); border:1px solid rgba(51,65,85,.5)">
+          <template x-if="form.incluirIva">
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>Subtotal base (sin IVA)</span>
+                <span x-text="`$${calcDesglose().base}`"></span>
+              </div>
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>IVA 16%</span>
+                <span x-text="`$${calcDesglose().iva}`"></span>
+              </div>
+              <div class="flex justify-between text-sm font-bold text-emerald-400 pt-1 border-t border-slate-700/60">
+                <span>Total</span>
+                <span x-text="`$${calcDesglose().total}`"></span>
+              </div>
+            </div>
+          </template>
+          <template x-if="!form.incluirIva">
+            <div class="flex justify-between text-sm font-bold text-slate-300">
+              <span>Total (sin IVA)</span>
+              <span x-text="`$${calcDesglose().total}`"></span>
+            </div>
+          </template>
+        </div>
+      </template>
 
       <!-- Fecha -->
       <div>
@@ -732,7 +762,7 @@
   @keydown.escape.window="cerrarOrden()">
   <div class="modal-backdrop absolute inset-0" @click="cerrarOrden()"></div>
 
-  <div class="relative w-full sm:max-w-lg sm:mx-4 slide-up bg-modal"
+  <div class="relative w-full sm:max-w-2xl sm:mx-4 slide-up bg-modal"
     style="border-top-left-radius:20px; border-top-right-radius:20px; max-height:93vh; overflow-y:auto"
     @click.stop>
 
@@ -793,15 +823,44 @@
         </div>
       </div>
 
-      <!-- Buscador de producto -->
-      <div x-show="ordenForm.id_cliente || ordenForm.folio_numero">
+      <!-- Buscador de producto + selector de sección -->
+      <div x-show="ordenForm.id_cliente || ordenForm.folio_numero" class="space-y-2">
         <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Agregar producto</label>
+
+        <!-- Selector de sección activa -->
+        <div class="flex items-center gap-2">
+          <select x-model="seccionActual" class="input-dark flex-1 text-xs" style="padding:7px 10px">
+            <template x-for="s in sectionNames()" :key="s">
+              <option :value="s" x-text="s"></option>
+            </template>
+          </select>
+          <button @click="mostrarNuevaSeccion = !mostrarNuevaSeccion"
+            :class="mostrarNuevaSeccion ? 'text-emerald-400' : 'text-slate-400 hover:text-white'"
+            class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+            style="background:rgba(51,65,85,.5)" title="Agregar sección">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Input nueva sección -->
+        <div x-show="mostrarNuevaSeccion" class="flex gap-2">
+          <input x-model="nuevaSeccionNombre" @keydown.enter="agregarSeccion()" type="text"
+            placeholder="Nombre de sección..."
+            class="input-dark flex-1 text-xs" style="padding:7px 10px" />
+          <button @click="agregarSeccion()" class="btn-primary px-3 py-1.5 text-xs">Agregar</button>
+          <button @click="mostrarNuevaSeccion = false; nuevaSeccionNombre = ''"
+            class="btn-ghost px-3 py-1.5 text-xs">Cancelar</button>
+        </div>
+
+        <!-- Buscador -->
         <div class="relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
           <input x-model="ordenBusqueda" @input="buscarProductoPedido()" type="text"
-            placeholder="Buscar por nombre..."
+            :placeholder="`Buscar para agregar en "${seccionActual}"...`"
             class="input-dark pl-9" style="padding-top:9px; padding-bottom:9px" />
           <!-- Resultados -->
           <ul x-show="ordenResultados.length > 0"
@@ -825,12 +884,13 @@
         </div>
       </div>
 
-      <!-- Carrito -->
+      <!-- Carrito con secciones -->
       <div x-show="cartItems().length > 0">
         <div class="flex items-center justify-between mb-2">
           <p class="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Carrito</p>
-          <p class="text-xs text-slate-500"
-            x-text="`${cartItems().length} producto${cartItems().length !== 1 ? 's' : ''}`"></p>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full text-emerald-300"
+            style="background:rgba(16,185,129,.12)"
+            x-text="`${cartItems().length} producto${cartItems().length !== 1 ? 's' : ''}`"></span>
         </div>
         <div class="card overflow-hidden">
           <table class="w-full">
@@ -839,40 +899,57 @@
                 <th class="text-left px-3 py-2 text-[10px] text-slate-500 font-semibold uppercase">Producto</th>
                 <th class="text-center px-2 py-2 text-[10px] text-slate-500 font-semibold uppercase w-16">Cant.</th>
                 <th class="text-center px-2 py-2 text-[10px] text-slate-500 font-semibold uppercase w-20">Precio</th>
-                <th class="text-right px-2 py-2 text-[10px] text-slate-500 font-semibold uppercase w-16">Sub</th>
+                <th class="text-right px-2 py-2 text-[10px] text-slate-500 font-semibold uppercase w-20">Sub</th>
                 <th class="w-8"></th>
               </tr>
             </thead>
-            <tbody>
-              <template x-for="(item, idx) in cartItems()" :key="idx">
-                <tr class="border-b border-slate-700/40">
-                  <td class="px-3 py-2">
-                    <p class="text-white text-xs font-medium leading-snug" x-text="item.nombre_producto"></p>
-                    <p class="text-[10px] text-slate-600" x-text="item.unidad"></p>
-                  </td>
-                  <td class="px-1 py-2 text-center">
-                    <input type="number" min="0.001" step="any"
-                      x-model.number="item.cantidad"
-                      class="w-14 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-white input-inline" />
-                  </td>
-                  <td class="px-1 py-2 text-center">
-                    <input type="number" min="0" step="any"
-                      x-model.number="item.precio_unitario"
-                      class="w-16 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-emerald-400 input-inline" />
-                  </td>
-                  <td class="px-2 py-2 text-right text-xs text-slate-300 font-medium"
-                    x-text="`$${((item.cantidad||0)*(item.precio_unitario||0)).toFixed(2)}`"></td>
-                  <td class="px-2 py-2 text-center">
-                    <button @click="quitarDelCarrito(idx)"
-                      class="text-slate-600 hover:text-red-400 transition-colors p-0.5">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                      </svg>
-                    </button>
+            <!-- Una tbody por sección -->
+            <template x-for="secName in sectionNames()" :key="secName">
+              <tbody>
+                <!-- Encabezado de sección (oculto si solo hay "General" con 1 sección) -->
+                <tr x-show="sectionNames().length > 1 || secName !== 'General'"
+                  :class="seccionActual === secName ? 'bg-emerald-900/20' : 'bg-slate-800/60'">
+                  <td colspan="5" class="px-3 py-1.5">
+                    <div class="flex items-center gap-2">
+                      <span class="text-[10px] font-bold uppercase tracking-widest"
+                        :class="seccionActual === secName ? 'text-emerald-400' : 'text-slate-400'"
+                        x-text="secName"></span>
+                      <span class="text-[9px] text-slate-600"
+                        x-text="`(${(ordenCarrito[secName]||[]).length})`"></span>
+                    </div>
                   </td>
                 </tr>
-              </template>
-            </tbody>
+                <!-- Items de la sección -->
+                <template x-for="(item, idx) in (ordenCarrito[secName] || [])" :key="idx">
+                  <tr class="border-b border-slate-700/40" :class="idx % 2 !== 0 ? 'bg-slate-800/40' : ''">
+                    <td class="px-3 py-2">
+                      <p class="text-white text-xs font-medium leading-snug" x-text="item.nombre_producto"></p>
+                      <p class="text-[10px] text-slate-600" x-text="item.unidad"></p>
+                    </td>
+                    <td class="px-1 py-2 text-center">
+                      <input type="number" min="0.001" step="any"
+                        x-model.number="item.cantidad"
+                        class="w-14 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-white input-inline" />
+                    </td>
+                    <td class="px-1 py-2 text-center">
+                      <input type="number" min="0" step="any"
+                        x-model.number="item.precio_unitario"
+                        class="w-16 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-emerald-400 input-inline" />
+                    </td>
+                    <td class="px-2 py-2 text-right text-xs text-slate-300 font-medium"
+                      x-text="`$${((item.cantidad||0)*(item.precio_unitario||0)).toFixed(2)}`"></td>
+                    <td class="px-2 py-2 text-center">
+                      <button @click="quitarDelCarrito(secName, idx)"
+                        class="text-slate-600 hover:text-red-400 transition-colors p-0.5">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </template>
           </table>
           <!-- Total -->
           <div class="px-4 py-3 border-t border-slate-700/40 flex items-center justify-between">

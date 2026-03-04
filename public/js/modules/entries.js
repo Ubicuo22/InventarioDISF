@@ -62,8 +62,25 @@ function entriesModule() {
       this.form.stockActual = 0;   this.form.busqueda = ''
     },
 
-    calcTotal() {
-      return ((parseFloat(this.form.cantidad) || 0) * (parseFloat(this.form.precio) || 0)).toFixed(2)
+    calcDesglose() {
+      const cant   = parseFloat(this.form.cantidad) || 0
+      const precio = parseFloat(this.form.precio)   || 0
+      if (!cant || !precio) return null
+      if (this.form.incluirIva) {
+        const baseUnit = precio / 1.16
+        const ivaUnit  = precio - baseUnit
+        return {
+          base:  (cant * baseUnit).toFixed(2),
+          iva:   (cant * ivaUnit).toFixed(2),
+          total: (cant * precio).toFixed(2)
+        }
+      } else {
+        return {
+          base:  (cant * precio).toFixed(2),
+          iva:   null,
+          total: (cant * precio).toFixed(2)
+        }
+      }
     },
 
     async guardarEntrada() {

@@ -11,6 +11,9 @@ function ordersModule() {
     ordenResultados: [],
     ordenForm: {},
     ordenCarrito: { General: [] },
+    seccionActual: 'General',
+    nuevaSeccionNombre: '',
+    mostrarNuevaSeccion: false,
 
     async cargarOrdenes() {
       this.cargandoOrdenes = true
@@ -56,19 +59,24 @@ function ordersModule() {
 
     async abrirNuevaOrden() {
       if (!this.grupos.length) await this.cargarGrupos()
-      this.ordenForm       = { folio_numero: null, id_grupo: '', id_cliente: '', nombreCliente: '', nombreGrupo: '' }
-      this.ordenCarrito    = { General: [] }
-      this.errorOrden      = ''
-      this.ordenBusqueda   = ''
-      this.ordenResultados = []
-      this.clientesGrupo   = []
-      this.modalOrdenAbierto = true
+      this.ordenForm          = { folio_numero: null, id_grupo: '', id_cliente: '', nombreCliente: '', nombreGrupo: '' }
+      this.ordenCarrito       = { General: [] }
+      this.seccionActual      = 'General'
+      this.nuevaSeccionNombre = ''
+      this.mostrarNuevaSeccion = false
+      this.errorOrden         = ''
+      this.ordenBusqueda      = ''
+      this.ordenResultados    = []
+      this.clientesGrupo      = []
+      this.modalOrdenAbierto  = true
     },
 
     async abrirEditarOrden(orden) {
-      this.errorOrden      = ''
-      this.ordenBusqueda   = ''
-      this.ordenResultados = []
+      this.errorOrden          = ''
+      this.ordenBusqueda       = ''
+      this.ordenResultados     = []
+      this.nuevaSeccionNombre  = ''
+      this.mostrarNuevaSeccion = false
       try {
         const r = await API.get(`/api/ordenes/${orden.folio_numero}`)
         if (!r.ok) { this.mostrarToast('Error al cargar el pedido', true); return }
@@ -80,12 +88,11 @@ function ordersModule() {
           nombreCliente: o.nombre_cliente,
           nombreGrupo:   o.nombre_grupo
         }
-        // Aplanar secciones en General para edición web
+        // Preservar secciones tal como vienen del DB (compatibilidad con electron)
         const cart = (typeof o.datos_carrito === 'string')
           ? JSON.parse(o.datos_carrito) : (o.datos_carrito || {})
-        const items = []
-        for (const sec of Object.values(cart)) items.push(...sec)
-        this.ordenCarrito = { General: items }
+        this.ordenCarrito  = Object.keys(cart).length ? cart : { General: [] }
+        this.seccionActual = this.sectionNames()[0] || 'General'
         this.modalOrdenAbierto = true
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar el pedido', true)
@@ -93,12 +100,29 @@ function ordersModule() {
     },
 
     cerrarOrden() {
-      this.modalOrdenAbierto = false
-      this.ordenForm         = {}
-      this.ordenCarrito      = { General: [] }
-      this.errorOrden        = ''
-      this.ordenBusqueda     = ''
-      this.ordenResultados   = []
+      this.modalOrdenAbierto   = false
+      this.ordenForm           = {}
+      this.ordenCarrito        = { General: [] }
+      this.seccionActual       = 'General'
+      this.nuevaSeccionNombre  = ''
+      this.mostrarNuevaSeccion = false
+      this.errorOrden          = ''
+      this.ordenBusqueda       = ''
+      this.ordenResultados     = []
+    },
+
+    // Retorna los nombres de sección con General siempre primero
+    sectionNames() {
+      const keys = Object.keys(this.ordenCarrito)
+      if (keys.includes('General')) {
+        return ['General', ...keys.filter(k => k !== 'General')]
+      }
+      return keys
+    },
+
+    // Lista plana de todos los items (para conteo y total)
+    cartItems() {
+      return Object.values(this.ordenCarrito).flat()
     },
 
     async buscarProductoPedido() {
@@ -115,33 +139,43 @@ function ordersModule() {
     },
 
     agregarAlCarrito(producto) {
-      const existing = this.ordenCarrito.General.find(i => i.id_producto === producto.id_producto)
+      const sec = this.seccionActual || 'General'
+      if (!this.ordenCarrito[sec]) this.ordenCarrito[sec] = []
+      const existing = this.ordenCarrito[sec].find(i => i.id_producto === producto.id_producto)
       if (existing) {
         existing.cantidad += 1
       } else {
-        this.ordenCarrito.General.push({
+        this.ordenCarrito[sec].push({
           id_producto:     producto.id_producto,
           nombre_producto: producto.nombre_producto,
           unidad:          producto.unidad_producto,
           cantidad:        1,
           precio_unitario: parseFloat(producto.precio_base) || 0,
-          seccion:         'General'
+          seccion:         sec
         })
       }
       this.ordenBusqueda   = ''
       this.ordenResultados = []
     },
 
-    cartItems() {
-      return this.ordenCarrito.General || []
+    quitarDelCarrito(seccion, idx) {
+      if (!this.ordenCarrito[seccion]) return
+      this.ordenCarrito[seccion].splice(idx, 1)
     },
 
-    quitarDelCarrito(idx) {
-      this.ordenCarrito.General.splice(idx, 1)
+    agregarSeccion() {
+      const nombre = this.nuevaSeccionNombre.trim()
+      if (!nombre) return
+      if (!this.ordenCarrito[nombre]) {
+        this.ordenCarrito[nombre] = []
+      }
+      this.seccionActual       = nombre
+      this.nuevaSeccionNombre  = ''
+      this.mostrarNuevaSeccion = false
     },
 
     calcTotalOrden() {
-      return this.ordenCarrito.General.reduce((sum, item) =>
+      return this.cartItems().reduce((sum, item) =>
         sum + ((item.cantidad || 0) * (item.precio_unitario || 0)), 0)
     },
 
