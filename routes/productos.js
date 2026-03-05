@@ -93,6 +93,43 @@ router.get('/buscar', requireAuth, async (req, res) => {
   }
 })
 
+// Crear nuevo producto
+router.post('/', requireAuth, async (req, res) => {
+  try {
+    const { nombre_producto, unidad_producto, precio, id_grupo } = req.body
+    if (!nombre_producto || !unidad_producto) {
+      return res.status(400).json({ ok: false, error: 'Nombre y unidad son requeridos' })
+    }
+    // Verificar duplicado (case-insensitive)
+    const [dup] = await q(
+      'SELECT id_producto FROM producto WHERE LOWER(nombre_producto) = LOWER(?)',
+      [nombre_producto.trim()]
+    )
+    if (dup) {
+      return res.status(409).json({ ok: false, error: 'Ya existe un producto con ese nombre' })
+    }
+    // Insertar producto
+    const result = await q(
+      'INSERT INTO producto (nombre_producto, unidad_producto, stock, es_especial, activo) VALUES (?, ?, 0, 0, 1)',
+      [nombre_producto.trim(), unidad_producto.toLowerCase().trim()]
+    )
+    const id_producto = result.insertId
+    // Asignar precio al grupo si se proporcionó
+    if (precio && id_grupo) {
+      await q(
+        `INSERT INTO precio_por_grupo (id_producto, id_grupo, precio_base)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE precio_base = ?`,
+        [id_producto, id_grupo, precio, precio]
+      )
+    }
+    res.json({ ok: true, data: { id_producto, nombre_producto: nombre_producto.trim() } })
+  } catch (err) {
+    console.error('[productos] POST /:', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // Lista de proveedores
 router.get('/proveedores', requireAuth, async (req, res) => {
   try {

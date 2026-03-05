@@ -34,6 +34,7 @@ app.use('/api/entradas',  require('./routes/entradas'))
 app.use('/api/ordenes',   require('./routes/ordenes'))
 app.use('/api/clientes',  require('./routes/clientes'))
 app.use('/api/ubicuoai',  require('./routes/ubicuoai'))
+app.use('/api/mermas',    require('./routes/mermas'))
 
 // Health check público
 app.get('/api/status', async (req, res) => {

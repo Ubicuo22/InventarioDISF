@@ -30,7 +30,8 @@ function authModule() {
         this.verificarDB(),
         this.cargarProductos(),
         this.cargarResumen(),
-        this.cargarProveedores()
+        this.cargarProveedores(),
+        this.cargarMermasRecientes()
       ])
     },
 

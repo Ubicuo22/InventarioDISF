@@ -20,8 +20,8 @@
   --text:       #f9fafb;
   --text-muted: #9ca3af;   /* gray-400 */
   --text-dim:   #6b7280;   /* gray-500 */
-  --accent:     #10b981;
-  --accent-h:   #059669;
+  --accent:     #16a34a;
+  --accent-h:   #15803d;
   --scrollbar:  #1a1a1a;
 }
 
@@ -34,8 +34,8 @@
   --text:       #111827;
   --text-muted: #374151;   /* gray-700 */
   --text-dim:   #6b7280;   /* gray-500 */
-  --accent:     #059669;
-  --accent-h:   #047857;
+  --accent:     #15803d;
+  --accent-h:   #166534;
   --scrollbar:  #d1d5db;
 }
 
@@ -178,3 +178,26 @@ html.light .text-violet-400 { color: #6d28d9 !important; }
 /* Badge IA (usa clase ia-badge para poder sobreescribir inline colors) */
 .ia-badge { background: rgba(139,92,246,.3); color: #c4b5fd; }
 html.light .ia-badge { background: rgba(139,92,246,.15); color: #4c1d95; }
+
+/* ══════════════════════════════
+   VERDE OSCURO — Reemplaza emerald chillón
+   emerald-400 (#34d399) / emerald-500 (#10b981) → green-500/600
+══════════════════════════════ */
+/* Textos */
+.text-emerald-400        { color: #22c55e !important; }
+.text-emerald-300        { color: #4ade80 !important; }
+.text-emerald-500        { color: #16a34a !important; }
+/* Focus ring en inputs */
+.input-dark:focus        { box-shadow: 0 0 0 2px rgba(22,163,74,.25) !important; }
+.ia-qty-input:focus      { box-shadow: 0 0 0 2px rgba(22,163,74,.25) !important; }
+/* Backgrounds con opacidad */
+[class*="bg-emerald-500\/"] { --tw-bg-opacity: 1; background-color: rgba(22,163,74,var(--tw-bg-opacity)) !important; }
+[class*="bg-emerald-400\/"] { background-color: rgba(74,222,128,var(--tw-bg-opacity,1)) !important; }
+/* Borders */
+[class*="border-emerald-500\/"] { border-color: rgba(22,163,74,var(--tw-border-opacity,1)) !important; }
+[class*="border-emerald-400\/"] { border-color: rgba(74,222,128,var(--tw-border-opacity,1)) !important; }
+/* Nav bottom active */
+.text-emerald-400 { color: #22c55e !important; }
+/* IA cards verde */
+.ia-card-verde  { background: rgba(22,163,74,.08)  !important; border-color: rgba(22,163,74,.28) !important; }
+html.light .ia-card-verde { background: rgba(22,163,74,.06) !important; border-color: rgba(22,163,74,.20) !important; }

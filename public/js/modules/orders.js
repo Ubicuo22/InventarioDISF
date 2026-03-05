@@ -5,6 +5,7 @@ function ordersModule() {
     grupos: [],
     clientesGrupo: [],
     modalOrdenAbierto: false,
+    ordenReadOnly: false,
     guardandoOrden: false,
     errorOrden: '',
     ordenBusqueda: '',
@@ -29,6 +30,17 @@ function ordersModule() {
       resultados: [],
       buscando: false,
       seleccionado: null
+    },
+
+    iaCrearModal: {
+      visible: false,
+      secIdx: -1,
+      prodIdx: -1,
+      nombre: '',
+      unidad: 'kg',
+      precio: '',
+      guardando: false,
+      error: ''
     },
 
     // ─────────────────────────────────────────────────────────
@@ -85,6 +97,10 @@ function ordersModule() {
         visible: false, secIdx: -1, prodIdx: -1,
         busqueda: '', resultados: [], buscando: false, seleccionado: null
       }
+      this.iaCrearModal = {
+        visible: false, secIdx: -1, prodIdx: -1,
+        nombre: '', unidad: 'kg', precio: '', guardando: false, error: ''
+      }
     },
 
     async abrirNuevaOrden() {
@@ -108,6 +124,7 @@ function ordersModule() {
       this.ordenResultados     = []
       this.nuevaSeccionNombre  = ''
       this.mostrarNuevaSeccion = false
+      this.ordenReadOnly       = orden.estado === 'registrada'
       this._resetIA()
       try {
         const r = await API.get(`/api/ordenes/${orden.folio_numero}`)
@@ -133,6 +150,7 @@ function ordersModule() {
 
     cerrarOrden() {
       this.modalOrdenAbierto   = false
+      this.ordenReadOnly       = false
       this.ordenForm           = {}
       this.ordenCarrito        = { General: [] }
       this.seccionActual       = 'General'
@@ -253,6 +271,13 @@ function ordersModule() {
     iaMatchCount() {
       return this.iaResultados.reduce((sum, sec) =>
         sec.productos.reduce((s, p) => s + (p.tipo !== 'sin_match' && p.producto_id ? 1 : 0), sum), 0)
+    },
+
+    // Cuenta productos con match pero sin precio asignado al grupo
+    iaSinPrecioCount() {
+      return this.iaResultados.reduce((sum, sec) =>
+        sec.productos.reduce((s, p) =>
+          s + (p.tipo !== 'sin_match' && p.producto_id && !(p.precio > 0) ? 1 : 0), sum), 0)
     },
 
     iaTotalIA() {
@@ -384,12 +409,86 @@ function ordersModule() {
       }
     },
 
+    // ── Modal crear nuevo producto ────────────────────────────
+
+    iaAbrirCrear(secIdx, prodIdx) {
+      const prod = this.iaResultados[secIdx].productos[prodIdx]
+      this.iaCrearModal = {
+        visible:   true,
+        secIdx,
+        prodIdx,
+        nombre:    prod.texto_original || '',
+        unidad:    'kg',
+        precio:    '',
+        guardando: false,
+        error:     ''
+      }
+      this.$nextTick(() => document.getElementById('ia-crear-nombre')?.focus())
+    },
+
+    async iaConfirmarCrear() {
+      const { secIdx, prodIdx, nombre, unidad, precio } = this.iaCrearModal
+      if (!nombre.trim() || !unidad) return
+      this.iaCrearModal.guardando = true
+      this.iaCrearModal.error     = ''
+      try {
+        const body = {
+          nombre_producto:  nombre.trim(),
+          unidad_producto:  unidad,
+          precio:           parseFloat(precio) || 0,
+          id_grupo:         this.ordenForm.id_grupo || null
+        }
+        const r = await API.post('/api/productos', body)
+        if (!r.ok) { this.iaCrearModal.error = r.error || 'Error al crear'; return }
+
+        const prod = this.iaResultados[secIdx].productos[prodIdx]
+        // Actualizar la entrada en iaResultados como si hubiera hecho match perfecto
+        this.iaResultados[secIdx].productos[prodIdx] = {
+          ...prod,
+          tipo:            'perfecto',
+          nombre_producto: r.data.nombre_producto,
+          producto_id:     r.data.id_producto,
+          unidad:          r.data.unidad_producto,
+          precio:          parseFloat(r.data.precio_base) || 0,
+          confianza:       100
+        }
+        this.iaCrearModal = {
+          visible: false, secIdx: -1, prodIdx: -1,
+          nombre: '', unidad: 'kg', precio: '', guardando: false, error: ''
+        }
+        this.mostrarToast(`Producto "${r.data.nombre_producto}" creado`)
+      } catch (e) {
+        this.iaCrearModal.error = e.message || 'Error de conexión'
+      } finally {
+        this.iaCrearModal.guardando = false
+      }
+    },
+
     // ── Confirmar: vuelca iaResultados al carrito ─────────────
 
     // Para compatibilidad con botón de confirmar antiguo (si se llama sin arg)
     iaConMatch() { return this.iaMatchCount() },
 
     confirmarIA() {
+      // #1 — Refuerzo positivo: guarda correcciones para productos inciertos
+      // aceptados sin cambio (fire-and-forget, no bloquea el flujo)
+      for (const sec of this.iaResultados) {
+        for (const prod of sec.productos) {
+          if (
+            prod.tipo === 'incierto' &&
+            prod.producto_id &&
+            prod.texto_original &&
+            prod.texto_original.toLowerCase() !== (prod.nombre_producto || '').toLowerCase()
+          ) {
+            API.post('/api/ubicuoai/correccion', {
+              incorrect: prod.texto_original,
+              correct:   prod.nombre_producto
+            }).catch(() => {})
+          }
+        }
+      }
+
+      // Volcado al carrito respetando secciones
       for (const sec of this.iaResultados) {
         for (const prod of sec.productos) {
           if (prod.tipo === 'sin_match' || !prod.producto_id) continue
@@ -421,6 +520,7 @@ function ordersModule() {
     // ══════════════════════════════════════════════════════════
 
     async guardarOrden() {
+      if (this.ordenReadOnly) return
       this.errorOrden = ''
       if (!this.ordenForm.id_cliente) { this.errorOrden = 'Selecciona un cliente'; return }
       if (this.cartItems().length === 0) { this.errorOrden = 'Agrega al menos un producto'; return }

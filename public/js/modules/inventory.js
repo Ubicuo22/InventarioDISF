@@ -51,6 +51,64 @@ function inventoryModule() {
 
     async recargar() {
       await Promise.all([this.cargarProductos(), this.cargarResumen()])
+    },
+
+    // ── Nuevo producto ────────────────────────────────────────
+    modalProductoAbierto: false,
+    guardandoProducto:    false,
+    errorProducto:        '',
+    productoForm: {
+      nombre_producto: '',
+      unidad_producto: 'kg',
+      precio:          '',
+      id_grupo:        ''
+    },
+
+    abrirNuevoProducto() {
+      this.errorProducto = ''
+      this.productoForm  = { nombre_producto: '', unidad_producto: 'kg', precio: '', id_grupo: '' }
+      // Cargar grupos si aún no están (compartido con ordersModule via flat-merge)
+      if (!this.grupos?.length) this.cargarGrupos()
+      this.modalProductoAbierto = true
+    },
+
+    cerrarProducto() {
+      this.modalProductoAbierto = false
+      this.errorProducto        = ''
+    },
+
+    async guardarProducto() {
+      this.errorProducto = ''
+      if (!this.productoForm.nombre_producto.trim())
+        { this.errorProducto = 'El nombre es obligatorio'; return }
+      if (!this.productoForm.unidad_producto)
+        { this.errorProducto = 'Selecciona una unidad'; return }
+      const precio = this.productoForm.precio !== '' ? parseFloat(this.productoForm.precio) : null
+      if (precio !== null && (isNaN(precio) || precio <= 0))
+        { this.errorProducto = 'Precio debe ser mayor a 0'; return }
+      if (precio && !this.productoForm.id_grupo)
+        { this.errorProducto = 'Selecciona un grupo para el precio'; return }
+
+      this.guardandoProducto = true
+      try {
+        const body = {
+          nombre_producto: this.productoForm.nombre_producto.trim(),
+          unidad_producto: this.productoForm.unidad_producto
+        }
+        if (precio && this.productoForm.id_grupo) {
+          body.precio   = precio
+          body.id_grupo = this.productoForm.id_grupo
+        }
+        const r = await API.post('/api/productos', body)
+        if (!r.ok) { this.errorProducto = r.error || 'Error al guardar'; return }
+        this.cerrarProducto()
+        this.mostrarToast(`Producto "${r.data.nombre_producto}" creado`)
+        await this.recargar()
+      } catch (e) {
+        this.errorProducto = e.message || 'Error de conexión'
+      } finally {
+        this.guardandoProducto = false
+      }
     }
   }
 }
