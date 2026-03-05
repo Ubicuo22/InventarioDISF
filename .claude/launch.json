@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "bodega",
+      "name": "bodega-main",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js"],
-      "port": 3030
+      "port": 3032
     }
   ]
 }
