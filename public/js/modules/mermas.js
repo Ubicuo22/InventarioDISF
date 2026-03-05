@@ -110,7 +110,7 @@ function mermasModule() {
         })
         if (!r.ok) { this.errorMerma = r.error || 'Error al guardar'; return }
         this.cerrarMerma()
-        this.mostrarToast(`Merma registrada — ${r.nombre_producto}`)
+        this.mostrarToast(`Merma registrada — ${r.data?.nombre_producto || this.mermaForm.nombre_producto}`)
         // Refrescar stock en inventario
         await this.cargarProductos()
         await this.cargarResumen()
