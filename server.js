@@ -28,13 +28,14 @@ app.use(express.json())
 app.use(express.static(path.join(__dirname, 'public')))
 
 // ─── Rutas ───────────────────────────────────────────────────
-app.use('/api/auth',      require('./routes/auth'))
-app.use('/api/productos', require('./routes/productos'))
-app.use('/api/entradas',  require('./routes/entradas'))
-app.use('/api/ordenes',   require('./routes/ordenes'))
-app.use('/api/clientes',  require('./routes/clientes'))
-app.use('/api/ubicuoai',  require('./routes/ubicuoai'))
-app.use('/api/mermas',    require('./routes/mermas'))
+app.use('/api/auth',            require('./routes/auth'))
+app.use('/api/productos',       require('./routes/productos'))
+app.use('/api/entradas',        require('./routes/entradas'))
+app.use('/api/ordenes',         require('./routes/ordenes'))
+app.use('/api/clientes',        require('./routes/clientes'))
+app.use('/api/ubicuoai',        require('./routes/ubicuoai'))
+app.use('/api/mermas',          require('./routes/mermas'))
+app.use('/api/notificaciones',  require('./routes/notificaciones'))
 
 // Health check público
 app.get('/api/status', async (req, res) => {

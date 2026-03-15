@@ -33,6 +33,8 @@ function authModule() {
         this.cargarProveedores(),
         this.cargarMermasRecientes()
       ])
+      // Inicializar push notifications (no bloquea si falla)
+      this.initPush().catch(() => {})
     },
 
     async verificarDB() {
