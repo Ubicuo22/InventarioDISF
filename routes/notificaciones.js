@@ -13,12 +13,20 @@ const router   = express.Router()
 const { requireAuth } = require('../middleware/auth')
 const pool     = require('../db/pool')
 
-// ── Inicializar VAPID ────────────────────────────────────────
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL,
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-)
+// ── Inicializar VAPID (lazy — al primer uso, no al cargar el módulo) ─
+let vapidInicializado = false
+function inicializarVapid() {
+  if (vapidInicializado) return
+  if (!process.env.VAPID_EMAIL || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    throw new Error('Faltan variables VAPID_EMAIL, VAPID_PUBLIC_KEY o VAPID_PRIVATE_KEY')
+  }
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  )
+  vapidInicializado = true
+}
 
 // ── Helper: obtener todas las suscripciones activas ──────────
 async function getSuscripciones() {
@@ -30,6 +38,7 @@ async function getSuscripciones() {
 
 // ── Helper: enviar push a todos los dispositivos ─────────────
 async function enviarATodos(payload) {
+  inicializarVapid()
   const suscripciones = await getSuscripciones()
   if (!suscripciones.length) return { enviados: 0 }
 
