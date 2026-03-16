@@ -135,11 +135,11 @@ router.post('/suscribir', async (req, res) => {
 router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
   try {
     const { cliente, folio } = req.body
-    const folioStr = folio ? ` #${String(folio).padStart(4, '0')}` : ''
+    const folioStr = folio ? ` · #${String(folio).padStart(4, '0')}` : ''
 
     const result = await enviarATodos({
-      title: `📦 Pedido nuevo${folioStr}`,
-      body:  cliente || 'Sin cliente',
+      title: '📦 Pedido nuevo',
+      body:  `${cliente || 'Sin cliente'}${folioStr}`,
       icon:  '/assets/icon.png'
     })
 
@@ -159,11 +159,11 @@ router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
 router.post('/pedido-procesado', requireNotifSecret, async (req, res) => {
   try {
     const { cliente, folio } = req.body
-    const folioStr = folio ? ` #${String(folio).padStart(4, '0')}` : ''
+    const folioStr = folio ? ` · #${String(folio).padStart(4, '0')}` : ''
 
     const result = await enviarATodos({
-      title: `✅ Pedido procesado${folioStr}`,
-      body:  cliente || 'Sin cliente',
+      title: '💰 Pedido procesado',
+      body:  `${cliente || 'Sin cliente'}${folioStr}`,
       icon:  '/assets/icon.png'
     })
 
