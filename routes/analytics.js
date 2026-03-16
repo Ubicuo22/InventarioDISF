@@ -1,0 +1,217 @@
+/**
+ * DISFRULEG BODEGA — Análisis de Ventas
+ *
+ * GET /api/analytics/hoy            — Métricas del día actual
+ * GET /api/analytics/periodo        — Métricas por rango de fechas (?fechaInicio=&fechaFin=)
+ * GET /api/analytics/top-productos  — Top 10 productos por período
+ */
+
+const router      = require('express').Router()
+const { q }       = require('../db/pool')
+const { requireAuth } = require('../middleware/auth')
+
+router.use(requireAuth)
+
+// ════════════════════════════════════════════════════════════
+// GET /api/analytics/hoy
+// ════════════════════════════════════════════════════════════
+router.get('/hoy', async (req, res) => {
+  try {
+    // Q1: Ventas del día (notas, clientes, total)
+    const [ventas, peps] = await Promise.all([
+      q(`
+        SELECT
+          COUNT(DISTINCT f.id_factura)                                        AS total_notas,
+          COUNT(DISTINCT f.id_cliente)                                        AS clientes_activos,
+          COALESCE(SUM(df.cantidad_factura * df.precio_unitario_venta), 0)   AS total_vendido
+        FROM factura f
+        INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
+        WHERE DATE(f.fecha_factura) = CURDATE()
+      `),
+      // Q2: Ganancias PEPS del día
+      q(`
+        SELECT
+          COALESCE(SUM(dvl.utilidad_total), 0)                               AS ganancia_total,
+          COALESCE(SUM(dvl.cantidad_consumida * dvl.costo_unitario), 0)      AS costo_total
+        FROM detalle_venta_lote dvl
+        INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
+        INNER JOIN factura f          ON f.id_factura  = df.id_factura
+        WHERE DATE(f.fecha_factura) = CURDATE()
+      `)
+    ])
+
+    const v = ventas[0]  || {}
+    const p = peps[0]    || {}
+
+    const totalVendido = parseFloat(v.total_vendido  || 0)
+    const ganancia     = parseFloat(p.ganancia_total || 0)
+    const margen       = totalVendido > 0
+      ? parseFloat(((ganancia / totalVendido) * 100).toFixed(1))
+      : 0
+
+    res.json({
+      ok: true,
+      data: {
+        total_notas:       parseInt(v.total_notas       || 0),
+        clientes_activos:  parseInt(v.clientes_activos  || 0),
+        total_vendido:     totalVendido,
+        ganancia_total:    ganancia,
+        costo_total:       parseFloat(p.costo_total     || 0),
+        margen_porcentaje: margen
+      }
+    })
+  } catch (err) {
+    console.error('[analytics] GET /hoy:', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════
+// GET /api/analytics/periodo?fechaInicio=YYYY-MM-DD&fechaFin=YYYY-MM-DD
+// ════════════════════════════════════════════════════════════
+router.get('/periodo', async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin } = req.query
+    if (!fechaInicio || !fechaFin) {
+      return res.status(400).json({ ok: false, error: 'Faltan fechaInicio y fechaFin' })
+    }
+
+    // 3 queries en paralelo — mismo patrón que Electron analytics handler
+    const [facturas, totalesPorFactura, pepsPorFactura] = await Promise.all([
+
+      // Q1: Facturas del período con cliente
+      q(`
+        SELECT
+          f.id_factura,
+          DATE(f.fecha_factura) AS fecha,
+          f.id_cliente
+        FROM factura f
+        WHERE DATE(f.fecha_factura) BETWEEN ? AND ?
+      `, [fechaInicio, fechaFin]),
+
+      // Q2: Total vendido por factura
+      q(`
+        SELECT
+          df.id_factura,
+          SUM(df.cantidad_factura * df.precio_unitario_venta) AS total_vendido
+        FROM detalle_factura df
+        INNER JOIN factura f ON f.id_factura = df.id_factura
+        WHERE DATE(f.fecha_factura) BETWEEN ? AND ?
+        GROUP BY df.id_factura
+      `, [fechaInicio, fechaFin]),
+
+      // Q3: Ganancias PEPS por factura
+      q(`
+        SELECT
+          df.id_factura,
+          COALESCE(SUM(dvl.cantidad_consumida * dvl.costo_unitario), 0) AS costo_total,
+          COALESCE(SUM(dvl.utilidad_total), 0)                          AS ganancia
+        FROM detalle_venta_lote dvl
+        INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
+        INNER JOIN factura f          ON f.id_factura  = df.id_factura
+        WHERE DATE(f.fecha_factura) BETWEEN ? AND ?
+        GROUP BY df.id_factura
+      `, [fechaInicio, fechaFin])
+    ])
+
+    // — Merge en JS —
+    const ventaMap = {}
+    for (const r of totalesPorFactura) ventaMap[r.id_factura] = parseFloat(r.total_vendido || 0)
+    const pepsMap = {}
+    for (const r of pepsPorFactura)   pepsMap[r.id_factura]  = { costo: parseFloat(r.costo_total || 0), ganancia: parseFloat(r.ganancia || 0) }
+
+    // Agrupar por día
+    const porDiaMap = {}
+    const clientesGlobal = new Set()
+    let totalVendido = 0, gananciaTotal = 0, costoTotal = 0, totalNotas = 0
+
+    for (const f of facturas) {
+      const fecha    = f.fecha instanceof Date ? f.fecha.toISOString().split('T')[0] : String(f.fecha)
+      const vendido  = ventaMap[f.id_factura] || 0
+      const peps     = pepsMap[f.id_factura]  || { costo: 0, ganancia: 0 }
+
+      clientesGlobal.add(f.id_cliente)
+      totalVendido  += vendido
+      gananciaTotal += peps.ganancia
+      costoTotal    += peps.costo
+      totalNotas    += 1
+
+      if (!porDiaMap[fecha]) {
+        porDiaMap[fecha] = { fecha, total_notas: 0, total_vendido: 0, ganancia: 0 }
+      }
+      porDiaMap[fecha].total_notas   += 1
+      porDiaMap[fecha].total_vendido += vendido
+      porDiaMap[fecha].ganancia      += peps.ganancia
+    }
+
+    // Ordenar días desc y redondear
+    const por_dia = Object.values(porDiaMap)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))
+      .map(d => ({
+        ...d,
+        total_vendido:     parseFloat(d.total_vendido.toFixed(2)),
+        ganancia:          parseFloat(d.ganancia.toFixed(2)),
+        margen_porcentaje: d.total_vendido > 0
+          ? parseFloat(((d.ganancia / d.total_vendido) * 100).toFixed(1))
+          : 0
+      }))
+
+    const margenGlobal = totalVendido > 0
+      ? parseFloat(((gananciaTotal / totalVendido) * 100).toFixed(1))
+      : 0
+
+    res.json({
+      ok: true,
+      data: {
+        resumen: {
+          total_notas:       totalNotas,
+          clientes_activos:  clientesGlobal.size,
+          total_vendido:     parseFloat(totalVendido.toFixed(2)),
+          ganancia_total:    parseFloat(gananciaTotal.toFixed(2)),
+          costo_total:       parseFloat(costoTotal.toFixed(2)),
+          margen_porcentaje: margenGlobal
+        },
+        por_dia
+      }
+    })
+  } catch (err) {
+    console.error('[analytics] GET /periodo:', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════
+// GET /api/analytics/top-productos?fechaInicio=&fechaFin=
+// ════════════════════════════════════════════════════════════
+router.get('/top-productos', async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin } = req.query
+    if (!fechaInicio || !fechaFin) {
+      return res.status(400).json({ ok: false, error: 'Faltan fechaInicio y fechaFin' })
+    }
+
+    const rows = await q(`
+      SELECT
+        p.nombre_producto,
+        p.unidad_producto,
+        SUM(df.cantidad_factura)                                              AS cantidad_vendida,
+        SUM(df.cantidad_factura * df.precio_unitario_venta)                   AS total_vendido,
+        COUNT(DISTINCT f.id_factura)                                          AS veces_vendido
+      FROM producto p
+      INNER JOIN detalle_factura df ON p.id_producto = df.id_producto
+      INNER JOIN factura f          ON df.id_factura  = f.id_factura
+      WHERE DATE(f.fecha_factura) BETWEEN ? AND ?
+        AND p.activo = 1
+      GROUP BY p.id_producto, p.nombre_producto, p.unidad_producto
+      ORDER BY total_vendido DESC
+      LIMIT 10
+    `, [fechaInicio, fechaFin])
+
+    res.json({ ok: true, data: rows })
+  } catch (err) {
+    console.error('[analytics] GET /top-productos:', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+module.exports = router
