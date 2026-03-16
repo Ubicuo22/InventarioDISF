@@ -177,4 +177,54 @@ router.post('/pedido-procesado', requireNotifSecret, async (req, res) => {
   }
 })
 
+// ════════════════════════════════════════════════════════════
+// POST /api/notificaciones/stock-entrada
+// Electron avisa cuando se registra una compra (entra stock)
+// Body: { secret, producto, cantidad, unidad, usuario }
+// ════════════════════════════════════════════════════════════
+router.post('/stock-entrada', requireNotifSecret, async (req, res) => {
+  try {
+    const { producto, cantidad, unidad, usuario } = req.body
+    const cantStr    = cantidad ? ` · +${cantidad}${unidad ? ' ' + unidad : ''}` : ''
+    const usuarioStr = usuario  ? ` · ${usuario}` : ''
+
+    const result = await enviarATodos({
+      title: `📦 Entrada de stock · ${producto || 'Producto'}${cantStr}${usuarioStr}`,
+      body:  '',
+      icon:  '/assets/icon.png'
+    })
+
+    console.log(`[push] Stock entrada notificado — ${result.enviados}/${result.total} dispositivos`)
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[notificaciones] POST /stock-entrada', e.message)
+    res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
+  }
+})
+
+// ════════════════════════════════════════════════════════════
+// POST /api/notificaciones/stock-bajo
+// Electron avisa cuando un producto llega a 0 o negativo
+// Body: { secret, producto, stock, unidad, usuario }
+// ════════════════════════════════════════════════════════════
+router.post('/stock-bajo', requireNotifSecret, async (req, res) => {
+  try {
+    const { producto, stock, unidad, usuario } = req.body
+    const stockStr   = stock !== undefined ? ` · ${stock} ${unidad || ''}`.trimEnd() : ''
+    const usuarioStr = usuario ? ` · ${usuario}` : ''
+
+    const result = await enviarATodos({
+      title: `⚠️ Stock bajo · ${producto || 'Producto'}${stockStr}${usuarioStr}`,
+      body:  '',
+      icon:  '/assets/icon.png'
+    })
+
+    console.log(`[push] Stock bajo notificado — ${result.enviados}/${result.total} dispositivos`)
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[notificaciones] POST /stock-bajo', e.message)
+    res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
+  }
+})
+
 module.exports = router
