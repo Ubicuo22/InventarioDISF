@@ -11,7 +11,7 @@ const express  = require('express')
 const webpush  = require('web-push')
 const router   = express.Router()
 const { requireAuth } = require('../middleware/auth')
-const pool     = require('../db/pool')
+const { pool }  = require('../db/pool')
 
 // ── Inicializar VAPID (lazy — al primer uso, no al cargar el módulo) ─
 let vapidInicializado = false
