@@ -94,7 +94,7 @@ router.get('/vapid-key', (req, res) => {
 // El iPhone registra su suscripción push (requiere JWT)
 // Body: { endpoint, keys: { p256dh, auth } }
 // ════════════════════════════════════════════════════════════
-router.post('/suscribir', requireAuth, async (req, res) => {
+router.post('/suscribir', async (req, res) => {
   try {
     const { endpoint, keys } = req.body
     if (!endpoint || !keys?.p256dh || !keys?.auth) {

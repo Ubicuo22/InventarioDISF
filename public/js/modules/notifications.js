@@ -35,12 +35,13 @@ function notificationsModule() {
         console.log('[push] SW registrado. Suscrito:', this.pushSuscrito)
 
         // Sincronizar suscripción local al servidor (por si falló al guardar antes)
-        // El token está en localStorage, no como propiedad del objeto Alpine
-        if (sub && localStorage.getItem('bodega_token')) {
+        // Usa fetch directo para NO disparar session-expired si hay error 401
+        if (sub) {
           const subJson = sub.toJSON()
-          API.post('/api/notificaciones/suscribir', {
-            endpoint: subJson.endpoint,
-            keys:     subJson.keys
+          fetch('/api/notificaciones/suscribir', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys })
           }).catch(() => {}) // best-effort, no bloquea
         }
       } catch (e) {
@@ -73,12 +74,13 @@ function notificationsModule() {
           applicationServerKey: vapidKey
         })
 
-        // 4. Guardar suscripción en el servidor
+        // 4. Guardar suscripción en el servidor (fetch directo, sin JWT requerido)
         const subJson = sub.toJSON()
-        const saveRes = await API.post('/api/notificaciones/suscribir', {
-          endpoint: subJson.endpoint,
-          keys:     subJson.keys
-        })
+        const saveRes = await fetch('/api/notificaciones/suscribir', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys })
+        }).then(r => r.json())
         if (!saveRes.ok) throw new Error('No se pudo guardar la suscripción')
 
         this.pushSuscrito = true
