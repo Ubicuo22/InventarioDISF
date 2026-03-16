@@ -139,8 +139,8 @@ router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
     const usuarioStr = usuario ? ` · ${usuario}` : ''
 
     const result = await enviarATodos({
-      title: '📦 Pedido nuevo',
-      body:  `${cliente || 'Sin cliente'}${folioStr}${usuarioStr}`,
+      title: `📦 Pedido nuevo · ${cliente || 'Sin cliente'}${folioStr}${usuarioStr}`,
+      body:  '',
       icon:  '/assets/icon.png'
     })
 
@@ -164,8 +164,8 @@ router.post('/pedido-procesado', requireNotifSecret, async (req, res) => {
     const usuarioStr = usuario ? ` · ${usuario}` : ''
 
     const result = await enviarATodos({
-      title: '💰 Pedido procesado',
-      body:  `${cliente || 'Sin cliente'}${folioStr}${usuarioStr}`,
+      title: `💰 Pedido procesado · ${cliente || 'Sin cliente'}${folioStr}${usuarioStr}`,
+      body:  '',
       icon:  '/assets/icon.png'
     })
 
