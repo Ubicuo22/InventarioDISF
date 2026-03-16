@@ -35,7 +35,8 @@ function notificationsModule() {
         console.log('[push] SW registrado. Suscrito:', this.pushSuscrito)
 
         // Sincronizar suscripción local al servidor (por si falló al guardar antes)
-        if (sub && this.token) {
+        // El token está en localStorage, no como propiedad del objeto Alpine
+        if (sub && localStorage.getItem('bodega_token')) {
           const subJson = sub.toJSON()
           API.post('/api/notificaciones/suscribir', {
             endpoint: subJson.endpoint,
