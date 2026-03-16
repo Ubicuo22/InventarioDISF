@@ -33,6 +33,15 @@ function notificationsModule() {
         this.pushSuscrito = !!sub
 
         console.log('[push] SW registrado. Suscrito:', this.pushSuscrito)
+
+        // Sincronizar suscripción local al servidor (por si falló al guardar antes)
+        if (sub && this.token) {
+          const subJson = sub.toJSON()
+          API.post('/api/notificaciones/suscribir', {
+            endpoint: subJson.endpoint,
+            keys:     subJson.keys
+          }).catch(() => {}) // best-effort, no bloquea
+        }
       } catch (e) {
         console.warn('[push] Error al registrar SW:', e.message)
       }
