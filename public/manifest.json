@@ -1,6 +1,6 @@
 {
   "name": "Disfruleg Bodega",
-  "short_name": "Disfruleg",
+  "short_name": "Bodega",
   "description": "Portal de inventario para el encargado de bodega",
   "start_url": "/",
   "display": "standalone",
