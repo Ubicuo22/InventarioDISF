@@ -134,12 +134,13 @@ router.post('/suscribir', async (req, res) => {
 // ════════════════════════════════════════════════════════════
 router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
   try {
-    const { cliente, folio } = req.body
-    const folioStr = folio ? ` · #${String(folio).padStart(4, '0')}` : ''
+    const { cliente, folio, usuario } = req.body
+    const folioStr   = folio   ? ` · #${String(folio).padStart(4, '0')}` : ''
+    const usuarioStr = usuario ? ` · ${usuario}` : ''
 
     const result = await enviarATodos({
       title: '📦 Pedido nuevo',
-      body:  `${cliente || 'Sin cliente'}${folioStr}`,
+      body:  `${cliente || 'Sin cliente'}${folioStr}${usuarioStr}`,
       icon:  '/assets/icon.png'
     })
 
@@ -158,12 +159,13 @@ router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 router.post('/pedido-procesado', requireNotifSecret, async (req, res) => {
   try {
-    const { cliente, folio } = req.body
-    const folioStr = folio ? ` · #${String(folio).padStart(4, '0')}` : ''
+    const { cliente, folio, usuario } = req.body
+    const folioStr   = folio   ? ` · #${String(folio).padStart(4, '0')}` : ''
+    const usuarioStr = usuario ? ` · ${usuario}` : ''
 
     const result = await enviarATodos({
       title: '💰 Pedido procesado',
-      body:  `${cliente || 'Sin cliente'}${folioStr}`,
+      body:  `${cliente || 'Sin cliente'}${folioStr}${usuarioStr}`,
       icon:  '/assets/icon.png'
     })
 
