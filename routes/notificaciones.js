@@ -8,69 +8,10 @@
  */
 
 const express  = require('express')
-const webpush  = require('web-push')
 const router   = express.Router()
 const { requireAuth } = require('../middleware/auth')
 const { pool }  = require('../db/pool')
-
-// ── Inicializar VAPID (lazy — al primer uso, no al cargar el módulo) ─
-let vapidInicializado = false
-function inicializarVapid() {
-  if (vapidInicializado) return
-  if (!process.env.VAPID_EMAIL || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
-    throw new Error('Faltan variables VAPID_EMAIL, VAPID_PUBLIC_KEY o VAPID_PRIVATE_KEY')
-  }
-  webpush.setVapidDetails(
-    process.env.VAPID_EMAIL,
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  )
-  vapidInicializado = true
-}
-
-// ── Helper: obtener todas las suscripciones activas ──────────
-async function getSuscripciones() {
-  const [rows] = await pool.query(
-    'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE activo = 1'
-  )
-  return rows
-}
-
-// ── Helper: enviar push a todos los dispositivos ─────────────
-async function enviarATodos(payload) {
-  inicializarVapid()
-  const suscripciones = await getSuscripciones()
-  if (!suscripciones.length) return { enviados: 0 }
-
-  const payloadStr = JSON.stringify(payload)
-  let enviados = 0
-
-  await Promise.allSettled(
-    suscripciones.map(async (sub) => {
-      const subscription = {
-        endpoint: sub.endpoint,
-        keys: { p256dh: sub.p256dh, auth: sub.auth }
-      }
-      try {
-        await webpush.sendNotification(subscription, payloadStr)
-        enviados++
-      } catch (err) {
-        // Si el endpoint ya no es válido (410 Gone), lo desactivamos
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await pool.query(
-            'UPDATE push_subscriptions SET activo = 0 WHERE id = ?',
-            [sub.id]
-          )
-          console.log(`[push] Suscripción ${sub.id} desactivada (endpoint expirado)`)
-        } else {
-          console.error(`[push] Error enviando a sub ${sub.id}:`, err.message)
-        }
-      }
-    })
-  )
-
-  return { enviados, total: suscripciones.length }
-}
+const { enviarATodos } = require('../utils/push')
 
 // ── Middleware: verificar NOTIF_SECRET para llamadas de Electron ──
 function requireNotifSecret(req, res, next) {

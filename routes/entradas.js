@@ -7,6 +7,7 @@
 const router = require('express').Router()
 const { pool, q } = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
+const { enviarATodos } = require('../utils/push')
 
 // Últimas entradas registradas
 router.get('/recientes', requireAuth, async (req, res) => {
@@ -104,6 +105,22 @@ router.post('/', requireAuth, async (req, res) => {
 
     await conn.commit()
     conn.release()
+
+    // Notificar a todos los dispositivos — fire-and-forget
+    const [prodRow] = await q(
+      'SELECT nombre_producto, unidad_producto FROM producto WHERE id_producto = ?',
+      [idProducto]
+    )
+    const nombre  = prodRow?.nombre_producto || 'Producto'
+    const unidad  = prodRow?.unidad_producto || ''
+    const cantStr = `+${cantidadNum}${unidad ? ' ' + unidad : ''}`
+    enviarATodos({
+      title: `📦 Entrada de stock · ${nombre} · ${cantStr} · ${usuario}`,
+      body:  '',
+      icon:  '/assets/icon.png'
+    }).then(r => {
+      console.log(`[push] Stock entrada web — ${r.enviados}/${r.total} dispositivos`)
+    }).catch(() => {})
 
     res.json({
       ok: true,
