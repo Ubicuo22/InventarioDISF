@@ -1,12 +1,13 @@
 /**
  * DISFRULEG BODEGA — Notificaciones Push
  *
- * POST /api/notificaciones/suscribir        — el iPhone se registra (sin auth, re-sync seguro)
- * POST /api/notificaciones/nuevo-pedido     — Electron avisa pedido nuevo (requiere NOTIF_SECRET)
- * POST /api/notificaciones/pedido-procesado — Electron avisa venta procesada (requiere NOTIF_SECRET)
- * POST /api/notificaciones/stock-entrada    — Electron avisa entrada de stock (requiere NOTIF_SECRET)
- * POST /api/notificaciones/stock-bajo       — Electron avisa stock en cero (requiere NOTIF_SECRET)
- * GET  /api/notificaciones/vapid-key        — devuelve la clave pública VAPID (pública, sin auth)
+ * POST /api/notificaciones/suscribir           — el iPhone se registra (sin auth, re-sync seguro)
+ * POST /api/notificaciones/nuevo-pedido        — Electron avisa pedido nuevo (requiere NOTIF_SECRET)
+ * POST /api/notificaciones/pedido-procesado    — Electron avisa venta procesada (requiere NOTIF_SECRET)
+ * POST /api/notificaciones/stock-entrada       — Electron avisa entrada de stock (requiere NOTIF_SECRET)
+ * POST /api/notificaciones/stock-bajo          — Electron avisa stock en cero (requiere NOTIF_SECRET)
+ * POST /api/notificaciones/cotizacion-importada — Electron avisa importación de cotización (requiere NOTIF_SECRET)
+ * GET  /api/notificaciones/vapid-key           — devuelve la clave pública VAPID (pública, sin auth)
  */
 
 const express  = require('express')
@@ -77,11 +78,12 @@ router.post('/suscribir', async (req, res) => {
 // ════════════════════════════════════════════════════════════
 router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
   try {
-    const { cliente, folio, usuario } = req.body
+    const { cliente, folio, usuario, grupo } = req.body
     const folioStr = folio ? `#${String(folio).padStart(4, '0')}` : ''
+    const esAeropuerto = grupo && grupo.toLowerCase().includes('aeropuerto')
 
     const result = await enviarATodos({
-      title: `📦 Pedido nuevo`,
+      title: esAeropuerto ? `📦 Pedido nuevo — ${grupo}` : `📦 Pedido nuevo`,
       body:  [cliente, folioStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
       tag:   `pedido-${folio || Date.now()}`
@@ -102,11 +104,12 @@ router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 router.post('/pedido-procesado', requireNotifSecret, async (req, res) => {
   try {
-    const { cliente, folio, usuario } = req.body
+    const { cliente, folio, usuario, grupo } = req.body
     const folioStr = folio ? `#${String(folio).padStart(4, '0')}` : ''
+    const esAeropuerto = grupo && grupo.toLowerCase().includes('aeropuerto')
 
     const result = await enviarATodos({
-      title: `💰 Pedido procesado`,
+      title: esAeropuerto ? `💰 Pedido procesado — ${grupo}` : `💰 Pedido procesado`,
       body:  [cliente, folioStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
       tag:   `procesado-${folio || Date.now()}`
@@ -166,6 +169,31 @@ router.post('/stock-bajo', requireNotifSecret, async (req, res) => {
     res.json({ ok: true, ...result })
   } catch (e) {
     console.error('[notificaciones] POST /stock-bajo', e.message)
+    res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
+  }
+})
+
+// ════════════════════════════════════════════════════════════
+// POST /api/notificaciones/cotizacion-importada
+// Electron avisa cuando se importa una cotización de precios
+// Body: { grupo, productos, usuario }
+// ════════════════════════════════════════════════════════════
+router.post('/cotizacion-importada', requireNotifSecret, async (req, res) => {
+  try {
+    const { grupo, productos, usuario } = req.body
+    const productosStr = productos ? `${productos} producto${productos !== 1 ? 's' : ''}` : ''
+
+    const result = await enviarATodos({
+      title: `📋 Cotización importada`,
+      body:  [grupo, productosStr, usuario].filter(Boolean).join(' · '),
+      icon:  '/assets/icon.png',
+      tag:   `cotizacion-${Date.now()}`
+    })
+
+    console.log(`[push] Cotización importada — ${result.enviados}/${result.total} dispositivos`)
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[notificaciones] POST /cotizacion-importada', e.message)
     res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
   }
 })
