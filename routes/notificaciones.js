@@ -7,6 +7,7 @@
  * POST /api/notificaciones/stock-entrada       — Electron avisa entrada de stock (requiere NOTIF_SECRET)
  * POST /api/notificaciones/stock-bajo          — Electron avisa stock en cero (requiere NOTIF_SECRET)
  * POST /api/notificaciones/cotizacion-importada — Electron avisa importación de cotización (requiere NOTIF_SECRET)
+ * POST /api/notificaciones/nueva-version       — deploy-update.js avisa nueva versión disponible (requiere NOTIF_SECRET)
  * GET  /api/notificaciones/vapid-key           — devuelve la clave pública VAPID (pública, sin auth)
  */
 
@@ -194,6 +195,30 @@ router.post('/cotizacion-importada', requireNotifSecret, async (req, res) => {
     res.json({ ok: true, ...result })
   } catch (e) {
     console.error('[notificaciones] POST /cotizacion-importada', e.message)
+    res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
+  }
+})
+
+// ════════════════════════════════════════════════════════════
+// POST /api/notificaciones/nueva-version
+// deploy-update.js avisa cuando sube una nueva versión a R2
+// Body: { version }
+// ════════════════════════════════════════════════════════════
+router.post('/nueva-version', requireNotifSecret, async (req, res) => {
+  try {
+    const { version } = req.body
+
+    const result = await enviarATodos({
+      title: `🖥️ Nueva versión disponible`,
+      body:  `DISFRULEG Escritorio v${version} ya está lista. Se instalará automáticamente al reiniciar.`,
+      icon:  '/assets/icon.png',
+      tag:   `nueva-version-${version}`
+    })
+
+    console.log(`[push] Nueva versión v${version} — ${result.enviados}/${result.total} dispositivos`)
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[notificaciones] POST /nueva-version', e.message)
     res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
   }
 })
