@@ -51,6 +51,13 @@ app.use('/api/mermas',     requireAuth, requireModulo('mermas'),     require('./
 app.use('/api/ubicuoai',   requireAuth, requireModulo('pedidos'),    require('./routes/ubicuoai'))
 app.use('/api/analytics',  requireAuth, requireModulo('analytics'),  require('./routes/analytics'))
 
+// ─── Cobranza (requiere módulo 'cobranza') ───────────────────
+app.use('/api/deudas', require('./routes/deudas'))
+app.use('/api/pagos',  require('./routes/pagos'))
+
+// ─── Dashboard TV (token público) ────────────────────────────
+app.use('/api/dashboard', require('./routes/dashboard'))
+
 // ─── Rutas de administración (solo admin) ────────────────────
 app.use('/api/admin', require('./routes/admin'))
 

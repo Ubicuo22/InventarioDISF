@@ -10,6 +10,7 @@ const MODULOS_BODEGA = [
   { id: 'historial',  label: 'Historial',   desc: 'Historial de movimientos' },
   { id: 'analytics',  label: 'Ventas',      desc: 'Analytics y ganancias' },
   { id: 'mermas',     label: 'Mermas',      desc: 'Registro de mermas' },
+  { id: 'cobranza',   label: 'Cobranza',    desc: 'Deudas y registro de pagos' },
 ]
 
 function adminModule() {
