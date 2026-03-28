@@ -2296,10 +2296,16 @@
         <!-- Lista de sesiones -->
         <template x-for="s in sesiones" :key="s.jti">
           <div class="px-4 py-3 flex items-center gap-3" style="border-bottom:1px solid var(--border)">
-            <!-- Avatar color -->
-            <div class="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
-              :style="`background:${s.avatar_color || '#475569'}`"
-              x-text="(s.nombre_completo || s.username || '?')[0].toUpperCase()">
+            <!-- Avatar -->
+            <div class="w-9 h-9 rounded-full flex-shrink-0 relative overflow-hidden">
+              <img x-show="s.avatar_url_publica"
+                :src="s.avatar_url_publica" alt=""
+                class="w-full h-full object-cover"
+                @error="$el.style.display='none'; $el.nextElementSibling.style.display='flex'" />
+              <div class="w-full h-full absolute inset-0 flex items-center justify-center text-xs font-bold text-white"
+                :style="`background:${s.avatar_color || '#475569'}; display:${s.avatar_url_publica ? 'none' : 'flex'}`"
+                x-text="(s.nombre_completo || s.username || '?')[0].toUpperCase()">
+              </div>
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
@@ -2398,9 +2404,16 @@
         <div x-show="!editandoUsuario">
           <template x-for="u in usuariosAdmin" :key="u.id_usuario">
             <div class="px-4 py-3 flex items-center gap-3" style="border-bottom:1px solid var(--border)">
-              <div class="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
-                :style="`background:${u.avatar_color || '#475569'}`"
-                x-text="(u.nombre_completo || u.username || '?')[0].toUpperCase()">
+              <!-- Avatar -->
+              <div class="w-9 h-9 rounded-full flex-shrink-0 relative overflow-hidden">
+                <img x-show="u.avatar_url_publica"
+                  :src="u.avatar_url_publica" alt=""
+                  class="w-full h-full object-cover"
+                  @error="$el.style.display='none'; $el.nextElementSibling.style.display='flex'" />
+                <div class="w-full h-full absolute inset-0 flex items-center justify-center text-xs font-bold text-white"
+                  :style="`background:${u.avatar_color || '#475569'}; display:${u.avatar_url_publica ? 'none' : 'flex'}`"
+                  x-text="(u.nombre_completo || u.username || '?')[0].toUpperCase()">
+                </div>
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">

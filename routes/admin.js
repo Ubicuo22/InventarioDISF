@@ -21,7 +21,7 @@ router.get('/sesiones', async (req, res) => {
       SELECT
         s.id, s.jti, s.ip, s.user_agent,
         s.fecha_login, s.ultimo_uso,
-        u.id_usuario, u.username, u.nombre_completo, u.rol, u.avatar_color
+        u.id_usuario, u.username, u.nombre_completo, u.rol, u.avatar_color, u.avatar_url_publica
       FROM sesiones_activas s
       JOIN usuarios_sistema u ON s.id_usuario = u.id_usuario
       WHERE s.activo = 1
@@ -57,7 +57,7 @@ router.delete('/sesiones/:jti', async (req, res) => {
 router.get('/usuarios', async (req, res) => {
   try {
     const [users] = await pool.execute(`
-      SELECT id_usuario, username, nombre_completo, rol, activo, ultimo_acceso, avatar_color
+      SELECT id_usuario, username, nombre_completo, rol, activo, ultimo_acceso, avatar_color, avatar_url_publica
       FROM usuarios_sistema
       ORDER BY FIELD(rol,'admin','supervisor','usuario'), nombre_completo
     `)
