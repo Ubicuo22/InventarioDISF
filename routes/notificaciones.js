@@ -81,10 +81,9 @@ router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
   try {
     const { cliente, folio, usuario, grupo } = req.body
     const folioStr = folio ? `#${String(folio).padStart(4, '0')}` : ''
-    const esAeropuerto = grupo && grupo.toLowerCase().includes('aeropuerto')
 
     const result = await enviarATodos({
-      title: esAeropuerto ? `📦 Pedido nuevo — ${cliente}` : `📦 Pedido nuevo`,
+      title: cliente ? `📦 Pedido nuevo — ${cliente}` : `📦 Pedido nuevo`,
       body:  [folioStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
       tag:   `pedido-${folio || Date.now()}`
@@ -107,10 +106,9 @@ router.post('/pedido-procesado', requireNotifSecret, async (req, res) => {
   try {
     const { cliente, folio, usuario, grupo } = req.body
     const folioStr = folio ? `#${String(folio).padStart(4, '0')}` : ''
-    const esAeropuerto = grupo && grupo.toLowerCase().includes('aeropuerto')
 
     const result = await enviarATodos({
-      title: esAeropuerto ? `💰 Pedido procesado — ${cliente}` : `💰 Pedido procesado`,
+      title: cliente ? `💰 Pedido procesado — ${cliente}` : `💰 Pedido procesado`,
       body:  [folioStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
       tag:   `procesado-${folio || Date.now()}`
