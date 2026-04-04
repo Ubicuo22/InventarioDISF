@@ -2,6 +2,7 @@ function entriesModule() {
   return {
     modalAbierto: false,
     guardando: false,
+    guardadoOk: false,
     errorModal: '',
     dropdownVisible: false,
     dropResults: [],
@@ -21,6 +22,7 @@ function entriesModule() {
 
     cerrarModal() {
       this.modalAbierto = false
+      this.guardadoOk   = false
       this.resetForm()
     },
 
@@ -86,7 +88,8 @@ function entriesModule() {
     async guardarEntrada() {
       this.errorModal = ''
       if (!this.form.idProducto) { this.errorModal = 'Selecciona un producto'; return }
-      this.guardando = true
+      this.guardandoOk = false
+      this.guardando   = true
       try {
         const r = await API.post('/api/entradas', {
           idProducto:  this.form.idProducto,
@@ -112,12 +115,18 @@ function entriesModule() {
         await this.cargarResumen()
 
         const msg = `${this.form.cantidad} × ${this.form.nombreProducto}`
+
+        // Confirmación visual — botón verde con check por 700ms antes de cerrar
+        this.guardando   = false
+        this.guardadoOk  = true
+        await new Promise(res => setTimeout(res, 700))
         this.cerrarModal()
         this.mostrarToast(msg)
       } catch (err) {
         this.errorModal = err.message || 'Error de conexión'
       } finally {
-        this.guardando = false
+        this.guardando  = false
+        this.guardadoOk = false
       }
     }
   }

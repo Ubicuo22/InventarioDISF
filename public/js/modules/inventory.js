@@ -7,6 +7,7 @@ function inventoryModule() {
     filtroStock: '',
     resumen: {},
     proveedores: [],
+    _filtrarTimer: null,
 
     async cargarProductos() {
       this.cargando = true
@@ -47,6 +48,12 @@ function inventoryModule() {
       if (this.filtroStock === 'low')  lista = lista.filter(p => p.stock > 0 && p.stock <= 5)
       if (this.filtroStock === 'zero') lista = lista.filter(p => p.stock <= 0)
       this.filtrados = lista
+    },
+
+    // Versión debounced del filtro — para el input de búsqueda (300ms)
+    filtrarDebounced() {
+      clearTimeout(this._filtrarTimer)
+      this._filtrarTimer = setTimeout(() => this.filtrar(), 300)
     },
 
     async recargar() {

@@ -7,6 +7,7 @@ function ordersModule() {
     modalOrdenAbierto: false,
     ordenReadOnly: false,
     guardandoOrden: false,
+    ordenGuardadaOk: false,
     errorOrden: '',
     ordenBusqueda: '',
     ordenResultados: [],
@@ -525,7 +526,8 @@ function ordersModule() {
 
     async guardarOrden() {
       if (this.ordenReadOnly) return
-      this.errorOrden = ''
+      this.errorOrden     = ''
+      this.ordenGuardadaOk = false
       if (!this.ordenForm.id_cliente) { this.errorOrden = 'Selecciona un cliente'; return }
       if (this.cartItems().length === 0) { this.errorOrden = 'Agrega al menos un producto'; return }
       this.guardandoOrden = true
@@ -537,13 +539,20 @@ function ordersModule() {
         if (this.ordenForm.folio_numero) body.folio_numero = this.ordenForm.folio_numero
         const r = await API.post('/api/ordenes', body)
         if (!r.ok) { this.errorOrden = r.error || 'Error al guardar'; return }
+
+        // Confirmación visual — botón verde con check por 700ms antes de cerrar
+        this.guardandoOrden  = false
+        this.ordenGuardadaOk = true
+        const folio = r.folio_numero
+        await new Promise(res => setTimeout(res, 700))
         this.cerrarOrden()
-        this.mostrarToast(`Pedido #${String(r.folio_numero).padStart(4, '0')} guardado`)
+        this.mostrarToast(`Pedido #${String(folio).padStart(4, '0')} guardado`)
         await this.cargarOrdenes()
       } catch (e) {
         this.errorOrden = e.message || 'Error de conexión'
       } finally {
-        this.guardandoOrden = false
+        this.guardandoOrden  = false
+        this.ordenGuardadaOk = false
       }
     }
   }
