@@ -1,6 +1,7 @@
 const router  = require('express').Router()
 const { q }   = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
+const { registrar } = require('../utils/actividad')
 
 router.use(requireAuth)
 
@@ -82,6 +83,7 @@ router.post('/', async (req, res) => {
         WHERE  folio_numero = ?
       `, [cartStr, total, folio_numero])
 
+      registrar(req, 'pedidos', 'orden_actualizada', { folio: folio_numero, total })
       res.json({ ok: true, folio_numero })
     } else {
       // — INSERT nueva orden
@@ -94,6 +96,7 @@ router.post('/', async (req, res) => {
         VALUES (?, ?, ?, ?, ?, 'guardada', 1)
       `, [nextFolio, id_cliente, usuario, cartStr, total])
 
+      registrar(req, 'pedidos', 'orden_nueva', { folio: nextFolio, total })
       res.json({ ok: true, folio_numero: nextFolio })
     }
   } catch (e) {

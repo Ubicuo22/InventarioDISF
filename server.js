@@ -27,6 +27,8 @@
 const path = require('path')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
+const { agendarResumenDiario } = require('./utils/resumen-diario')
+
 const express = require('express')
 const app  = express()
 const PORT = process.env.PORT || process.env.BODEGA_PORT || 3030
@@ -101,6 +103,27 @@ app.listen(PORT, async () => {
       )
     `)
     console.log('   ✓ Tabla sesiones_activas verificada')
+
+    // Auto-crear tabla logs_actividad si no existe
+    await q(`
+      CREATE TABLE IF NOT EXISTS logs_actividad (
+        id       INT AUTO_INCREMENT PRIMARY KEY,
+        usuario  VARCHAR(50)  NOT NULL,
+        nombre   VARCHAR(100) DEFAULT '',
+        modulo   VARCHAR(50)  NOT NULL,
+        accion   VARCHAR(100) NOT NULL,
+        detalles TEXT         DEFAULT NULL,
+        ip       VARCHAR(45)  DEFAULT '',
+        fecha    DATETIME     DEFAULT NOW(),
+        INDEX idx_fecha   (fecha),
+        INDEX idx_usuario (usuario),
+        INDEX idx_modulo  (modulo)
+      )
+    `)
+    console.log('   ✓ Tabla logs_actividad verificada')
+
+    // Programar resumen diario automático a las 20:00
+    agendarResumenDiario()
   } catch (err) {
     console.error('❌ Error iniciando:', err.message)
   }

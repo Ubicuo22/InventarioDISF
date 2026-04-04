@@ -13,11 +13,29 @@ const MODULOS_BODEGA = [
   { id: 'cobranza',   label: 'Cobranza',    desc: 'Deudas y registro de pagos' },
 ]
 
+const MODULOS_ACTIVIDAD = [
+  { id: '',           label: 'Todos' },
+  { id: 'auth',       label: 'Accesos' },
+  { id: 'inventario', label: 'Inventario' },
+  { id: 'pedidos',    label: 'Pedidos' },
+  { id: 'mermas',     label: 'Mermas' },
+  { id: 'cobranza',   label: 'Cobranza' },
+]
+
+const ACCION_ICONS = {
+  login:             '🔑',
+  entrada:           '📦',
+  merma:             '⚠️',
+  orden_nueva:       '🛒',
+  orden_actualizada: '✏️',
+  pago:              '💰',
+}
+
 function adminModule() {
   return {
     // ── Estado ────────────────────────────────────────────
     adminPanelAbierto:   false,
-    adminTab:            'sesiones',   // 'sesiones' | 'usuarios'
+    adminTab:            'sesiones',   // 'sesiones' | 'usuarios' | 'actividad'
     sesiones:            [],
     cargandoSesiones:    false,
     usuariosAdmin:       [],
@@ -27,6 +45,13 @@ function adminModule() {
     // Edición de permisos de supervisor
     editandoUsuario:     null,         // objeto usuario seleccionado
     editPermisos:        [],           // array de modulo_id seleccionados
+
+    // Historial de actividad
+    actividadLogs:       [],
+    cargandoActividad:   false,
+    actividadModulo:     '',           // filtro por módulo
+    actividadUsuario:    '',           // filtro por usuario
+    modulosActividad:    MODULOS_ACTIVIDAD,
 
     // ── Abrir / cerrar panel ──────────────────────────────
     async abrirAdminPanel() {
@@ -43,8 +68,9 @@ function adminModule() {
 
     async cambiarAdminTab(tab) {
       this.adminTab = tab
-      if (tab === 'sesiones' && !this.sesiones.length) await this.cargarSesiones()
-      if (tab === 'usuarios' && !this.usuariosAdmin.length) await this.cargarUsuarios()
+      if (tab === 'sesiones'  && !this.sesiones.length)     await this.cargarSesiones()
+      if (tab === 'usuarios'  && !this.usuariosAdmin.length) await this.cargarUsuarios()
+      if (tab === 'actividad' && !this.actividadLogs.length) await this.cargarActividad()
     },
 
     // ── Sesiones ──────────────────────────────────────────
@@ -138,6 +164,61 @@ function adminModule() {
       if (rol === 'admin')      return 'text-emerald-400 bg-emerald-400/10'
       if (rol === 'supervisor') return 'text-blue-400 bg-blue-400/10'
       return 'text-slate-500 bg-slate-500/10'
+    },
+
+    // ── Historial de actividad ─────────────────────────────
+    async cargarActividad() {
+      this.cargandoActividad = true
+      try {
+        const params = { limit: 60 }
+        if (this.actividadModulo)  params.modulo  = this.actividadModulo
+        if (this.actividadUsuario) params.usuario = this.actividadUsuario.toUpperCase()
+        const r = await API.getActividad(params)
+        if (r.ok) this.actividadLogs = r.data
+      } catch { /* silent */ }
+      finally { this.cargandoActividad = false }
+    },
+
+    async filtrarActividad() {
+      this.actividadLogs = []
+      await this.cargarActividad()
+    },
+
+    actividadIcono(accion) {
+      return ACCION_ICONS[accion] || '•'
+    },
+
+    actividadFecha(fecha) {
+      if (!fecha) return '—'
+      const d = new Date(fecha)
+      const hoy = new Date()
+      const diff = Math.floor((hoy - d) / 60000)
+      if (diff < 1)    return 'Ahora'
+      if (diff < 60)   return `${diff} min`
+      if (diff < 1440) return `${Math.floor(diff / 60)}h`
+      return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) +
+             ' ' + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    },
+
+    actividadDetalles(detallesStr) {
+      if (!detallesStr) return ''
+      try {
+        const d = JSON.parse(detallesStr)
+        return Object.entries(d)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(' · ')
+      } catch { return detallesStr }
+    },
+
+    actividadModuloClass(modulo) {
+      const map = {
+        auth:       'text-violet-400 bg-violet-400/10',
+        inventario: 'text-blue-400 bg-blue-400/10',
+        pedidos:    'text-emerald-400 bg-emerald-400/10',
+        mermas:     'text-orange-400 bg-orange-400/10',
+        cobranza:   'text-yellow-400 bg-yellow-400/10',
+      }
+      return map[modulo] || 'text-slate-400 bg-slate-400/10'
     }
   }
 }

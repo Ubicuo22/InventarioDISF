@@ -7,6 +7,7 @@
 const router = require('express').Router()
 const { pool } = require('../db/pool')
 const { requireAuth, requireModulo } = require('../middleware/auth')
+const { registrar } = require('../utils/actividad')
 
 router.use(requireAuth, requireModulo('cobranza'))
 
@@ -89,6 +90,10 @@ router.post('/', async (req, res) => {
     )
 
     await conn.commit()
+
+    registrar(req, 'cobranza', 'pago', {
+      idDeuda, monto: montoNum, metodo: metodoPago, pagada: pagada === 1
+    })
 
     res.json({
       ok:            true,

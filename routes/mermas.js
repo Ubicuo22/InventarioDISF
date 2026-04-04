@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { q }   = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
+const { registrar } = require('../utils/actividad')
 
 router.use(requireAuth)
 
@@ -47,6 +48,11 @@ router.post('/', async (req, res) => {
     )
 
     await conn.commit()
+
+    registrar(req, 'mermas', 'merma', {
+      producto: prod.nombre_producto, tipo: tipo_merma, cantidad: cantidad_merma
+    })
+
     res.json({ ok: true, id_merma: ins.insertId, nombre_producto: prod.nombre_producto })
   } catch (e) {
     await conn.rollback()

@@ -8,6 +8,7 @@ const router = require('express').Router()
 const { pool, q } = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
 const { enviarATodos } = require('../utils/push')
+const { registrar } = require('../utils/actividad')
 
 // Últimas entradas registradas
 router.get('/recientes', requireAuth, async (req, res) => {
@@ -121,6 +122,10 @@ router.post('/', requireAuth, async (req, res) => {
     }).then(r => {
       console.log(`[push] Stock entrada web — ${r.enviados}/${r.total} dispositivos`)
     }).catch(() => {})
+
+    registrar(req, 'inventario', 'entrada', {
+      producto: nombre, cantidad: cantidadNum, total: parseFloat(total.toFixed(2))
+    })
 
     res.json({
       ok: true,

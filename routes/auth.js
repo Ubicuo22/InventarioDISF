@@ -16,6 +16,7 @@ const jwt     = require('jsonwebtoken')
 const crypto  = require('crypto')
 const { pool } = require('../db/pool')
 const { requireAuth, invalidarCache } = require('../middleware/auth')
+const { registrar } = require('../utils/actividad')
 
 // ─── POST /api/auth/login ─────────────────────────────────
 router.post('/login', async (req, res) => {
@@ -109,6 +110,10 @@ router.post('/login', async (req, res) => {
     } catch (e) {
       console.warn('[auth] No se pudo guardar sesión (tabla sesiones_activas?):', e.message)
     }
+
+    // Registrar en historial de actividad
+    req.user = { username: user.username, nombre: user.nombre_completo }
+    registrar(req, 'auth', 'login', { rol: user.rol })
 
     res.json({
       ok: true,

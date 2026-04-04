@@ -80,5 +80,9 @@ const API = {
   async getUsuariosAdmin()     { return this.get('/api/admin/usuarios') },
   async updatePermisos(id, modulos) {
     return this.put(`/api/admin/usuarios/${id}/permisos`, { modulos })
+  },
+  async getActividad(params = {}) {
+    const qs = new URLSearchParams(params).toString()
+    return this.get(`/api/admin/actividad${qs ? '?' + qs : ''}`)
   }
 }

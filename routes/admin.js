@@ -124,4 +124,38 @@ router.put('/usuarios/:id/permisos', async (req, res) => {
   }
 })
 
+// ─── GET /api/admin/actividad ─────────────────────────────
+router.get('/actividad', async (req, res) => {
+  try {
+    const limit   = Math.min(parseInt(req.query.limit)  || 50, 200)
+    const offset  = parseInt(req.query.offset) || 0
+    const usuario = req.query.usuario || null
+    const modulo  = req.query.modulo  || null
+
+    const { q } = require('../db/pool')
+    const params = []
+    const where  = []
+
+    if (usuario) { where.push('usuario = ?'); params.push(usuario) }
+    if (modulo)  { where.push('modulo = ?');  params.push(modulo)  }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+    params.push(limit, offset)
+
+    const rows = await q(
+      `SELECT id, usuario, nombre, modulo, accion, detalles, ip, fecha
+       FROM logs_actividad
+       ${whereClause}
+       ORDER BY fecha DESC
+       LIMIT ? OFFSET ?`,
+      params
+    )
+
+    res.json({ ok: true, data: rows })
+  } catch (e) {
+    console.error('[admin] GET /actividad:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al obtener actividad' })
+  }
+})
+
 module.exports = router
