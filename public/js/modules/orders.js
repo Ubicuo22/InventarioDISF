@@ -163,8 +163,9 @@ function ordersModule() {
     },
 
     // Retorna los nombres de sección con General siempre primero
+    // Filtra keys internas que empiecen con _ (metadata del Electron)
     sectionNames() {
-      const keys = Object.keys(this.ordenCarrito)
+      const keys = Object.keys(this.ordenCarrito).filter(k => !k.startsWith('_'))
       if (keys.includes('General')) {
         return ['General', ...keys.filter(k => k !== 'General')]
       }
@@ -172,8 +173,11 @@ function ordersModule() {
     },
 
     // Lista plana de todos los items (para conteo y total)
+    // Excluye keys internas que empiecen con _
     cartItems() {
-      return Object.values(this.ordenCarrito).flat()
+      return Object.entries(this.ordenCarrito)
+        .filter(([k]) => !k.startsWith('_'))
+        .flatMap(([, v]) => v)
     },
 
     async buscarProductoPedido() {
