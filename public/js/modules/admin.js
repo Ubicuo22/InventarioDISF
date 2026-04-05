@@ -11,6 +11,7 @@ const MODULOS_BODEGA = [
   { id: 'analytics',  label: 'Ventas',      desc: 'Analytics y ganancias' },
   { id: 'mermas',     label: 'Mermas',      desc: 'Registro de mermas' },
   { id: 'cobranza',   label: 'Cobranza',    desc: 'Deudas y registro de pagos' },
+  { id: 'compras',    label: 'Compras',     desc: 'Historial de gastos de compra' },
 ]
 
 const MODULOS_ACTIVIDAD = [

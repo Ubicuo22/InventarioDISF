@@ -390,6 +390,23 @@
           </svg>
         </button>
 
+        <!-- Compras -->
+        <button x-show="tienePermiso('compras')" @click="tab = 'compras'; cargarCompras()"
+          class="card w-full text-left p-5 flex items-center gap-4 border border-transparent hover:border-cyan-500/30 transition-colors active:scale-[0.99]">
+          <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0" style="background: rgba(6,182,212,.12)">
+            <svg class="w-7 h-7 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-white font-semibold text-base">Compras</p>
+            <p class="text-slate-400 text-sm mt-0.5">Historial de gastos por día</p>
+          </div>
+          <svg class="w-5 h-5 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+
         <!-- Admin — solo visible para administradores -->
         <button x-show="session?.rol === 'admin'" @click="abrirAdminPanel()"
           class="card w-full text-left p-5 flex items-center gap-4 border border-transparent hover:border-slate-500/40 transition-colors active:scale-[0.99]">
@@ -1145,6 +1162,185 @@
 
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════
+         TAB: Compras
+    ══════════════════════════════════════════════════════════ -->
+    <div x-show="tab === 'compras'" x-cloak class="max-w-3xl mx-auto px-4 pt-5 pb-28">
+
+      <!-- Cabecera -->
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-white">Compras</h2>
+        <button @click="cargarCompras()" :disabled="comprasCargando"
+          class="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 disabled:opacity-40">
+          <svg class="w-5 h-5" :class="{'animate-spin': comprasCargando}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Filtros rápidos -->
+      <div class="flex gap-2 mb-4 flex-wrap">
+        <button @click="filtroCompras('hoy')"
+          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+          :class="comprasDesde === comprasHasta && comprasHasta === new Date().toISOString().slice(0,10)
+            ? 'bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/40'
+            : 'bg-white/5 text-slate-400 hover:text-white'">Hoy</button>
+        <button @click="filtroCompras('7d')"
+          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-white/5 text-slate-400 hover:text-white">7 días</button>
+        <button @click="filtroCompras('mes')"
+          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-white/5 text-slate-400 hover:text-white">Este mes</button>
+        <button @click="filtroCompras('30d')"
+          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-white/5 text-slate-400 hover:text-white">30 días</button>
+      </div>
+
+      <!-- Rango personalizado -->
+      <div class="flex gap-2 mb-5">
+        <div class="flex-1">
+          <label class="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Desde</label>
+          <input type="date" x-model="comprasDesde" @change="cargarCompras()"
+            class="w-full rounded-xl px-3 py-2 text-sm text-white border"
+            style="background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.1)">
+        </div>
+        <div class="flex-1">
+          <label class="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Hasta</label>
+          <input type="date" x-model="comprasHasta" @change="cargarCompras()"
+            class="w-full rounded-xl px-3 py-2 text-sm text-white border"
+            style="background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.1)">
+        </div>
+      </div>
+
+      <!-- Resumen del período -->
+      <div x-show="comprasResumen.total_compras >= 0 && !comprasCargando"
+        class="grid grid-cols-3 gap-3 mb-5">
+        <div class="card p-4 text-center rounded-2xl">
+          <p class="text-cyan-400 font-bold text-lg" x-text="fmtMoney(comprasResumen.total_periodo || 0)"></p>
+          <p class="text-slate-500 text-[11px] mt-0.5">Total gastado</p>
+        </div>
+        <div class="card p-4 text-center rounded-2xl">
+          <p class="text-white font-bold text-lg" x-text="comprasResumen.total_compras || 0"></p>
+          <p class="text-slate-500 text-[11px] mt-0.5">Compras</p>
+        </div>
+        <div class="card p-4 text-center rounded-2xl">
+          <p class="text-slate-300 font-bold text-lg" x-text="comprasResumen.dias_con_gasto || 0"></p>
+          <p class="text-slate-500 text-[11px] mt-0.5">Días con compras</p>
+        </div>
+      </div>
+
+      <!-- Cargando -->
+      <div x-show="comprasCargando" class="flex flex-col items-center py-14 text-slate-500">
+        <svg class="w-7 h-7 animate-spin mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span class="text-sm">Cargando compras...</span>
+      </div>
+
+      <!-- Error -->
+      <div x-show="comprasError && !comprasCargando"
+        class="text-center py-10 text-red-400 text-sm" x-text="comprasError"></div>
+
+      <!-- Sin datos -->
+      <div x-show="!comprasCargando && !comprasError && comprasDias.length === 0"
+        class="flex flex-col items-center justify-center py-16 text-slate-500">
+        <svg class="w-12 h-12 mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <p class="text-sm">Sin compras en este período</p>
+      </div>
+
+      <!-- Lista de días -->
+      <div x-show="!comprasCargando && comprasDias.length > 0" class="space-y-3">
+        <template x-for="dia in comprasDias" :key="dia.fecha">
+          <div class="card rounded-2xl overflow-hidden">
+
+            <!-- Cabecera del día -->
+            <button @click="toggleDiaCompras(dia.fecha)"
+              class="w-full flex items-center gap-3 p-4 text-left hover:bg-white/5 transition-colors">
+              <!-- Ícono -->
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style="background:rgba(6,182,212,.12)">
+                <svg class="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <!-- Info -->
+              <div class="flex-1 min-w-0">
+                <p class="text-white font-semibold text-sm capitalize" x-text="fmtFechaCompra(dia.fecha)"></p>
+                <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span class="text-slate-400 text-xs" x-text="`${dia.num_compras} compra${dia.num_compras !== 1 ? 's' : ''}`"></span>
+                  <template x-if="dia.proveedores.length > 0">
+                    <span class="text-slate-600 text-xs" x-text="'· ' + dia.proveedores.join(', ')"></span>
+                  </template>
+                </div>
+              </div>
+              <!-- Total + chevron -->
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-cyan-400 font-bold text-sm" x-text="fmtMoney(dia.total_gasto)"></span>
+                <svg class="w-4 h-4 text-slate-600 transition-transform duration-200"
+                  :class="comprasDiaOpen === dia.fecha ? 'rotate-90' : ''"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </div>
+            </button>
+
+            <!-- Desglose expandido -->
+            <div x-show="comprasDiaOpen === dia.fecha"
+              x-transition:enter="transition ease-out duration-150"
+              x-transition:enter-start="opacity-0 -translate-y-1"
+              x-transition:enter-end="opacity-100 translate-y-0"
+              x-transition:leave="transition ease-in duration-100"
+              x-transition:leave-start="opacity-100"
+              x-transition:leave-end="opacity-0">
+              <div class="px-4 pb-4 space-y-3">
+
+                <!-- Por proveedor -->
+                <template x-for="grupo in comprasPorProveedor(dia.compras)" :key="grupo.proveedor">
+                  <div>
+                    <!-- Nombre del proveedor -->
+                    <div class="flex items-center justify-between mb-1.5">
+                      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide"
+                        x-text="grupo.proveedor"></p>
+                      <p class="text-xs text-slate-500" x-text="fmtMoney(grupo.total)"></p>
+                    </div>
+                    <!-- Items del proveedor -->
+                    <div class="rounded-xl overflow-hidden divide-y" style="border:1px solid rgba(255,255,255,.07); divide-color:rgba(255,255,255,.05)">
+                      <template x-for="c in grupo.items" :key="c.id_compra">
+                        <div class="px-3 py-2.5 flex items-center gap-3"
+                          style="background:rgba(255,255,255,.03)">
+                          <div class="flex-1 min-w-0">
+                            <p class="text-white text-sm font-medium truncate" x-text="c.nombre_producto"></p>
+                            <p class="text-slate-500 text-xs mt-0.5"
+                              x-text="`${c.cantidad} ${c.unidad_producto || ''} × ${fmtMoney(c.precio_unitario)}${c.incluye_iva ? ' c/IVA' : ''}`"></p>
+                          </div>
+                          <div class="text-right flex-shrink-0">
+                            <p class="text-white text-sm font-semibold" x-text="fmtMoney(c.total)"></p>
+                            <template x-if="c.folio">
+                              <p class="text-slate-600 text-[10px]" x-text="'Folio: ' + c.folio"></p>
+                            </template>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- IVA del día si aplica -->
+                <template x-if="dia.total_iva > 0">
+                  <div class="flex justify-between items-center pt-1 border-t" style="border-color:rgba(255,255,255,.07)">
+                    <span class="text-slate-500 text-xs">IVA incluido en total</span>
+                    <span class="text-slate-400 text-xs" x-text="fmtMoney(dia.total_iva)"></span>
+                  </div>
+                </template>
+
+              </div>
+            </div>
+
+          </div>
+        </template>
+      </div>
+
+    </div><!-- /tab compras -->
+
   </main>
 
   <!-- ── Bottom Nav — visible en módulos ── -->
@@ -1206,6 +1402,16 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
         </svg>
         <span class="text-[10px] font-medium">Ventas</span>
+      </button>
+
+      <!-- Compras -->
+      <button x-show="tienePermiso('compras')" @click="tab = 'compras'; cargarCompras()"
+        class="flex-1 flex flex-col items-center justify-center py-3 gap-0.5 transition-colors"
+        :class="tab === 'compras' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <span class="text-[10px] font-medium">Compras</span>
       </button>
 
     </div>
@@ -2964,6 +3170,7 @@
 <script src="/js/modules/analytics.js"></script>
 <script src="/js/modules/admin.js"></script>
 <script src="/js/modules/cobranza.js"></script>
+<script src="/js/modules/compras.js"></script>
 <script src="/js/bodega.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 

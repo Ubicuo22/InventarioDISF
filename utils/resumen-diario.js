@@ -20,10 +20,11 @@ async function enviarResumen() {
       [hoy]
     )
 
-    // Entradas de stock del día
+    // Entradas de stock del día + gasto total
     const [entradasRow] = await q(
-      `SELECT COUNT(*) AS total FROM compra
-       WHERE DATE(fecha_registro) = ?`,
+      `SELECT COUNT(*) AS total, COALESCE(SUM(total_con_impuestos), 0) AS gasto
+       FROM compra
+       WHERE DATE(fecha_compra) = ?`,
       [hoy]
     )
 
@@ -42,14 +43,20 @@ async function enviarResumen() {
 
     const pedidos  = pedidosRow?.total  || 0
     const entradas = entradasRow?.total || 0
+    const gasto    = parseFloat(entradasRow?.gasto || 0)
     const critico  = criticoRow?.total  || 0
     const mermas   = mermasRow?.total   || 0
 
+    const gastoStr = '$' + gasto.toLocaleString('es-MX', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    })
+
     const partes = []
     partes.push(`📋 Pedidos: ${pedidos}`)
-    if (entradas > 0) partes.push(`📦 Entradas: ${entradas}`)
-    if (mermas   > 0) partes.push(`⚠️ Mermas: ${mermas}`)
-    if (critico  > 0) partes.push(`🔴 Stock crítico: ${critico}`)
+    // Compras siempre se incluye (aunque el gasto sea $0.00)
+    partes.push(`🛒 Compras: ${entradas} · ${gastoStr}`)
+    if (mermas  > 0) partes.push(`⚠️ Mermas: ${mermas}`)
+    if (critico > 0) partes.push(`🔴 Stock crítico: ${critico}`)
 
     const fecha = new Date().toLocaleDateString('es-MX', {
       weekday: 'long', day: 'numeric', month: 'short'
@@ -61,7 +68,7 @@ async function enviarResumen() {
       icon:  '/assets/icon.png'
     })
 
-    console.log(`[resumen-diario] Enviado — ${pedidos} pedidos, ${critico} stock crítico — ${result.enviados}/${result.total} dispositivos`)
+    console.log(`[resumen-diario] Enviado — ${pedidos} pedidos, ${entradas} compras ($${gasto.toFixed(2)}), ${critico} crítico — ${result.enviados}/${result.total} dispositivos`)
   } catch (e) {
     console.error('[resumen-diario] Error al enviar:', e.message)
   }

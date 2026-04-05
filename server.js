@@ -50,6 +50,7 @@ app.use('/api/clientes',   requireAuth, require('./routes/clientes'))
 app.use('/api/ordenes',    requireAuth, requireModulo('pedidos'),    require('./routes/ordenes'))
 app.use('/api/entradas',   requireAuth, requireModulo('inventario'), require('./routes/entradas'))
 app.use('/api/mermas',     requireAuth, requireModulo('mermas'),     require('./routes/mermas'))
+app.use('/api/compras',    requireAuth, requireModulo('compras'),    require('./routes/compras'))
 app.use('/api/ubicuoai',   requireAuth, requireModulo('pedidos'),    require('./routes/ubicuoai'))
 app.use('/api/analytics',  requireAuth, requireModulo('analytics'),  require('./routes/analytics'))
 
