@@ -15,6 +15,7 @@ const express  = require('express')
 const router   = express.Router()
 const { pool }  = require('../db/pool')
 const { enviarATodos } = require('../utils/push')
+const jwt      = require('jsonwebtoken')
 
 // ── Middleware: verificar NOTIF_SECRET para llamadas de Electron ──
 function requireNotifSecret(req, res, next) {
@@ -35,7 +36,9 @@ router.get('/vapid-key', (req, res) => {
 
 // ════════════════════════════════════════════════════════════
 // POST /api/notificaciones/suscribir
-// El iPhone registra su suscripción push (sin JWT — re-sync seguro)
+// El dispositivo registra su suscripción push.
+// JWT opcional: si se envía, asocia la suscripción al usuario
+//   y desactiva sus suscripciones antiguas (previene notif dobles).
 // Body: { endpoint, keys: { p256dh, auth } }
 // ════════════════════════════════════════════════════════════
 router.post('/suscribir', async (req, res) => {
@@ -43,6 +46,16 @@ router.post('/suscribir', async (req, res) => {
     const { endpoint, keys } = req.body
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ ok: false, error: 'Suscripción inválida' })
+    }
+
+    // Intentar identificar al usuario desde el JWT (opcional — no bloquea si falla)
+    let userId = null
+    const authHeader = req.headers.authorization || ''
+    if (authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET)
+        userId = decoded?.id_usuario ?? decoded?.id ?? null
+      } catch { /* token inválido o expirado — continuar sin user_id */ }
     }
 
     // Upsert: si el endpoint ya existe, actualiza keys y lo reactiva
@@ -63,6 +76,41 @@ router.post('/suscribir', async (req, res) => {
         [endpoint, keys.p256dh, keys.auth]
       )
       console.log('[push] Nueva suscripción registrada')
+    }
+
+    // Si conocemos al usuario: desactivar sus otras suscripciones con distinto endpoint
+    // Esto previene notificaciones dobles cuando el browser renueva su suscripción push
+    if (userId) {
+      try {
+        const [dupes] = await pool.query(
+          'SELECT id FROM push_subscriptions WHERE endpoint != ? AND activo = 1',
+          [endpoint]
+        )
+        if (dupes.length > 0) {
+          // Verificar cuáles de esas suscripciones pertenecían a este usuario
+          // usando el campo user_id si existe, o desactivar todas las duplicadas conocidas
+          await pool.query(
+            'UPDATE push_subscriptions SET activo = 0 WHERE endpoint != ? AND activo = 1 AND user_id = ?',
+            [endpoint, userId]
+          )
+          // Actualizar user_id de la suscripción actual
+          await pool.query(
+            'UPDATE push_subscriptions SET user_id = ? WHERE endpoint = ?',
+            [userId, endpoint]
+          )
+          console.log(`[push] Usuario ${userId}: suscripciones antiguas desactivadas, user_id asignado`)
+        } else {
+          // Sin duplicados — solo asignar user_id
+          await pool.query(
+            'UPDATE push_subscriptions SET user_id = ? WHERE endpoint = ?',
+            [userId, endpoint]
+          )
+        }
+      } catch (cleanupErr) {
+        // Si falla (ej. columna user_id no existe aún) → ignorar silenciosamente
+        // La suscripción ya fue guardada correctamente arriba
+        console.warn('[push] Cleanup user_id falló (¿columna no existe?):', cleanupErr.message)
+      }
     }
 
     res.json({ ok: true })

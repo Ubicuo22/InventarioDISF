@@ -35,12 +35,16 @@ function notificationsModule() {
         console.log('[push] SW registrado. Suscrito:', this.pushSuscrito)
 
         // Sincronizar suscripción local al servidor (por si falló al guardar antes)
-        // Usa fetch directo para NO disparar session-expired si hay error 401
+        // Incluye JWT para que el servidor pueda desactivar suscripciones antiguas del mismo usuario
         if (sub) {
           const subJson = sub.toJSON()
+          const token = localStorage.getItem('bodega_token') || ''
           fetch('/api/notificaciones/suscribir', {
             method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type':  'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
             body:    JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys })
           }).catch(() => {}) // best-effort, no bloquea
         }
@@ -74,11 +78,15 @@ function notificationsModule() {
           applicationServerKey: vapidKey
         })
 
-        // 4. Guardar suscripción en el servidor (fetch directo, sin JWT requerido)
+        // 4. Guardar suscripción en el servidor (incluye JWT para limpiar subs antiguas)
         const subJson = sub.toJSON()
+        const token = localStorage.getItem('bodega_token') || ''
         const saveRes = await fetch('/api/notificaciones/suscribir', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type':  'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body:    JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys })
         }).then(r => r.json())
         if (!saveRes.ok) throw new Error('No se pudo guardar la suscripción')
