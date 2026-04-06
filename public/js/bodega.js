@@ -1,5 +1,5 @@
 // Composición del store Alpine.js.
-// Orden: ui → auth → inventory → entries → orders → history → mermas → notifications → analytics → admin → cobranza → compras
+// Orden: ui → auth → inventory → entries → orders → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard
 function bodega() {
   return {
     ...uiModule(),
@@ -14,5 +14,6 @@ function bodega() {
     ...adminModule(),
     ...cobranzaModule(),
     ...comprasModule(),
+    ...dashboardModule(),
   }
 }

@@ -56,6 +56,7 @@ function uiModule() {
     },
 
     _ptrRefreshTab() {
+      if (this.tab === 'home')       return this.cargarDashboard()
       if (this.tab === 'inventario') return this.recargar()
       if (this.tab === 'pedidos')    return this.cargarOrdenes()
       if (this.tab === 'entradas')   return this.historialTab === 'entradas'
@@ -63,6 +64,7 @@ function uiModule() {
         : this.cargarPedidosHistorial()
       if (this.tab === 'analytics')  return this.cargarVentasHoy()
       if (this.tab === 'cobranza')   return this.cargarDeudas()
+      if (this.tab === 'compras')    return this.cargarCompras()
       return Promise.resolve()
     }
   }

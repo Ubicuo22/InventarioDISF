@@ -39,7 +39,8 @@ function authModule() {
         this.cargarResumen(),
         this.cargarProveedores(),
         this.cargarMermasRecientes(),
-        this.cargarOrdenes()          // pre-carga el contador de pedidos activos para el home
+        this.cargarOrdenes(),         // pre-carga el contador de pedidos activos para el home
+        this.cargarDashboard()        // métricas del día para el panel home
       ])
       this.initPush().catch(() => {})
     },
