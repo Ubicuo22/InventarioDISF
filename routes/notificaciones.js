@@ -196,6 +196,30 @@ router.post('/stock-entrada', requireNotifSecret, async (req, res) => {
 })
 
 // ════════════════════════════════════════════════════════════
+// POST /api/notificaciones/stock-bajo-multiple
+// Electron avisa cuando >3 productos quedan en stock ≤ 0
+// Body: { cantidad, usuario }
+// ════════════════════════════════════════════════════════════
+router.post('/stock-bajo-multiple', requireNotifSecret, async (req, res) => {
+  try {
+    const { cantidad, usuario } = req.body
+
+    const result = await enviarATodos({
+      title: `⚠️ Stock bajo en ${cantidad} productos`,
+      body:  `Varios productos quedaron en cero o negativo · ${usuario || ''}`.trim().replace(/·\s*$/, ''),
+      icon:  '/assets/icon.png',
+      tag:   'stock-bajo-multiple'
+    })
+
+    console.log(`[push] Stock bajo múltiple (${cantidad} productos) — ${result.enviados}/${result.total} dispositivos`)
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[notificaciones] POST /stock-bajo-multiple', e.message)
+    res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
+  }
+})
+
+// ════════════════════════════════════════════════════════════
 // POST /api/notificaciones/stock-bajo
 // Electron avisa cuando un producto llega a 0 o negativo
 // Body: { producto, stock, unidad, usuario }

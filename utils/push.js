@@ -20,11 +20,12 @@ let vapidInicializado = false
 
 function inicializarVapid() {
   if (vapidInicializado) return
-  if (!process.env.VAPID_EMAIL || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
-    throw new Error('Faltan variables VAPID_EMAIL, VAPID_PUBLIC_KEY o VAPID_PRIVATE_KEY')
+  const vapidEmail = process.env.VAPID_EMAIL || process.env.VAPID_SUBJECT
+  if (!vapidEmail || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    throw new Error('Faltan variables VAPID_EMAIL (o VAPID_SUBJECT), VAPID_PUBLIC_KEY o VAPID_PRIVATE_KEY')
   }
   webpush.setVapidDetails(
-    process.env.VAPID_EMAIL,
+    vapidEmail,
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
   )
