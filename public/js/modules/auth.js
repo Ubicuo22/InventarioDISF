@@ -15,10 +15,15 @@ function authModule() {
         try {
           const parsed = JSON.parse(user)
           // Limpiar sesión si es rol "usuario" (no tiene acceso a la appweb)
-          if (parsed.rol === 'usuario') {
+          if (parsed.rol === 'usuario') { this.logout(); return }
+
+          // Verificar expiración del JWT antes de cargar
+          if (this._tokenExpirado(token)) {
             this.logout()
+            this.mostrarToast('Tu sesión expiró — vuelve a iniciar sesión', true)
             return
           }
+
           this.session = parsed
           await this.cargarTodo()
         } catch {
@@ -32,15 +37,40 @@ function authModule() {
       })
     },
 
+    /**
+     * Decodifica el JWT (sin verificar firma, solo para leer exp)
+     * y devuelve true si ya expiró o está a menos de 5 minutos de expirar.
+     */
+    _tokenExpirado(token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        if (!payload.exp) return false
+        // Margen de 5 minutos para no sorprender al usuario a mitad de una acción
+        return Date.now() >= (payload.exp - 5 * 60) * 1000
+      } catch {
+        return false // si no se puede parsear, dejamos que el servidor decida
+      }
+    },
+
+    /**
+     * Carga todos los módulos al iniciar sesión.
+     * Cada llamada tiene su propio try/catch para que un fallo puntual
+     * no derrumbe toda la carga ni deslogee al usuario.
+     */
     async cargarTodo() {
+      const cargar = async (fn, nombre) => {
+        try { await fn() }
+        catch (e) { console.warn(`[cargarTodo] ${nombre} falló:`, e.message) }
+      }
+
       await Promise.all([
-        this.verificarDB(),
-        this.cargarProductos(),
-        this.cargarResumen(),
-        this.cargarProveedores(),
-        this.cargarMermasRecientes(),
-        this.cargarOrdenes(),         // pre-carga el contador de pedidos activos para el home
-        this.cargarDashboard()        // métricas del día para el panel home
+        cargar(() => this.verificarDB(),           'verificarDB'),
+        cargar(() => this.cargarProductos(),        'cargarProductos'),
+        cargar(() => this.cargarResumen(),          'cargarResumen'),
+        cargar(() => this.cargarProveedores(),      'cargarProveedores'),
+        cargar(() => this.cargarMermasRecientes(),  'cargarMermasRecientes'),
+        cargar(() => this.cargarOrdenes(),          'cargarOrdenes'),
+        cargar(() => this.cargarDashboard(),        'cargarDashboard'),
       ])
       this.initPush().catch(() => {})
     },
@@ -69,11 +99,13 @@ function authModule() {
         }
         localStorage.setItem('bodega_token', r.token)
         localStorage.setItem('bodega_user', JSON.stringify(r.user))
-        this.session  = r.user
+        this.session   = r.user
         this.loginForm = { username: '', password: '', showPwd: false }
         await this.cargarTodo()
-      } catch {
-        this.loginError = 'No se pudo conectar al servidor'
+      } catch (e) {
+        this.loginError = e._networkError
+          ? e.message
+          : 'No se pudo conectar al servidor'
       } finally {
         this.logging = false
       }
