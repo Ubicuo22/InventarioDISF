@@ -27,6 +27,17 @@
 const path = require('path')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
+// ─── Prevenir caídas por errores no capturados ────────────────
+process.on('uncaughtException', (err) => {
+  console.error(`[${new Date().toISOString()}] ❌ uncaughtException:`, err.message, err.stack)
+  // No terminar el proceso — registrar y continuar
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error(`[${new Date().toISOString()}] ❌ unhandledRejection:`, reason)
+  // No terminar el proceso — registrar y continuar
+})
+
 const { agendarResumenDiario } = require('./utils/resumen-diario')
 
 const express = require('express')
@@ -78,6 +89,13 @@ app.get('/api/status', async (req, res) => {
 // Fallback SPA — debe ir al final
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'))
+})
+
+// ─── Middleware de errores Express (catch-all) ────────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(`[${new Date().toISOString()}] ❌ Express error:`, err.message)
+  res.status(500).json({ ok: false, error: 'Error interno del servidor' })
 })
 
 // ─── Iniciar ──────────────────────────────────────────────────

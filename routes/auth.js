@@ -18,8 +18,47 @@ const { pool } = require('../db/pool')
 const { requireAuth, invalidarCache } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
 
+// ─── Rate limiter en memoria (sin dependencias externas) ──────
+// Máx 10 intentos por IP en ventana de 1 minuto
+const loginAttempts = new Map()
+const RATE_WINDOW_MS = 60_000  // 1 minuto
+const RATE_MAX       = 10      // intentos permitidos por ventana
+
+function rateLimitLogin(req, res, next) {
+  const ip  = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown')
+  const now = Date.now()
+  const entry = loginAttempts.get(ip) || { count: 0, resetAt: now + RATE_WINDOW_MS }
+
+  // Resetear ventana si ya expiró
+  if (now > entry.resetAt) {
+    entry.count   = 0
+    entry.resetAt = now + RATE_WINDOW_MS
+  }
+
+  entry.count++
+  loginAttempts.set(ip, entry)
+
+  if (entry.count > RATE_MAX) {
+    const segsRestantes = Math.ceil((entry.resetAt - now) / 1000)
+    return res.status(429).json({
+      ok:    false,
+      error: `Demasiados intentos. Espera ${segsRestantes}s antes de intentar de nuevo.`
+    })
+  }
+
+  next()
+}
+
+// Limpiar IPs antiguas cada 5 minutos para no acumular memoria
+setInterval(() => {
+  const now = Date.now()
+  for (const [ip, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(ip)
+  }
+}, 5 * 60_000)
+
 // ─── POST /api/auth/login ─────────────────────────────────
-router.post('/login', async (req, res) => {
+router.post('/login', rateLimitLogin, async (req, res) => {
   try {
     const { username, password } = req.body
     if (!username || !password) {
