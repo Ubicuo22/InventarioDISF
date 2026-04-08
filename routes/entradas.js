@@ -10,6 +10,40 @@ const { requireAuth } = require('../middleware/auth')
 const { enviarATodos } = require('../utils/push')
 const { registrar } = require('../utils/actividad')
 
+// Productos equivalentes (familia) de un producto
+router.get('/equivalentes/:idProducto', requireAuth, async (req, res) => {
+  try {
+    const { idProducto } = req.params
+    // Familias a las que pertenece el producto
+    const familias = await q(`
+      SELECT f.id_familia
+      FROM producto_familia_miembro m
+      JOIN producto_familia f ON f.id_familia = m.id_familia
+      WHERE m.id_producto = ? AND f.activo = 1
+    `, [idProducto])
+
+    if (!familias.length) return res.json({ ok: true, data: [] })
+
+    const ids = familias.map(f => f.id_familia)
+    const placeholders = ids.map(() => '?').join(',')
+
+    const miembros = await q(`
+      SELECT p.id_producto, p.nombre_producto, p.unidad_producto, p.stock
+      FROM producto_familia_miembro m
+      JOIN producto p ON p.id_producto = m.id_producto
+      WHERE m.id_familia IN (${placeholders})
+        AND m.id_producto != ?
+        AND p.activo = 1
+      GROUP BY p.id_producto
+      ORDER BY p.nombre_producto
+    `, [...ids, idProducto])
+
+    res.json({ ok: true, data: miembros })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // Últimas entradas registradas
 router.get('/recientes', requireAuth, async (req, res) => {
   try {
@@ -44,13 +78,14 @@ router.post('/', requireAuth, async (req, res) => {
   try {
     const {
       idProducto,
-      idProveedor = null,
+      idProveedor    = null,
       cantidad,
       precio,
       fechaCompra,
-      folio       = null,
-      incluirIva  = true,
-      notas       = null
+      folio          = null,
+      incluirIva     = true,
+      notas          = null,
+      idsEquivalentes = []
     } = req.body
 
     // Validaciones
@@ -103,6 +138,17 @@ router.post('/', requireAuth, async (req, res) => {
       `UPDATE producto SET stock = stock + ? WHERE id_producto = ?`,
       [cantidadNum, idProducto]
     )
+
+    // 4. Actualizar stock de equivalentes seleccionados (solo stock, sin PEPS)
+    const equivalentesValidos = Array.isArray(idsEquivalentes)
+      ? idsEquivalentes.map(Number).filter(n => n > 0 && n !== Number(idProducto))
+      : []
+    for (const idEq of equivalentesValidos) {
+      await conn.execute(
+        `UPDATE producto SET stock = stock + ? WHERE id_producto = ?`,
+        [cantidadNum, idEq]
+      )
+    }
 
     await conn.commit()
     conn.release()

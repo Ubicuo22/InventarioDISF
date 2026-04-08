@@ -1631,6 +1631,28 @@
         </div>
       </div>
 
+      <!-- Equivalentes (familia) -->
+      <div x-show="equivalentes.length > 0">
+        <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
+          Actualizar también estos equivalentes
+        </label>
+        <div class="rounded-xl overflow-hidden divide-y divide-slate-700/60"
+          style="background:rgba(15,23,42,.5); border:1px solid rgba(51,65,85,.5)">
+          <template x-for="eq in equivalentes" :key="eq.id_producto">
+            <label class="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-700/30 transition-colors">
+              <input
+                type="checkbox"
+                :value="eq.id_producto"
+                x-model="equivalentesChecked"
+                class="w-4 h-4 rounded accent-emerald-500 flex-shrink-0"
+              />
+              <span class="text-sm text-slate-200 truncate flex-1" x-text="eq.nombre_producto"></span>
+              <span class="text-xs text-slate-500 flex-shrink-0" x-text="`stock: ${eq.stock}`"></span>
+            </label>
+          </template>
+        </div>
+      </div>
+
       <!-- Cantidad + Precio -->
       <div class="grid grid-cols-2 gap-3">
         <div>

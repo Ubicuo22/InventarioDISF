@@ -7,6 +7,8 @@ function entriesModule() {
     dropdownVisible: false,
     dropResults: [],
     form: {},
+    equivalentes: [],           // productos equivalentes del producto seleccionado
+    equivalentesChecked: [],    // ids seleccionados para actualizar stock
 
     abrirModal(prod = null) {
       this.resetForm()
@@ -16,6 +18,7 @@ function entriesModule() {
         this.form.nombreProducto = prod.nombre_producto
         this.form.stockActual    = prod.stock
         this.form.busqueda       = prod.nombre_producto
+        this.cargarEquivalentes(prod.id_producto)
       }
       this.modalAbierto = true
     },
@@ -34,8 +37,10 @@ function entriesModule() {
         incluirIva: true, fechaCompra: hoy,
         idProveedor: '', folio: '', notas: ''
       }
-      this.dropResults     = []
-      this.dropdownVisible = false
+      this.dropResults          = []
+      this.dropdownVisible      = false
+      this.equivalentes         = []
+      this.equivalentesChecked  = []
     },
 
     buscarProducto() {
@@ -50,18 +55,33 @@ function entriesModule() {
       }
     },
 
-    seleccionar(p) {
+    async cargarEquivalentes(idProducto) {
+      this.equivalentes        = []
+      this.equivalentesChecked = []
+      try {
+        const r = await API.get(`/api/entradas/equivalentes/${idProducto}`)
+        if (r.ok && r.data.length > 0) {
+          this.equivalentes        = r.data
+          this.equivalentesChecked = r.data.map(e => e.id_producto) // todos marcados por defecto
+        }
+      } catch (_) {}
+    },
+
+    async seleccionar(p) {
       this.form.idProducto     = p.id_producto
       this.form.nombreProducto = p.nombre_producto
       this.form.stockActual    = p.stock
       this.form.busqueda       = p.nombre_producto
       this.dropdownVisible     = false
       this.dropResults         = []
+      this.cargarEquivalentes(p.id_producto)
     },
 
     limpiarSeleccion() {
-      this.form.idProducto = null; this.form.nombreProducto = ''
-      this.form.stockActual = 0;   this.form.busqueda = ''
+      this.form.idProducto     = null; this.form.nombreProducto = ''
+      this.form.stockActual    = 0;    this.form.busqueda = ''
+      this.equivalentes        = []
+      this.equivalentesChecked = []
     },
 
     calcDesglose() {
@@ -92,23 +112,29 @@ function entriesModule() {
       this.guardando   = true
       try {
         const r = await API.post('/api/entradas', {
-          idProducto:  this.form.idProducto,
-          idProveedor: this.form.idProveedor || null,
-          cantidad:    this.form.cantidad,
-          precio:      this.form.precio,
-          fechaCompra: this.form.fechaCompra,
-          folio:       this.form.folio || null,
-          incluirIva:  this.form.incluirIva,
-          notas:       this.form.notas || null
+          idProducto:      this.form.idProducto,
+          idProveedor:     this.form.idProveedor || null,
+          cantidad:        this.form.cantidad,
+          precio:          this.form.precio,
+          fechaCompra:     this.form.fechaCompra,
+          folio:           this.form.folio || null,
+          incluirIva:      this.form.incluirIva,
+          notas:           this.form.notas || null,
+          idsEquivalentes: this.equivalentesChecked
         })
         if (!r.ok) { this.errorModal = r.error || 'Error al guardar'; return }
 
         // Actualizar stock local sin recargar lista completa
+        const cantAgregada = parseFloat(this.form.cantidad)
         const idx = this.productos.findIndex(p => p.id_producto === this.form.idProducto)
         if (idx !== -1) {
-          this.productos[idx] = {
-            ...this.productos[idx],
-            stock: parseFloat(this.productos[idx].stock) + parseFloat(this.form.cantidad)
+          this.productos[idx] = { ...this.productos[idx], stock: parseFloat(this.productos[idx].stock) + cantAgregada }
+        }
+        // Actualizar stock local de equivalentes seleccionados
+        for (const idEq of this.equivalentesChecked) {
+          const idxEq = this.productos.findIndex(p => p.id_producto === idEq)
+          if (idxEq !== -1) {
+            this.productos[idxEq] = { ...this.productos[idxEq], stock: parseFloat(this.productos[idxEq].stock) + cantAgregada }
           }
         }
         this.filtrar()
