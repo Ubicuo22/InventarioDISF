@@ -293,4 +293,31 @@ router.post('/nueva-version', requireNotifSecret, async (req, res) => {
   }
 })
 
+// ════════════════════════════════════════════════════════════
+// POST /api/notificaciones/mensaje-personalizado
+// Envía una notificación con título y cuerpo libre
+// Body: { titulo, mensaje }
+// ════════════════════════════════════════════════════════════
+router.post('/mensaje-personalizado', requireNotifSecret, async (req, res) => {
+  try {
+    const { titulo, mensaje } = req.body
+    if (!titulo || !mensaje) {
+      return res.status(400).json({ ok: false, error: 'Se requieren titulo y mensaje' })
+    }
+
+    const result = await enviarATodos({
+      title: titulo,
+      body:  mensaje,
+      icon:  '/assets/icon.png',
+      tag:   `mensaje-personalizado-${Date.now()}`
+    })
+
+    console.log(`[push] Mensaje personalizado — ${result.enviados}/${result.total} dispositivos`)
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[notificaciones] POST /mensaje-personalizado', e.message)
+    res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
+  }
+})
+
 module.exports = router
