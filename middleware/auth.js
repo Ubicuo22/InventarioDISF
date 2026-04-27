@@ -22,10 +22,30 @@ async function isSessionActive(jti) {
 
   try {
     const rows = await q('SELECT activo FROM sesiones_activas WHERE jti = ?', [jti])
-    const activo = rows.length > 0 && rows[0].activo === 1
-    sessionCache.set(jti, { activo, expiresAt: Date.now() + CACHE_TTL })
-    if (activo) {
-      q('UPDATE sesiones_activas SET ultimo_uso = NOW() WHERE jti = ?', [jti]).catch(() => {})
+
+    // Política:
+    //   • Fila existe y activo=1 → sesión activa
+    //   • Fila existe y activo=0 → sesión revocada explícitamente (logout / admin)
+    //   • Fila NO existe         → tratar como activa
+    //                              (puede ser que el INSERT del login todavía no
+    //                               sea visible por replication lag de TiDB, o que
+    //                               haya fallado silenciosamente. El JWT con su
+    //                               propia expiración (12h) es la fuente de verdad
+    //                               en ese caso. Esto evita que el primer login
+    //                               rebote al usuario por race condition.)
+    let activo
+    if (rows.length === 0) {
+      activo = true
+      // No cachear muy largo cuando la fila no existe: si en el segundo o
+      // tercer intento aparece como activo=0 (revocada), queremos detectarlo
+      // pronto. 30s es suficiente para absorber replication lag.
+      sessionCache.set(jti, { activo, expiresAt: Date.now() + 30_000 })
+    } else {
+      activo = rows[0].activo === 1
+      sessionCache.set(jti, { activo, expiresAt: Date.now() + CACHE_TTL })
+      if (activo) {
+        q('UPDATE sesiones_activas SET ultimo_uso = NOW() WHERE jti = ?', [jti]).catch(() => {})
+      }
     }
     return activo
   } catch {
