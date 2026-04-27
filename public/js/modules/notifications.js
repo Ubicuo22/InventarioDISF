@@ -15,6 +15,12 @@ function notificationsModule() {
 
     // ── Inicialización (llamar tras login) ────────────────────
     async initPush() {
+      // Guarda de idempotencia: si ya se inicializó (o está en curso) no
+      // repetimos el sync. Evita POSTs duplicados a /suscribir si initPush
+      // se llama dos veces seguidas (cargarTodo, login + reload, etc.).
+      if (this._pushIniciado) return
+      this._pushIniciado = true
+
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         console.log('[push] No soportado en este navegador')
         this.pushSoportado = false
