@@ -1191,32 +1191,32 @@
       </div>
 
       <!-- Filtros rápidos -->
-      <div class="flex gap-2 mb-4 flex-wrap">
+      <div class="flex gap-2 md:gap-3 mb-5 md:mb-6 flex-wrap">
         <button @click="filtroCompras('hoy')"
-          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+          class="px-4 py-2 md:px-5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-colors whitespace-nowrap"
           :class="comprasDesde === comprasHasta && comprasHasta === new Date().toISOString().slice(0,10)
             ? 'bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/40'
             : 'bg-white/5 text-slate-400 hover:text-white'">Hoy</button>
         <button @click="filtroCompras('7d')"
-          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-white/5 text-slate-400 hover:text-white">7 días</button>
+          class="px-4 py-2 md:px-5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-colors whitespace-nowrap bg-white/5 text-slate-400 hover:text-white">7 días</button>
         <button @click="filtroCompras('mes')"
-          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-white/5 text-slate-400 hover:text-white">Este mes</button>
+          class="px-4 py-2 md:px-5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-colors whitespace-nowrap bg-white/5 text-slate-400 hover:text-white">Este mes</button>
         <button @click="filtroCompras('30d')"
-          class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-white/5 text-slate-400 hover:text-white">30 días</button>
+          class="px-4 py-2 md:px-5 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-colors whitespace-nowrap bg-white/5 text-slate-400 hover:text-white">30 días</button>
       </div>
 
       <!-- Rango personalizado -->
-      <div class="flex gap-2 mb-5">
+      <div class="flex gap-2 md:gap-3 mb-5 md:mb-6">
         <div class="flex-1">
-          <label class="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Desde</label>
+          <label class="block text-[10px] md:text-xs text-slate-500 mb-1 uppercase tracking-wide">Desde</label>
           <input type="date" x-model="comprasDesde" @change="cargarCompras()"
-            class="w-full rounded-xl px-3 py-2 text-sm text-white border"
+            class="w-full rounded-xl px-3 py-2 md:py-2.5 text-sm text-white border"
             style="background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.1)">
         </div>
         <div class="flex-1">
-          <label class="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Hasta</label>
+          <label class="block text-[10px] md:text-xs text-slate-500 mb-1 uppercase tracking-wide">Hasta</label>
           <input type="date" x-model="comprasHasta" @change="cargarCompras()"
-            class="w-full rounded-xl px-3 py-2 text-sm text-white border"
+            class="w-full rounded-xl px-3 py-2 md:py-2.5 text-sm text-white border"
             style="background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.1)">
         </div>
       </div>
