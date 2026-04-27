@@ -126,6 +126,53 @@ function authModule() {
       }
     },
 
+    /**
+     * Re-sincroniza la sesión local con BD. Usado cuando:
+     *   - El avatar carga 404 (probablemente el archivo cambió en R2).
+     *   - Queremos refrescar de forma proactiva en cada init().
+     * No bloquea ni desloggea si falla — best effort.
+     * Tiene throttling: no se llama más de 1 vez cada 30s para evitar
+     * loops si el backend devuelve un avatar que también está muerto.
+     */
+    async refrescarSesion() {
+      const now = Date.now()
+      if (this._ultimoRefresh && (now - this._ultimoRefresh) < 30_000) return
+      this._ultimoRefresh = now
+      try {
+        const r = await API.get('/api/auth/me')
+        if (!r.ok || !r.user) return
+        // Solo actualizar si hay cambio real (evita reactivity churn)
+        const cambio =
+          r.user.avatar !== this.session?.avatar ||
+          r.user.color  !== this.session?.color  ||
+          r.user.nombre !== this.session?.nombre ||
+          r.user.rol    !== this.session?.rol
+        if (cambio) {
+          // Conservamos el token, solo actualizamos datos del usuario
+          const merged = { ...this.session, ...r.user }
+          this.session = merged
+          localStorage.setItem('bodega_user', JSON.stringify(merged))
+        }
+      } catch { /* silencioso */ }
+    },
+
+    /**
+     * Handler para <img @error> del avatar — el archivo en R2 ya no existe.
+     * Refresca sesión y, si la nueva URL es distinta, fuerza un re-render
+     * cambiando el src. Si tras el refresh el avatar sigue dando 404, el
+     * throttle evita bucles.
+     */
+    async onAvatarError(evento) {
+      const oldSrc = this.session?.avatar
+      await this.refrescarSesion()
+      const newSrc = this.session?.avatar
+      if (newSrc && newSrc !== oldSrc && evento?.target) {
+        // Re-asignar src dispara una nueva carga
+        evento.target.style.display = ''
+        evento.target.src = newSrc
+      }
+    },
+
     async logout() {
       // Invalidar sesión en BD (fire-and-forget)
       API.logout().catch(() => {})

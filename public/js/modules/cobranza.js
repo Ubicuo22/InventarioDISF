@@ -200,7 +200,7 @@ function cobranzaModule() {
     },
 
     porcentajePagado(deuda) {
-      if (!deuda.monto_total || deuda.monto_total <= 0) return 0
+      if (!deuda || !deuda.monto_total || deuda.monto_total <= 0) return 0
       return Math.min(100, Math.round((deuda.monto_pagado / deuda.monto_total) * 100))
     },
 

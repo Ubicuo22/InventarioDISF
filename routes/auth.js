@@ -175,6 +175,54 @@ router.post('/login', rateLimitLogin, async (req, res) => {
   }
 })
 
+// ─── GET /api/auth/me ─────────────────────────────────────
+// Devuelve los datos frescos del usuario autenticado (lee de BD,
+// no del JWT). Útil cuando el avatar/color cambia en Disfruleg
+// Electron y queremos resincronizar el cliente sin pedirle logout.
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const id = req.user?.id
+    if (!id) return res.status(401).json({ ok: false, error: 'No autenticado' })
+
+    const [users] = await pool.execute(
+      `SELECT id_usuario, username, nombre_completo, rol, activo,
+              avatar_color, avatar_r2_key
+       FROM usuarios_sistema
+       WHERE id_usuario = ? AND activo = 1`,
+      [id]
+    )
+    if (!users.length) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' })
+
+    const user = resolverAvatar(users[0])
+
+    // Módulos permitidos (solo aplica para supervisores)
+    let modulosPermitidos = null
+    if (user.rol === 'supervisor') {
+      const [perms] = await pool.execute(
+        'SELECT modulo_id FROM permisos_usuario WHERE id_usuario = ?',
+        [user.id_usuario]
+      )
+      modulosPermitidos = perms.map(r => r.modulo_id)
+    }
+
+    res.json({
+      ok: true,
+      user: {
+        id:               user.id_usuario,
+        username:         user.username,
+        nombre:           user.nombre_completo,
+        rol:              user.rol,
+        color:            user.avatar_color,
+        avatar:           user.avatar_url_publica,
+        modulosPermitidos
+      }
+    })
+  } catch (e) {
+    console.error('[auth] GET /me:', e.message)
+    res.status(500).json({ ok: false, error: 'Error de servidor' })
+  }
+})
+
 // ─── POST /api/auth/logout ────────────────────────────────
 router.post('/logout', requireAuth, async (req, res) => {
   try {

@@ -181,7 +181,7 @@
         <img x-show="session?.avatar"
           :src="session?.avatar" alt=""
           class="w-full h-full object-cover"
-          @error="$el.style.display='none'; $el.nextElementSibling.style.display='flex'" />
+          @error="onAvatarError($event); $el.style.display='none'; $el.nextElementSibling.style.display='flex'" />
         <div class="w-full h-full absolute inset-0 flex items-center justify-center text-sm font-bold text-white"
           :style="`background:${session?.color || '#475569'}; display:${session?.avatar ? 'none' : 'flex'}`"
           x-text="(session?.nombre || session?.username || '?')[0].toUpperCase()">
@@ -1197,7 +1197,7 @@
                 </tr>
               </thead>
               <tbody>
-                <template x-for="dia in ventasPeriodo.por_dia" :key="dia.fecha">
+                <template x-for="dia in (ventasPeriodo?.por_dia || [])" :key="dia.fecha">
                   <tr class="border-b border-slate-700/30 hover:bg-white/[0.02] transition-colors">
                     <td class="px-4 py-3 text-slate-300 text-sm" x-text="fmtFecha(dia.fecha + 'T12:00:00')"></td>
                     <td class="px-2 py-3 text-center text-slate-400 text-sm" x-text="dia.total_notas"></td>
@@ -2081,7 +2081,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
           <input x-model="ordenBusqueda" @input="buscarProductoPedido()" type="text"
-            :placeholder="`Buscar para agregar en "${seccionActual}"...`"
+            :placeholder="`Buscar para agregar en &quot;${seccionActual}&quot;...`"
             class="input-dark pl-9" style="padding-top:9px; padding-bottom:9px" />
           <!-- Resultados -->
           <ul x-show="ordenResultados.length > 0"
