@@ -106,9 +106,14 @@ app.listen(PORT, async () => {
     console.log(`✅ Disfruleg Bodega — http://localhost:${PORT}`)
     console.log(`   DB: ${process.env.TIDB_HOST}`)
 
-    // Auto-crear tabla sesiones_activas si no existe
+    // Tabla propia de Bodega para sesiones JWT.
+    //
+    // Nombre con prefijo `bodega_` para no colisionar con `sesiones_activas`,
+    // que pertenece a Disfruleg Electron y tiene un schema completamente
+    // distinto (id_sesion, id_dispositivo, activa, etc.) — ambas apps comparten
+    // la misma BD de TiDB y antes estaban pisándose la tabla.
     await q(`
-      CREATE TABLE IF NOT EXISTS sesiones_activas (
+      CREATE TABLE IF NOT EXISTS bodega_sesiones (
         id          INT AUTO_INCREMENT PRIMARY KEY,
         jti         VARCHAR(36)  NOT NULL UNIQUE,
         id_usuario  INT          NOT NULL,
@@ -121,7 +126,7 @@ app.listen(PORT, async () => {
         INDEX idx_usuario  (id_usuario)
       )
     `)
-    console.log('   ✓ Tabla sesiones_activas verificada')
+    console.log('   ✓ Tabla bodega_sesiones verificada')
 
     // Auto-crear tabla logs_actividad si no existe
     await q(`

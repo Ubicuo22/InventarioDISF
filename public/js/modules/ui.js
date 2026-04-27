@@ -5,20 +5,41 @@ function uiModule() {
     pedidosTab: 'activos',
     toast: { visible: false, msg: '', error: false },
 
-    // Tema — espejo del key usado en Disfruleg Electron
-    darkMode: localStorage.getItem('disfruleg-theme') !== 'light',
+    // Tema — 'dark' | 'light'
+    // El valor inicial lo resuelve el script anti-flash en <head> (var global __THEME),
+    // pero si por alguna razón no corrió, hacemos fallback aquí mismo.
+    theme: (window.__THEME) || (
+      localStorage.getItem('disfruleg-theme') === 'light' ? 'light' :
+      localStorage.getItem('disfruleg-theme') === 'dark'  ? 'dark'  :
+      (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    ),
+
+    // Compat: algunos módulos antiguos pueden seguir leyendo darkMode
+    get darkMode() { return this.theme === 'dark' },
 
     // Pull-to-refresh
     ptrStartY:   0,
     ptrDy:       0,
     ptrSpinning: false,
 
-    toggleDarkMode() {
-      this.darkMode = !this.darkMode
-      const theme = this.darkMode ? 'dark' : 'light'
-      localStorage.setItem('disfruleg-theme', theme)
+    /**
+     * Alterna tema, persiste y actualiza atributos de <html> + meta theme-color.
+     * El observer en CSS aplica las variables; las transiciones declaradas en
+     * style.css hacen el cross-fade automático.
+     */
+    toggleTheme() {
+      this.theme = this.theme === 'dark' ? 'light' : 'dark'
+      this._aplicarTema(this.theme)
+    },
+
+    // Compat con llamadas viejas
+    toggleDarkMode() { this.toggleTheme() },
+
+    _aplicarTema(theme) {
+      try { localStorage.setItem('disfruleg-theme', theme) } catch {}
+      document.documentElement.setAttribute('data-theme', theme)
       const meta = document.querySelector('meta[name="theme-color"]')
-      if (meta) meta.setAttribute('content', this.darkMode ? '#0a0a0a' : '#f9fafb')
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#060608' : '#f2f2f7')
     },
 
     mostrarToast(msg, error = false) {

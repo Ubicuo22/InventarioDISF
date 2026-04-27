@@ -1,6 +1,7 @@
 /* ══════════════════════════════════════════════════════════
    DISFRULEG PORTAL BODEGA — Design System
-   Bento Minimal Glass + Liquid Glass hero (dark only)
+   Bento Minimal Glass + Liquid Glass hero
+   Soporte de temas: data-theme="dark" (default) | "light"
 ══════════════════════════════════════════════════════════ */
 
 /* ── Fuentes ── */
@@ -13,29 +14,10 @@
 }
 
 /* ══════════════════════════════
-   TOKENS
+   TOKENS — INVARIANTES (no cambian entre temas)
 ══════════════════════════════ */
 :root {
-  /* Canvas */
-  --bg-0: #060608;
-  --bg-1: #0a0a0c;
-  --bg-2: #101014;
-
-  /* Glass layers (sobre bg-1) */
-  --glass-1: rgba(255,255,255,0.035);
-  --glass-2: rgba(255,255,255,0.055);
-  --glass-3: rgba(255,255,255,0.085);
-  --glass-4: rgba(255,255,255,0.12);
-  --glass-border:    rgba(255,255,255,0.07);
-  --glass-border-hi: rgba(255,255,255,0.14);
-
-  /* Texto */
-  --text:       #f5f5f7;
-  --text-muted: #a1a1aa;
-  --text-dim:   #71717a;
-  --text-faint: #52525b;
-
-  /* Acentos */
+  /* Acentos (mismos en ambos temas) */
   --accent:      #22c55e;
   --accent-h:    #16a34a;
   --accent-glow: rgba(34,197,94,0.35);
@@ -60,23 +42,110 @@
   --blur-2: 24px;
   --blur-3: 40px;
 
+  /* Easings */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snap:   cubic-bezier(0.5, 0, 0.2, 1);
+}
+
+/* ══════════════════════════════
+   TEMA OSCURO (default)
+══════════════════════════════ */
+:root,
+[data-theme="dark"] {
+  /* Canvas */
+  --bg-0: #060608;
+  --bg-1: #0a0a0c;
+  --bg-2: #101014;
+
+  /* Glass layers (tintes claros sobre fondo oscuro) */
+  --glass-1: rgba(255,255,255,0.035);
+  --glass-2: rgba(255,255,255,0.055);
+  --glass-3: rgba(255,255,255,0.085);
+  --glass-4: rgba(255,255,255,0.12);
+  --glass-border:    rgba(255,255,255,0.07);
+  --glass-border-hi: rgba(255,255,255,0.14);
+
+  /* Texto */
+  --text:       #f5f5f7;
+  --text-muted: #a1a1aa;
+  --text-dim:   #71717a;
+  --text-faint: #52525b;
+
   /* Sombras */
   --shadow-glass: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
   --shadow-pop:   0 20px 60px -15px rgba(0,0,0,0.75);
   --shadow-fab:   0 14px 40px -6px rgba(22,163,74,.55), 0 4px 14px rgba(22,163,74,.28), inset 0 1px 0 rgba(255,255,255,0.15);
   --shadow-nav:   0 -4px 24px rgba(0,0,0,0.45), 0 10px 32px -8px rgba(0,0,0,0.5);
 
-  /* Easings */
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-snap:   cubic-bezier(0.5, 0, 0.2, 1);
+  /* Backdrops específicos */
+  --modal-bg:        rgba(18,18,22,0.88);
+  --modal-backdrop:  rgba(0,0,0,0.55);
+  --dropdown-bg:     rgba(20,20,24,0.92);
+  --nav-bg:          rgba(18,18,22,0.70);
+  --header-bg:       rgba(10,10,12,0.72);
 
-  /* Compat (clases heredadas) */
+  /* Compat */
   --bg:         var(--bg-1);
   --bg-card:    var(--glass-2);
   --bg-raised:  var(--glass-1);
   --border:     var(--glass-border);
   --scrollbar:  rgba(255,255,255,0.08);
+
+  color-scheme: dark;
+}
+
+/* ══════════════════════════════
+   TEMA CLARO
+══════════════════════════════ */
+[data-theme="light"] {
+  /* Canvas — grises Apple, no blanco puro */
+  --bg-0: #f2f2f7;
+  --bg-1: #ffffff;
+  --bg-2: #f7f7fa;
+
+  /* Glass layers — tintes oscuros sobre fondo claro */
+  --glass-1: rgba(0,0,0,0.025);
+  --glass-2: rgba(0,0,0,0.04);
+  --glass-3: rgba(0,0,0,0.065);
+  --glass-4: rgba(0,0,0,0.09);
+  --glass-border:    rgba(0,0,0,0.08);
+  --glass-border-hi: rgba(0,0,0,0.14);
+
+  /* Texto — gradiente de oscuros */
+  --text:       #0a0a0c;
+  --text-muted: #3f3f46;
+  --text-dim:   #52525b;
+  --text-faint: #71717a;
+
+  /* Sombras — más sutiles para fondo claro */
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6);
+  --shadow-pop:   0 20px 50px -12px rgba(0,0,0,0.18);
+  --shadow-fab:   0 14px 40px -6px rgba(22,163,74,.45), 0 4px 14px rgba(22,163,74,.22), inset 0 1px 0 rgba(255,255,255,0.4);
+  --shadow-nav:   0 -4px 24px rgba(0,0,0,0.06), 0 10px 32px -8px rgba(0,0,0,0.10);
+
+  /* Backdrops específicos */
+  --modal-bg:        rgba(255,255,255,0.92);
+  --modal-backdrop:  rgba(0,0,0,0.35);
+  --dropdown-bg:     rgba(255,255,255,0.96);
+  --nav-bg:          rgba(255,255,255,0.78);
+  --header-bg:       rgba(255,255,255,0.78);
+
+  /* Compat */
+  --bg:         var(--bg-1);
+  --bg-card:    var(--glass-2);
+  --bg-raised:  var(--glass-1);
+  --border:     var(--glass-border);
+  --scrollbar:  rgba(0,0,0,0.10);
+
+  color-scheme: light;
+}
+
+/* Transición suave al alternar tema */
+html, body, .card, .bento-tile, [class*="bg-modal"],
+nav.bottom-nav-glass, .glass, .glass-2, .glass-strong,
+.input-dark, .badge-ok, .badge-low, .badge-zero {
+  transition: background .25s var(--ease-smooth), color .25s var(--ease-smooth), border-color .25s var(--ease-smooth);
 }
 
 /* ══════════════════════════════
@@ -87,7 +156,6 @@
 
 html {
   background: var(--bg-0);
-  color-scheme: dark;
 }
 
 body {
@@ -100,6 +168,181 @@ body {
   position: relative;
   min-height: 100dvh;
   overflow-x: hidden;
+}
+
+/* ══════════════════════════════════════════════════════════
+   BRIDGE LIGHT MODE — sobreescribe utilidades Tailwind hardcoded
+   El HTML tiene cientos de `text-white`, `text-slate-X`, `bg-white/X`
+   que asumen tema oscuro. En lugar de tocar cada uno, los redefinimos
+   aquí cuando data-theme="light". Si en Fase 2/3 reemplazamos por
+   clases semánticas (.text-primary, etc.) este bloque se puede ir
+   recortando.
+   ══════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  /* Texto: blancos y slates → escala oscura */
+  .text-white       { color: var(--text) !important; }
+  .text-slate-100   { color: var(--text) !important; }
+  .text-slate-200   { color: var(--text) !important; }
+  .text-slate-300   { color: var(--text-muted) !important; }
+  .text-slate-400   { color: var(--text-dim) !important; }
+  .text-slate-500   { color: var(--text-faint) !important; }
+  .text-slate-600   { color: #a1a1aa !important; }
+  .text-slate-700   { color: #d4d4d8 !important; }
+
+  /* Fondos: glass blancos translúcidos → oscuros translúcidos */
+  .bg-white\/5      { background-color: var(--glass-1) !important; }
+  .bg-white\/10     { background-color: var(--glass-2) !important; }
+  .bg-white\/15     { background-color: var(--glass-3) !important; }
+  .bg-white\/20     { background-color: var(--glass-3) !important; }
+  .bg-white\/30     { background-color: var(--glass-4) !important; }
+
+  /* Bordes blancos translúcidos */
+  .border-white\/5,
+  .border-white\/10,
+  .border-white\/20 { border-color: var(--glass-border) !important; }
+
+  /* Hover de texto: hover:text-white → hover oscuro */
+  .hover\:text-white:hover { color: var(--text) !important; }
+
+  /* Slate-700/800/900 → invertir para que badges/chips no queden tan oscuros */
+  .bg-slate-700\/30, .bg-slate-700\/40, .bg-slate-700\/50,
+  .bg-slate-800\/30, .bg-slate-800\/40, .bg-slate-800\/50,
+  .bg-slate-900\/30, .bg-slate-900\/40, .bg-slate-900\/50 {
+    background-color: var(--glass-2) !important;
+  }
+
+  /* Indicador del puntito de DB: bg-emerald-400 ya contrasta solo */
+
+  /* Acentos brillantes (text-emerald-400, text-violet-300, etc.) los dejamos
+     iguales — funcionan tanto en dark como en light por su saturación. Si
+     alguno se ve mal en pruebas, lo overrideamos puntualmente abajo. */
+
+  /* Stats grandes con colores acentuados — bajamos un tono para mejor contraste */
+  .text-amber-400   { color: #b45309 !important; }
+  .text-cyan-400    { color: #0e7490 !important; }
+  .text-emerald-400 { color: #047857 !important; }
+  .text-blue-400    { color: #1d4ed8 !important; }
+  .text-violet-400  { color: #6d28d9 !important; }
+  .text-rose-400    { color: #be123c !important; }
+  .text-red-400     { color: #b91c1c !important; }
+
+  /* Sombras de tiles bento — usar variable */
+  .shadow-2xl { box-shadow: var(--shadow-pop) !important; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   THEME TOGGLE BUTTON — sol/luna del header y login
+   Colores sólidos por tema (no usamos text-slate-* porque el
+   bridge los lava a --text-faint y el ícono se vuelve invisible).
+   ══════════════════════════════════════════════════════════ */
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+:root .theme-toggle-btn,
+[data-theme="dark"] .theme-toggle-btn { color: #cbd5e1; }
+:root .theme-toggle-btn:hover,
+[data-theme="dark"] .theme-toggle-btn:hover { color: #fcd34d; }
+[data-theme="light"] .theme-toggle-btn { color: #475569; }
+[data-theme="light"] .theme-toggle-btn:hover { color: #4f46e5; }
+
+/* Variante flotante (login) — chip glass */
+.theme-toggle-btn-floating {
+  background: var(--glass-2);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+}
+
+/* ══════════════════════════════════════════════════════════
+   BADGES DE ROL — admin / supervisor / usuario
+   Contraste explícito por tema (no dependemos de Tailwind /opacity).
+   ══════════════════════════════════════════════════════════ */
+.badge-rol {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+/* Dark mode (default) */
+:root .badge-rol-admin,
+[data-theme="dark"] .badge-rol-admin {
+  color: #a7f3d0;
+  background: rgba(16,185,129,0.18);
+  border-color: rgba(52,211,153,0.35);
+}
+:root .badge-rol-supervisor,
+[data-theme="dark"] .badge-rol-supervisor {
+  color: #bfdbfe;
+  background: rgba(59,130,246,0.18);
+  border-color: rgba(96,165,250,0.35);
+}
+:root .badge-rol-usuario,
+[data-theme="dark"] .badge-rol-usuario {
+  color: #e2e8f0;
+  background: rgba(148,163,184,0.18);
+  border-color: rgba(148,163,184,0.32);
+}
+/* Light mode */
+[data-theme="light"] .badge-rol-admin {
+  color: #065f46;
+  background: rgba(16,185,129,0.14);
+  border-color: rgba(5,150,105,0.40);
+}
+[data-theme="light"] .badge-rol-supervisor {
+  color: #1e3a8a;
+  background: rgba(59,130,246,0.14);
+  border-color: rgba(37,99,235,0.40);
+}
+[data-theme="light"] .badge-rol-usuario {
+  color: #334155;
+  background: rgba(100,116,139,0.14);
+  border-color: rgba(71,85,105,0.30);
+}
+
+/* ══════════════════════════════════════════════════════════
+   ERRORES DE LOGIN — themed alerts
+   ══════════════════════════════════════════════════════════ */
+.login-alert {
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+/* Dark */
+:root .login-alert-error,
+[data-theme="dark"] .login-alert-error {
+  color: #fecaca;
+  background: rgba(127,29,29,0.40);
+  border-color: rgba(248,113,113,0.30);
+}
+:root .login-alert-chalan,
+[data-theme="dark"] .login-alert-chalan {
+  color: #fcd34d;
+  background: rgba(120,53,15,0.30);
+  border-color: rgba(251,191,36,0.30);
+}
+/* Light */
+[data-theme="light"] .login-alert-error {
+  color: #991b1b;
+  background: rgba(254,226,226,0.85);
+  border-color: rgba(220,38,38,0.30);
+}
+[data-theme="light"] .login-alert-chalan {
+  color: #92400e;
+  background: rgba(254,243,199,0.85);
+  border-color: rgba(217,119,6,0.30);
 }
 
 /* Gradiente ambiental + noise sutil como fondo vivo */
@@ -124,6 +367,20 @@ body::after {
   opacity: .55;
   pointer-events: none;
   mix-blend-mode: overlay;
+}
+
+/* En modo claro: ambient glow más suave (los radiales con saturación alta
+   sobre blanco se ven sucios) y el grain mucho más tenue. */
+[data-theme="light"] body::before {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(34,197,94,0.06), transparent 60%),
+    radial-gradient(ellipse 60% 60% at 100% 100%, rgba(139,92,246,0.05), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 0% 80%, rgba(59,130,246,0.04), transparent 50%),
+    var(--bg-0);
+}
+[data-theme="light"] body::after {
+  opacity: .15;
+  mix-blend-mode: multiply;
 }
 
 .font-behmer { font-family: 'Behmer', sans-serif; letter-spacing: .02em; }
@@ -236,7 +493,7 @@ body::after {
 .bg-page  { background: transparent !important; }
 .bg-modal { background: transparent !important; }
 .dropdown-themed {
-  background: rgba(20,20,24,0.92) !important;
+  background: var(--dropdown-bg) !important;
   border: 1px solid var(--glass-border) !important;
   backdrop-filter: blur(var(--blur-2)) saturate(180%);
   -webkit-backdrop-filter: blur(var(--blur-2)) saturate(180%);
@@ -363,13 +620,13 @@ body::after {
    BOTTOM SHEET / MODAL
 ══════════════════════════════ */
 .modal-backdrop {
-  background: rgba(0,0,0,0.55);
+  background: var(--modal-backdrop);
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 
 .sheet {
-  background: rgba(18,18,22,0.88);
+  background: var(--modal-bg);
   border: 1px solid var(--glass-border-hi);
   border-bottom: none;
   backdrop-filter: blur(var(--blur-3)) saturate(180%);
@@ -389,7 +646,7 @@ body::after {
 /* El HTML actual usa estilos inline con radio 20px — sobreescribimos vía selector para que todos los modales adopten el look sheet */
 [class*="bg-modal"],
 .bg-modal {
-  background: rgba(18,18,22,0.88) !important;
+  background: var(--modal-bg) !important;
   backdrop-filter: blur(var(--blur-3)) saturate(180%);
   -webkit-backdrop-filter: blur(var(--blur-3)) saturate(180%);
   border: 1px solid var(--glass-border-hi);
@@ -406,7 +663,7 @@ nav.bottom-nav-glass {
   bottom: calc(env(safe-area-inset-bottom) + 10px);
   width: calc(100% - 24px);
   max-width: 520px;
-  background: rgba(18,18,22,0.70);
+  background: var(--nav-bg);
   border: 1px solid var(--glass-border-hi);
   border-radius: 999px;
   backdrop-filter: blur(28px) saturate(200%);
@@ -501,6 +758,12 @@ nav.bottom-nav-glass {
 ══════════════════════════════ */
 .slide-up { animation: slideUp .3s var(--ease-smooth); }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+
+/* En tablet/desktop, los modales se centran — el slide-up desde abajo se siente
+   raro. Mejor un scale-in suave (mismo keyframe que .spring-in). */
+@media (min-width: 640px) {
+  .slide-up { animation: springIn .35s var(--ease-spring); }
+}
 
 .fade-in  { animation: fadeIn .25s var(--ease-smooth); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

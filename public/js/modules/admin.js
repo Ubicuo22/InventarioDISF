@@ -162,9 +162,13 @@ function adminModule() {
     },
 
     rolBadgeClass(rol) {
-      if (rol === 'admin')      return 'text-emerald-400 bg-emerald-400/10'
-      if (rol === 'supervisor') return 'text-blue-400 bg-blue-400/10'
-      return 'text-slate-500 bg-slate-500/10'
+      // Nota: usamos colores con suficiente contraste entre texto y fondo
+      // (text-* y bg-* en tonos distintos) para evitar que el badge salga
+      // como pastilla sólida sin texto legible si el CDN de Tailwind colapsa
+      // la variante /10 de opacidad.
+      if (rol === 'admin')      return 'badge-rol badge-rol-admin'
+      if (rol === 'supervisor') return 'badge-rol badge-rol-supervisor'
+      return 'badge-rol badge-rol-usuario'
     },
 
     // ── Historial de actividad ─────────────────────────────

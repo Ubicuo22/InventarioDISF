@@ -17,6 +17,7 @@ const crypto  = require('crypto')
 const { pool } = require('../db/pool')
 const { requireAuth, invalidarCache } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
+const { resolverAvatar } = require('../utils/avatar')
 
 // ─── Rate limiter en memoria (sin dependencias externas) ──────
 // Máx 10 intentos por IP en ventana de 1 minuto
@@ -67,7 +68,7 @@ router.post('/login', rateLimitLogin, async (req, res) => {
 
     const [users] = await pool.execute(
       `SELECT id_usuario, username, password_hash, nombre_completo,
-              rol, activo, bloqueado_hasta, avatar_color, avatar_url_publica
+              rol, activo, bloqueado_hasta, avatar_color, avatar_r2_key
        FROM usuarios_sistema
        WHERE username = ? AND activo = 1`,
       [username.toUpperCase()]
@@ -77,7 +78,8 @@ router.post('/login', rateLimitLogin, async (req, res) => {
       return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos' })
     }
 
-    const user = users[0]
+    // Resolver avatar_r2_key → avatar_url_publica (URL pública del bucket R2)
+    const user = resolverAvatar(users[0])
 
     // ── Rol "usuario" — sin acceso a la appweb ─────────────
     if (user.rol === 'usuario') {
@@ -143,11 +145,11 @@ router.post('/login', rateLimitLogin, async (req, res) => {
     const ua = (req.headers['user-agent'] || '').slice(0, 255)
     try {
       await pool.execute(
-        `INSERT INTO sesiones_activas (jti, id_usuario, ip, user_agent) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO bodega_sesiones (jti, id_usuario, ip, user_agent) VALUES (?, ?, ?, ?)`,
         [jti, user.id_usuario, ip, ua]
       )
     } catch (e) {
-      console.warn('[auth] No se pudo guardar sesión (tabla sesiones_activas?):', e.message)
+      console.warn('[auth] No se pudo guardar sesión (tabla bodega_sesiones?):', e.message)
     }
 
     // Registrar en historial de actividad
@@ -178,7 +180,7 @@ router.post('/logout', requireAuth, async (req, res) => {
   try {
     if (req.user?.jti) {
       await pool.execute(
-        'UPDATE sesiones_activas SET activo = 0 WHERE jti = ?',
+        'UPDATE bodega_sesiones SET activo = 0 WHERE jti = ?',
         [req.user.jti]
       )
       invalidarCache(req.user.jti)

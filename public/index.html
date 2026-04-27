@@ -16,6 +16,27 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+  <!-- Anti-flash: resuelve y aplica el tema ANTES de la primera pintura.
+       Lee localStorage; si no hay valor guardado usa prefers-color-scheme.
+       Expone window.__THEME para que uiModule lo herede sin re-resolver. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('disfruleg-theme')
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+        document.documentElement.setAttribute('data-theme', theme)
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', theme === 'dark' ? '#060608' : '#f2f2f7')
+        window.__THEME = theme
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        window.__THEME = 'dark'
+      }
+    })()
+  </script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
@@ -25,13 +46,27 @@
 <!-- ══════════════════════════════════════════════════════════
      PANTALLA DE LOGIN
 ══════════════════════════════════════════════════════════ -->
-<div x-show="!session" x-cloak class="min-h-screen min-h-dvh flex flex-col items-center justify-center p-4 gap-8">
+<div x-show="!session" x-cloak class="min-h-screen min-h-dvh flex flex-col items-center justify-center p-4 gap-8 relative">
+
+  <!-- Toggle de tema flotante (solo en login) -->
+  <button @click="toggleTheme()"
+    :title="theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+    class="theme-toggle-btn theme-toggle-btn-floating absolute top-4 right-4 p-2.5 rounded-full transition-all">
+    <svg x-show="theme === 'dark'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="4"/>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+    </svg>
+    <svg x-show="theme === 'light'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  </button>
+
   <div class="glass-strong p-8 w-full max-w-sm spring-in">
 
     <!-- Logo Disfruleg -->
     <div class="flex flex-col items-center mb-8 gap-3">
       <img
-        src="/assets/disfruleg-logo-dark.png"
+        :src="theme === 'light' ? '/assets/disfruleg-logo-light.png' : '/assets/disfruleg-logo-dark.png'"
         alt="Disfruleg"
         class="h-14 object-contain"
         onerror="this.style.display='none'; this.nextElementSibling.style.display='block'"
@@ -84,17 +119,15 @@
 
       <!-- Error de login — chalan -->
       <div x-show="loginError && loginChalan"
-        class="rounded-2xl px-4 py-4 text-sm flex flex-col items-center gap-2 text-center"
-        style="background:rgba(120,53,15,.3); border:1px solid rgba(217,119,6,.5)">
+        class="login-alert login-alert-chalan rounded-2xl px-4 py-4 flex flex-col items-center gap-2 text-center">
         <span class="text-3xl">👷</span>
-        <p class="font-bold text-amber-300 text-base" x-text="loginError"></p>
-        <p class="text-amber-500 text-xs">Contacta a tu administrador para revisar tus permisos de acceso.</p>
+        <p class="font-bold text-base" x-text="loginError"></p>
+        <p class="text-xs opacity-80">Contacta a tu administrador para revisar tus permisos de acceso.</p>
       </div>
 
       <!-- Error de login — normal -->
       <div x-show="loginError && !loginChalan"
-        class="rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2"
-        style="background:rgba(127,29,29,.4); border:1px solid rgba(127,29,29,.8)">
+        class="login-alert login-alert-error rounded-xl flex items-center gap-2">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
         </svg>
@@ -119,7 +152,7 @@
     <p class="text-xs text-slate-500 uppercase tracking-widest">Desarrollado por</p>
     <div class="flex items-center gap-2">
       <img
-        src="/assets/ubicuo-logo-negativo.png"
+        :src="theme === 'light' ? '/assets/ubicuo-logo-light.png' : '/assets/ubicuo-logo-negativo.png'"
         alt="Ubicuo Studio"
         class="h-5 object-contain"
         onerror="this.style.display='none'"
@@ -137,12 +170,23 @@
 
   <!-- ── Header (glass) ── -->
   <header class="sticky top-0 z-20"
-    style="background: rgba(10,10,12,0.72); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border-bottom: 1px solid var(--glass-border); padding-top: env(safe-area-inset-top);">
+    style="background: var(--header-bg); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border-bottom: 1px solid var(--glass-border); padding-top: env(safe-area-inset-top);">
     <div class="max-w-3xl md:max-w-4xl lg:max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
 
-      <!-- Logo pequeño en header — click para volver al inicio -->
-      <img src="/assets/icon.png" alt="Disfruleg" @click="tab = 'home'"
-        class="h-8 w-8 object-contain flex-shrink-0 rounded-lg cursor-pointer" />
+      <!-- Avatar del usuario en header — click para volver al inicio -->
+      <div @click="tab = 'home'"
+        class="h-9 w-9 rounded-full flex-shrink-0 relative overflow-hidden cursor-pointer ring-1"
+        style="border-color: var(--glass-border); --tw-ring-color: var(--glass-border)"
+        :title="session?.nombre || session?.username">
+        <img x-show="session?.avatar"
+          :src="session?.avatar" alt=""
+          class="w-full h-full object-cover"
+          @error="$el.style.display='none'; $el.nextElementSibling.style.display='flex'" />
+        <div class="w-full h-full absolute inset-0 flex items-center justify-center text-sm font-bold text-white"
+          :style="`background:${session?.color || '#475569'}; display:${session?.avatar ? 'none' : 'flex'}`"
+          x-text="(session?.nombre || session?.username || '?')[0].toUpperCase()">
+        </div>
+      </div>
 
       <div class="flex-1 min-w-0">
         <p class="font-medium text-white text-sm truncate" x-text="session?.nombre || session?.username"></p>
@@ -154,6 +198,21 @@
         <div class="flex items-center gap-1" :title="dbOk ? 'Conectado a la base de datos' : 'Sin conexión'">
           <span class="w-2 h-2 rounded-full" :class="dbOk ? 'bg-emerald-400' : 'bg-red-400'"></span>
         </div>
+
+        <!-- Toggle de tema (sol / luna) -->
+        <button @click="toggleTheme()"
+          :title="theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+          class="theme-toggle-btn p-1.5 rounded-lg transition-colors">
+          <!-- Sol (cuando está en dark, muestra sol como invitación a cambiar a claro) -->
+          <svg x-show="theme === 'dark'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <!-- Luna (cuando está en light) -->
+          <svg x-show="theme === 'light'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
 
         <!-- Botón notificaciones push (solo si soportado y hay sesión) -->
         <button x-show="pushSoportado && session"
@@ -1488,13 +1547,14 @@
           <!-- Dropdown resultados -->
           <ul
             x-show="dropdownVisible && dropResults.length > 0"
-            class="absolute z-10 w-full mt-1 rounded-xl overflow-hidden shadow-2xl border border-slate-700 bg-page"
+            class="dropdown-themed absolute z-10 w-full mt-1 overflow-hidden shadow-2xl"
             style="max-height:200px; overflow-y:auto"
           >
             <template x-for="p in dropResults" :key="p.id_producto">
               <li
                 @mousedown.prevent="seleccionar(p)"
-                class="px-4 py-2.5 hover:bg-slate-700/60 cursor-pointer flex justify-between items-center gap-2 text-sm border-b border-slate-800 last:border-0"
+                class="px-4 py-2.5 hover:bg-slate-700/60 cursor-pointer flex justify-between items-center gap-2 text-sm"
+                style="border-bottom: 1px solid var(--glass-border)"
               >
                 <span class="text-slate-100 truncate" x-text="p.nombre_producto.toUpperCase()"></span>
                 <span
@@ -1651,8 +1711,7 @@
       <!-- Mensaje de error -->
       <div
         x-show="errorModal"
-        class="rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2"
-        style="background:rgba(127,29,29,.4); border:1px solid rgba(127,29,29,.8)"
+        class="login-alert login-alert-error rounded-xl flex items-center gap-2"
       >
         <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
@@ -2134,8 +2193,7 @@
 
       <!-- Error modal -->
       <div x-show="errorOrden"
-        class="rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2"
-        style="background:rgba(127,29,29,.4); border:1px solid rgba(127,29,29,.8)">
+        class="login-alert login-alert-error rounded-xl flex items-center gap-2">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
         </svg>
@@ -2884,23 +2942,23 @@
      Solo accesible para rol "admin"
 ══════════════════════════════════════════════════════════ -->
 <div x-show="adminPanelAbierto" x-cloak
-  class="fixed inset-0 z-[80] flex items-end justify-center"
+  class="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4"
   style="background:rgba(0,0,0,.65); backdrop-filter:blur(4px)"
   @keydown.escape.window="cerrarAdminPanel()">
 
-  <div class="bg-modal w-full max-w-lg rounded-t-2xl flex flex-col slide-up"
-    style="max-height:90vh; border-top:1px solid var(--border)">
+  <div class="bg-modal w-full max-w-lg md:max-w-2xl lg:max-w-3xl rounded-t-2xl sm:rounded-2xl flex flex-col slide-up"
+    style="max-height:90vh; border:1px solid var(--border)">
 
     <!-- Header -->
-    <div class="flex items-center justify-between px-4 py-3.5 flex-shrink-0"
+    <div class="flex items-center justify-between px-4 md:px-6 py-3.5 md:py-4 flex-shrink-0"
       style="border-bottom:1px solid var(--border)">
       <div>
-        <p class="font-semibold text-sm text-white">Administración</p>
-        <p class="text-[10px] text-slate-500 mt-0.5">Gestión de acceso y permisos</p>
+        <p class="font-semibold text-sm md:text-base text-white">Administración</p>
+        <p class="text-[10px] md:text-xs text-slate-500 mt-0.5">Gestión de acceso y permisos</p>
       </div>
       <button @click="cerrarAdminPanel()"
-        class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        class="p-1.5 md:p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+        <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
@@ -2909,17 +2967,17 @@
     <!-- Tabs -->
     <div class="flex flex-shrink-0" style="border-bottom:1px solid var(--border)">
       <button @click="cambiarAdminTab('sesiones')"
-        class="flex-1 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors"
+        class="flex-1 py-2.5 md:py-3 text-xs md:text-sm font-semibold uppercase tracking-wide transition-colors"
         :class="adminTab === 'sesiones' ? 'text-white border-b-2 border-emerald-400' : 'text-slate-500 hover:text-slate-300'">
         Sesiones activas
       </button>
       <button @click="cambiarAdminTab('usuarios')"
-        class="flex-1 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors"
+        class="flex-1 py-2.5 md:py-3 text-xs md:text-sm font-semibold uppercase tracking-wide transition-colors"
         :class="adminTab === 'usuarios' ? 'text-white border-b-2 border-emerald-400' : 'text-slate-500 hover:text-slate-300'">
         Usuarios
       </button>
       <button @click="cambiarAdminTab('actividad')"
-        class="flex-1 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors"
+        class="flex-1 py-2.5 md:py-3 text-xs md:text-sm font-semibold uppercase tracking-wide transition-colors"
         :class="adminTab === 'actividad' ? 'text-white border-b-2 border-emerald-400' : 'text-slate-500 hover:text-slate-300'">
         Actividad
       </button>

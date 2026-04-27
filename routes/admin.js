@@ -10,6 +10,7 @@
 const router = require('express').Router()
 const { pool } = require('../db/pool')
 const { requireAuth, requireAdmin, invalidarCache } = require('../middleware/auth')
+const { resolverAvatares } = require('../utils/avatar')
 
 // Todas las rutas de este router requieren ser admin
 router.use(requireAuth, requireAdmin)
@@ -21,13 +22,14 @@ router.get('/sesiones', async (req, res) => {
       SELECT
         s.id, s.jti, s.ip, s.user_agent,
         s.fecha_login, s.ultimo_uso,
-        u.id_usuario, u.username, u.nombre_completo, u.rol, u.avatar_color, u.avatar_url_publica
-      FROM sesiones_activas s
+        u.id_usuario, u.username, u.nombre_completo, u.rol, u.avatar_color, u.avatar_r2_key
+      FROM bodega_sesiones s
       JOIN usuarios_sistema u ON s.id_usuario = u.id_usuario
       WHERE s.activo = 1
       ORDER BY s.ultimo_uso DESC
     `)
-    res.json({ ok: true, sesiones: rows })
+    // Resolver avatar_r2_key → avatar_url_publica
+    res.json({ ok: true, sesiones: resolverAvatares(rows) })
   } catch (e) {
     console.error('[admin] GET /sesiones:', e.message)
     res.status(500).json({ ok: false, error: 'Error al obtener sesiones' })
@@ -42,7 +44,7 @@ router.delete('/sesiones/:jti', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'No puedes cerrar tu propia sesión desde aquí' })
     }
     await pool.execute(
-      'UPDATE sesiones_activas SET activo = 0 WHERE jti = ?',
+      'UPDATE bodega_sesiones SET activo = 0 WHERE jti = ?',
       [jti]
     )
     invalidarCache(jti)
@@ -57,10 +59,12 @@ router.delete('/sesiones/:jti', async (req, res) => {
 router.get('/usuarios', async (req, res) => {
   try {
     const [users] = await pool.execute(`
-      SELECT id_usuario, username, nombre_completo, rol, activo, ultimo_acceso, avatar_color, avatar_url_publica
+      SELECT id_usuario, username, nombre_completo, rol, activo, ultimo_acceso, avatar_color, avatar_r2_key
       FROM usuarios_sistema
       ORDER BY FIELD(rol,'admin','supervisor','usuario'), nombre_completo
     `)
+    // Resolver avatar_r2_key → avatar_url_publica antes de ensamblar la respuesta
+    resolverAvatares(users)
 
     // Permisos de supervisores
     const supervisorIds = users.filter(u => u.rol === 'supervisor').map(u => u.id_usuario)
@@ -127,8 +131,11 @@ router.put('/usuarios/:id/permisos', async (req, res) => {
 // ─── GET /api/admin/actividad ─────────────────────────────
 router.get('/actividad', async (req, res) => {
   try {
-    const limit   = Math.min(parseInt(req.query.limit)  || 50, 200)
-    const offset  = parseInt(req.query.offset) || 0
+    // Clamp y parseo defensivo — luego se inlinean en SQL porque mysql2.execute
+    // (prepared statements) manda LIMIT/OFFSET como strings y TiDB falla con
+    // "Incorrect arguments to LIMIT".
+    const limit   = Math.max(1, Math.min(parseInt(req.query.limit)  || 50, 200))
+    const offset  = Math.max(0, parseInt(req.query.offset) || 0)
     const usuario = req.query.usuario || null
     const modulo  = req.query.modulo  || null
 
@@ -140,14 +147,13 @@ router.get('/actividad', async (req, res) => {
     if (modulo)  { where.push('modulo = ?');  params.push(modulo)  }
 
     const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
-    params.push(limit, offset)
 
     const rows = await q(
       `SELECT id, usuario, nombre, modulo, accion, detalles, ip, fecha
        FROM logs_actividad
        ${whereClause}
        ORDER BY fecha DESC
-       LIMIT ? OFFSET ?`,
+       LIMIT ${limit} OFFSET ${offset}`,
       params
     )
 

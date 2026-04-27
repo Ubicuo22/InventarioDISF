@@ -9,6 +9,12 @@ function authModule() {
     async init() {
       this.resetForm()
 
+      // Asegura que el atributo data-theme y meta theme-color reflejen el estado
+      // actual de this.theme (resuelto en uiModule). El script anti-flash en <head>
+      // ya lo aplicó antes de la primera pintura, esto es defensa en profundidad
+      // para casos donde el script no haya corrido.
+      if (typeof this._aplicarTema === 'function') this._aplicarTema(this.theme)
+
       const token = localStorage.getItem('bodega_token')
       const user  = localStorage.getItem('bodega_user')
       if (token && user) {
@@ -23,6 +29,15 @@ function authModule() {
             this.mostrarToast('Tu sesión expiró — vuelve a iniciar sesión', true)
             return
           }
+
+          // Hidratar campos que pudieran faltar en sesiones viejas (avatar/color)
+          // — el JWT siempre los lleva, así que los rescatamos de ahí.
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]))
+            if (parsed.avatar === undefined && payload.avatar !== undefined) parsed.avatar = payload.avatar
+            if (parsed.color  === undefined && payload.color  !== undefined) parsed.color  = payload.color
+            localStorage.setItem('bodega_user', JSON.stringify(parsed))
+          } catch {}
 
           this.session = parsed
           await this.cargarTodo()

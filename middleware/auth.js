@@ -21,7 +21,7 @@ async function isSessionActive(jti) {
   sessionCache.delete(jti)
 
   try {
-    const rows = await q('SELECT activo FROM sesiones_activas WHERE jti = ?', [jti])
+    const rows = await q('SELECT activo FROM bodega_sesiones WHERE jti = ?', [jti])
 
     // Política:
     //   • Fila existe y activo=1 → sesión activa
@@ -44,7 +44,7 @@ async function isSessionActive(jti) {
       activo = rows[0].activo === 1
       sessionCache.set(jti, { activo, expiresAt: Date.now() + CACHE_TTL })
       if (activo) {
-        q('UPDATE sesiones_activas SET ultimo_uso = NOW() WHERE jti = ?', [jti]).catch(() => {})
+        q('UPDATE bodega_sesiones SET ultimo_uso = NOW() WHERE jti = ?', [jti]).catch(() => {})
       }
     }
     return activo
