@@ -1701,7 +1701,7 @@
   @keydown.escape.window="cerrarOrden()">
   <div class="modal-backdrop absolute inset-0" @click="cerrarOrden()"></div>
 
-  <div class="relative w-full sm:max-w-2xl sm:mx-4 slide-up bg-modal"
+  <div class="relative w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl sm:mx-4 slide-up bg-modal"
     style="border-top-left-radius:20px; border-top-right-radius:20px; max-height:93vh; overflow-y:auto"
     @click.stop>
 
@@ -1711,9 +1711,9 @@
     </div>
 
     <!-- Header sticky -->
-    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700 sticky top-0 z-10 bg-modal">
+    <div class="flex items-center justify-between px-5 py-4 md:px-7 border-b border-slate-700 sticky top-0 z-10 bg-modal">
       <div class="min-w-0">
-        <h2 class="font-semibold text-white text-base"
+        <h2 class="font-semibold text-white text-base md:text-lg"
           x-text="ordenForm.folio_numero ? `Pedido #${String(ordenForm.folio_numero).padStart(4,'0')}` : 'Nueva Orden'"></h2>
         <p class="text-xs text-slate-500 truncate"
           x-text="ordenForm.nombreCliente || 'Selecciona cliente'"></p>
@@ -1725,7 +1725,7 @@
       </button>
     </div>
 
-    <div class="px-5 py-4 space-y-4">
+    <div class="px-5 py-4 md:px-7 md:py-5 space-y-4">
 
       <!-- Grupo + Cliente (solo para nuevas órdenes) -->
       <div x-show="!ordenForm.folio_numero" class="grid grid-cols-2 gap-3">
@@ -2179,7 +2179,7 @@
   @keydown.escape.window="cerrarDetalleOrden()">
   <div class="modal-backdrop absolute inset-0" @click="cerrarDetalleOrden()"></div>
 
-  <div class="relative w-full sm:max-w-lg sm:mx-4 slide-up bg-modal"
+  <div class="relative w-full sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl sm:mx-4 slide-up bg-modal"
     style="border-top-left-radius:20px; border-top-right-radius:20px; max-height:90vh; overflow-y:auto"
     @click.stop>
 
@@ -2189,9 +2189,9 @@
     </div>
 
     <!-- Header sticky -->
-    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700 sticky top-0 z-10 bg-modal">
+    <div class="flex items-center justify-between px-5 py-4 md:px-7 border-b border-slate-700 sticky top-0 z-10 bg-modal">
       <div class="min-w-0">
-        <h2 class="font-semibold text-white text-base"
+        <h2 class="font-semibold text-white text-base md:text-lg"
           x-text="ordenDetalle ? `Pedido #${String(ordenDetalle.folio_numero).padStart(4,'0')}` : 'Cargando...'"></h2>
         <p class="text-xs text-slate-500 truncate mt-0.5"
           x-text="ordenDetalle ? `${ordenDetalle.nombre_cliente} · ${ordenDetalle.nombre_grupo}` : ''"></p>
@@ -2217,7 +2217,7 @@
     </div>
 
     <!-- Contenido del detalle -->
-    <div x-show="!cargandoDetalle && ordenDetalle" class="px-5 py-4 space-y-4">
+    <div x-show="!cargandoDetalle && ordenDetalle" class="px-5 py-4 md:px-7 md:py-5 space-y-4">
 
       <!-- Resumen: fecha + total -->
       <div class="rounded-xl px-4 py-3 grid grid-cols-2 gap-y-2"
