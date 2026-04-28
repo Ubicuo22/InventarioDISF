@@ -139,16 +139,25 @@ function authModule() {
       if (this._ultimoRefresh && (now - this._ultimoRefresh) < 30_000) return
       this._ultimoRefresh = now
       try {
-        const r = await API.get('/api/auth/me')
-        if (!r.ok || !r.user) return
-        // Solo actualizar si hay cambio real (evita reactivity churn)
+        // Usamos fetch crudo (no API.get) para que un 401 transitorio en /me
+        // NO dispare el global "session-expired" → logout → bounce al login.
+        // Esta función es best-effort para refrescar el avatar; si falla, simplemente
+        // se queda con la sesión actual hasta el próximo intento.
+        const token = localStorage.getItem('bodega_token') || ''
+        if (!token) return
+        const res = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (!res.ok) return
+        const r = await res.json().catch(() => null)
+        if (!r || !r.ok || !r.user) return
+
         const cambio =
           r.user.avatar !== this.session?.avatar ||
           r.user.color  !== this.session?.color  ||
           r.user.nombre !== this.session?.nombre ||
           r.user.rol    !== this.session?.rol
         if (cambio) {
-          // Conservamos el token, solo actualizamos datos del usuario
           const merged = { ...this.session, ...r.user }
           this.session = merged
           localStorage.setItem('bodega_user', JSON.stringify(merged))
