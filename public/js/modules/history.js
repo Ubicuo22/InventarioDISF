@@ -77,7 +77,8 @@ function historyModule() {
     // ── Helpers del modal detalle ─────────────────────────────
     detalleSectionNames() {
       if (!this.ordenDetalle?.datos_carrito) return []
-      const keys = Object.keys(this.ordenDetalle.datos_carrito)
+      // Filtra claves internas (__historial__, __orden__)
+      const keys = Object.keys(this.ordenDetalle.datos_carrito).filter(k => !k.startsWith('__'))
       if (keys.includes('General')) {
         return ['General', ...keys.filter(k => k !== 'General')]
       }
@@ -86,13 +87,26 @@ function historyModule() {
 
     detalleCartItems() {
       if (!this.ordenDetalle?.datos_carrito) return []
-      return Object.values(this.ordenDetalle.datos_carrito).flat()
+      return Object.entries(this.ordenDetalle.datos_carrito)
+        .filter(([k]) => !k.startsWith('__'))
+        .flatMap(([, v]) => Array.isArray(v) ? v : [])
     },
 
     detalleTotalOrden() {
       return this.detalleCartItems().reduce(
         (sum, item) => sum + ((item.cantidad || 0) * (item.precio_unitario || 0)), 0
       )
+    },
+
+    /**
+     * Devuelve el historial de cambios de la orden actual (más reciente primero).
+     * Compatible con app Electron (v3.6.8): entradas de cambios y de revisión.
+     */
+    detalleHistorial() {
+      if (!this.ordenDetalle?.datos_carrito) return []
+      const hist = this.ordenDetalle.datos_carrito.__historial__
+      if (!Array.isArray(hist)) return []
+      return [...hist].reverse()
     },
 
     // ── Formato de fecha ──────────────────────────────────────

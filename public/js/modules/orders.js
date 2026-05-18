@@ -2,6 +2,7 @@ function ordersModule() {
   return {
     ordenes: [],
     cargandoOrdenes: false,
+    ordenesFiltroRevision: 'todas',  // 'todas' | 'pendientes' | 'revisadas'
     grupos: [],
     clientesGrupo: [],
     modalOrdenAbierto: false,

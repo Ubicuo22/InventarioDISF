@@ -111,16 +111,23 @@ router.get('/data', requireDashboardToken, async (req, res) => {
 router.get('/metricas-hoy', requireAuth, async (req, res) => {
   try {
     const hoy = new Date().toISOString().slice(0, 10)
+    const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
 
     const [
       pedidosHoy,
-      pedidosActivos,
+      pedidosAyer,
+      pedidosActivosRows,
       ventas,
+      ventasAyer,
       compras,
+      comprasAyer,
       mermas,
+      mermasAyer,
       stockStats,
       topCritico,
-      deudas
+      deudas,
+      ultimaEntrada,
+      pedidosAtrasados
     ] = await Promise.all([
 
       // Pedidos creados hoy
@@ -128,8 +135,13 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          FROM ordenes_guardadas
          WHERE DATE(fecha_creacion) = ? AND activo = 1`, [hoy]),
 
-      // Pedidos activos (sin importar fecha)
+      // Pedidos creados ayer
       q(`SELECT COUNT(*) AS total
+         FROM ordenes_guardadas
+         WHERE DATE(fecha_creacion) = ? AND activo = 1`, [ayer]),
+
+      // Pedidos activos con su carrito (para detectar revisados/no revisados)
+      q(`SELECT folio_numero, datos_carrito, fecha_creacion
          FROM ordenes_guardadas
          WHERE estado = 'guardada' AND activo = 1`),
 
@@ -142,6 +154,12 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
          WHERE DATE(f.fecha_factura) = ?`, [hoy]),
 
+      // Ventas ayer (solo total, para tendencia)
+      q(`SELECT COALESCE(SUM(df.cantidad_factura * df.precio_unitario_venta), 0) AS total_vendido
+         FROM factura f
+         INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
+         WHERE DATE(f.fecha_factura) = ?`, [ayer]),
+
       // Compras del día
       q(`SELECT
            COUNT(*)                                AS num_compras,
@@ -149,10 +167,41 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          FROM compra
          WHERE DATE(fecha_compra) = ?`, [hoy]),
 
-      // Mermas del día
-      q(`SELECT COUNT(*) AS total
-         FROM merma
-         WHERE DATE(fecha_registro) = ? AND activo = 1`, [hoy]),
+      // Compras ayer (para tendencia)
+      q(`SELECT COALESCE(SUM(total_con_impuestos), 0) AS total_gasto
+         FROM compra
+         WHERE DATE(fecha_compra) = ?`, [ayer]),
+
+      // Mermas del día (incluye monto)
+      q(`SELECT
+           COUNT(*) AS total,
+           COALESCE(SUM(m.cantidad *
+             COALESCE(
+               (SELECT ip.costo_unitario
+                FROM inventario_peps ip
+                WHERE ip.id_producto = m.id_producto
+                ORDER BY ip.fecha_compra DESC, ip.id_inventario_peps DESC
+                LIMIT 1),
+               0
+             )
+           ), 0) AS monto_perdido
+         FROM merma m
+         WHERE DATE(m.fecha_registro) = ? AND m.activo = 1`, [hoy]),
+
+      // Mermas ayer (solo monto para tendencia)
+      q(`SELECT
+           COALESCE(SUM(m.cantidad *
+             COALESCE(
+               (SELECT ip.costo_unitario
+                FROM inventario_peps ip
+                WHERE ip.id_producto = m.id_producto
+                ORDER BY ip.fecha_compra DESC, ip.id_inventario_peps DESC
+                LIMIT 1),
+               0
+             )
+           ), 0) AS monto_perdido
+         FROM merma m
+         WHERE DATE(m.fecha_registro) = ? AND m.activo = 1`, [ayer]),
 
       // Stock crítico (≤ 5 unidades)
       q(`SELECT
@@ -182,38 +231,83 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
                  DATE_ADD(d.fecha_generada,
                    INTERVAL COALESCE(c.dias_credito_override, g.dias_credito, 0) DAY
                  ), CURDATE()
-               ) < 0`)
+               ) < 0`),
+
+      // Última entrada de inventario (para tarjeta Historial)
+      q(`SELECT c.fecha_registro, c.cantidad_compra, c.total_con_impuestos,
+                p.nombre_producto, p.unidad_producto,
+                COALESCE(c.usuario_registro, '—') AS usuario
+         FROM compra c
+         LEFT JOIN producto p ON p.id_producto = c.id_producto
+         ORDER BY c.fecha_registro DESC
+         LIMIT 1`),
+
+      // Pedidos atrasados (activos creados hace >24h)
+      q(`SELECT COUNT(*) AS total
+         FROM ordenes_guardadas
+         WHERE estado = 'guardada' AND activo = 1
+           AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY)`)
     ])
+
+    // Computar revisados / por revisar parseando __historial__
+    let porRevisar = 0
+    let revisados = 0
+    for (const orden of (pedidosActivosRows || [])) {
+      try {
+        const cart = typeof orden.datos_carrito === 'string'
+          ? JSON.parse(orden.datos_carrito)
+          : (orden.datos_carrito || {})
+        const hist = cart.__historial__ || []
+        // Está revisada si la última entrada es de tipo 'revision'
+        const last = hist[hist.length - 1]
+        if (last && last.tipoEvento === 'revision') {
+          revisados++
+        } else {
+          porRevisar++
+        }
+      } catch {
+        porRevisar++
+      }
+    }
 
     res.json({
       ok: true,
       ts: new Date().toISOString(),
       pedidos: {
-        total_hoy: parseInt(pedidosHoy[0]?.total  || 0),
-        activos:   parseInt(pedidosActivos[0]?.total || 0)
+        total_hoy:  parseInt(pedidosHoy[0]?.total  || 0),
+        total_ayer: parseInt(pedidosAyer[0]?.total || 0),
+        activos:    (pedidosActivosRows || []).length,
+        por_revisar: porRevisar,
+        revisados,
+        atrasados:  parseInt(pedidosAtrasados[0]?.total || 0)
       },
       ventas: {
-        total_vendido: parseFloat(ventas[0]?.total_vendido || 0),
-        notas:         parseInt(ventas[0]?.notas   || 0),
-        clientes:      parseInt(ventas[0]?.clientes || 0)
+        total_vendido:      parseFloat(ventas[0]?.total_vendido || 0),
+        total_vendido_ayer: parseFloat(ventasAyer[0]?.total_vendido || 0),
+        notas:              parseInt(ventas[0]?.notas    || 0),
+        clientes:           parseInt(ventas[0]?.clientes || 0)
       },
       compras: {
-        num_compras: parseInt(compras[0]?.num_compras || 0),
-        total_gasto: parseFloat(compras[0]?.total_gasto || 0)
+        num_compras:     parseInt(compras[0]?.num_compras || 0),
+        total_gasto:     parseFloat(compras[0]?.total_gasto || 0),
+        total_gasto_ayer: parseFloat(comprasAyer[0]?.total_gasto || 0)
       },
       mermas: {
-        total: parseInt(mermas[0]?.total || 0)
+        total:              parseInt(mermas[0]?.total || 0),
+        monto_perdido:      parseFloat(mermas[0]?.monto_perdido || 0),
+        monto_perdido_ayer: parseFloat(mermasAyer[0]?.monto_perdido || 0)
       },
       stock: {
-        criticos:  parseInt(stockStats[0]?.criticos  || 0),
-        sin_stock: parseInt(stockStats[0]?.sin_stock  || 0),
+        criticos:   parseInt(stockStats[0]?.criticos   || 0),
+        sin_stock:  parseInt(stockStats[0]?.sin_stock  || 0),
         bajo_stock: parseInt(stockStats[0]?.bajo_stock || 0),
-        top:       topCritico || []
+        top:        topCritico || []
       },
       deudas: {
-        vencidas:      parseInt(deudas[0]?.vencidas     || 0),
+        vencidas:      parseInt(deudas[0]?.vencidas      || 0),
         monto_vencido: parseFloat(deudas[0]?.monto_vencido || 0)
-      }
+      },
+      ultima_entrada: ultimaEntrada[0] || null
     })
   } catch (e) {
     console.error('[dashboard] GET /metricas-hoy:', e.message)
