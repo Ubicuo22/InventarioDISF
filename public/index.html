@@ -2546,14 +2546,38 @@
       </div>
 
       <!-- PANEL CENTRAL -->
-      <div class="flex-1 overflow-y-auto" x-show="!revisionShowSidebar || true"
+      <div class="flex-1 overflow-y-auto relative" x-show="!revisionShowSidebar || true"
         @touchstart.passive="revisionTouchStart($event)"
         @touchmove.passive="revisionTouchMove($event)"
         @touchend.passive="revisionTouchEnd($event)">
 
+        <!-- Overlay verde: se revela al deslizar A LA DERECHA (acción: REVISAR) -->
+        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center justify-start pl-6 z-10"
+          :style="`width: 50%; opacity: ${revisionTouchTx > 0 ? Math.min(1, revisionTouchTx / 80) : 0}`">
+          <div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white font-bold text-sm"
+            style="background:linear-gradient(135deg, #10b981, #059669); box-shadow: 0 6px 22px rgba(16,185,129,.45)">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+            <span>Revisar</span>
+          </div>
+        </div>
+
+        <!-- Overlay rojo: se revela al deslizar A LA IZQUIERDA (acción: FALTANTE) -->
+        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end pr-6 z-10"
+          :style="`width: 50%; opacity: ${revisionTouchTx < 0 ? Math.min(1, -revisionTouchTx / 80) : 0}`">
+          <div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white font-bold text-sm"
+            style="background:linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 6px 22px rgba(239,68,68,.45)">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <span>Faltante</span>
+          </div>
+        </div>
+
         <template x-if="revisionCurrent()">
-          <div class="p-6 sm:p-10"
-            :style="`transform: translateX(${revisionTouchTx}px); transition: ${revisionTouchX0 === null ? 'transform .2s ease' : 'none'}`">
+          <div class="p-6 sm:p-10 relative"
+            :style="`transform: translateX(${revisionTouchTx}px); transition: ${revisionTouchX0 === null ? 'transform .2s ease' : 'none'}; z-index: 20`">
 
             <!-- Sección badge -->
             <div class="flex items-center justify-center mb-6">

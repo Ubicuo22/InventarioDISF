@@ -243,28 +243,55 @@ function reviewModule () {
     },
 
     // ── Swipe en card central (móvil) ──────────────────────────
+    // Convención: swipe DERECHA = revisar ✓ · swipe IZQUIERDA = faltante ✗
     revisionTouchStart (e) {
       if (this.revisionSwipeLock) return
+      // Solo escuchar el primer touch
+      if (!e.touches || e.touches.length === 0) return
       this.revisionTouchX0 = e.touches[0].clientX
+      this.revisionTouchY0 = e.touches[0].clientY
       this.revisionTouchTx = 0
+      this.revisionSwipeAxisLocked = null  // 'x' | 'y' | null
     },
     revisionTouchMove (e) {
       if (this.revisionTouchX0 == null) return
+      if (!e.touches || e.touches.length === 0) return
       const dx = e.touches[0].clientX - this.revisionTouchX0
+      const dy = e.touches[0].clientY - (this.revisionTouchY0 ?? 0)
+
+      // Bloquear eje: si el primer movimiento es claramente vertical (scroll),
+      // ignoramos swipes horizontales para no robarle el scroll al usuario.
+      if (this.revisionSwipeAxisLocked == null) {
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+          this.revisionSwipeAxisLocked = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+        }
+      }
+      if (this.revisionSwipeAxisLocked !== 'x') {
+        this.revisionTouchTx = 0
+        return
+      }
+
       // Limitamos a ±120px para feedback visual
       this.revisionTouchTx = Math.max(-120, Math.min(120, dx))
     },
     revisionTouchEnd () {
       if (this.revisionTouchX0 == null) return
-      const tx = this.revisionTouchTx
+      const tx = Number(this.revisionTouchTx) || 0
+      const axis = this.revisionSwipeAxisLocked
+      // Reset state
       this.revisionTouchX0 = null
+      this.revisionTouchY0 = null
       this.revisionTouchTx = 0
+      this.revisionSwipeAxisLocked = null
+
+      // Solo procesar si fue swipe horizontal
+      if (axis !== 'x') return
 
       if (tx >= 80) {
-        // swipe derecha → revisar + siguiente
+        // swipe DERECHA → marcar revisado y avanzar
         this.revisionSiguiente()
       } else if (tx <= -80) {
-        // swipe izquierda → faltante
+        // swipe IZQUIERDA → marcar faltante
         this.revisionMarcarFaltante()
       }
     },
