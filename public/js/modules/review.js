@@ -271,8 +271,7 @@ function reviewModule () {
         return
       }
 
-      // Limitamos a ±120px para feedback visual
-      this.revisionTouchTx = Math.max(-120, Math.min(120, dx))
+      this.revisionTouchTx = Math.max(0, Math.min(120, dx))
     },
     revisionTouchEnd () {
       if (this.revisionTouchX0 == null) return
@@ -288,11 +287,7 @@ function reviewModule () {
       if (axis !== 'x') return
 
       if (tx >= 80) {
-        // swipe DERECHA → marcar revisado y avanzar
         this.revisionSiguiente()
-      } else if (tx <= -80) {
-        // swipe IZQUIERDA → marcar faltante
-        this.revisionMarcarFaltante()
       }
     },
 
@@ -304,10 +299,9 @@ function reviewModule () {
       try {
         // 1) Guardar cambios de cantidad (POST a /api/ordenes con folio existente)
         //    El backend computa el diff vs el carrito previo y agrega al __historial__
-        const cartParaGuardar = { ...this.revisionCart }
-        delete cartParaGuardar.__historial__  // backend lo regenera con diff
-        // necesitamos id_cliente — lo buscamos por folio. Ya está cargado en revisionCart si llegó por GET,
-        // pero por simplicidad lo pedimos al servidor:
+        const cartParaGuardar = JSON.parse(JSON.stringify(this.revisionCart))
+        delete cartParaGuardar.__historial__
+        delete cartParaGuardar.__orden__
         const detalle = await API.get(`/api/ordenes/${this.revisionFolio}`)
         if (!detalle.ok) {
           this.mostrarToast(detalle.error || 'Error al validar la orden', true)
