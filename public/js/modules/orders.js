@@ -17,6 +17,10 @@ function ordersModule() {
     seccionActual: 'General',
     nuevaSeccionNombre: '',
     mostrarNuevaSeccion: false,
+    observacion: '',
+    mostrarObservacion: false,
+    confirmarGuardadoModal: { visible: false },
+    agregarModal: { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true },
 
     // ── Estado UbicuoAI ──────────────────────────────────────
     modoIA: false,
@@ -45,12 +49,15 @@ function ordersModule() {
       error: ''
     },
 
+    iaPrecioModal: { visible: false, secIdx: -1, prodIdx: -1, precio: '', guardar: true, referencia: [] },
+
     // ─────────────────────────────────────────────────────────
 
     async cargarOrdenes() {
       this.cargandoOrdenes = true
       try {
         const estado = this.pedidosTab === 'registrados' ? 'registrada' : 'guardada'
+        // 'activos' y 'revisadas' son vistas del mismo estado=guardada (filtro client-side)
         const r = await API.get(`/api/ordenes?estado=${estado}`)
         this.ordenes = r.data || []
       } catch (err) {
@@ -103,6 +110,7 @@ function ordersModule() {
         visible: false, secIdx: -1, prodIdx: -1,
         nombre: '', unidad: 'kg', precio: '', guardando: false, error: ''
       }
+      this.iaPrecioModal = { visible: false, secIdx: -1, prodIdx: -1, precio: '', guardar: true, referencia: [] }
     },
 
     async abrirNuevaOrden() {
@@ -116,6 +124,8 @@ function ordersModule() {
       this.ordenBusqueda       = ''
       this.ordenResultados     = []
       this.clientesGrupo       = []
+      this.observacion         = ''
+      this.mostrarObservacion  = false
       this._resetIA()
       this.modalOrdenAbierto   = true
     },
@@ -142,9 +152,11 @@ function ordersModule() {
         // Preservar secciones tal como vienen del DB (compatibilidad con electron)
         const cart = (typeof o.datos_carrito === 'string')
           ? JSON.parse(o.datos_carrito) : (o.datos_carrito || {})
-        this.ordenCarrito  = Object.keys(cart).length ? cart : { General: [] }
-        this.seccionActual = this.sectionNames()[0] || 'General'
-        this.modalOrdenAbierto = true
+        this.ordenCarrito       = Object.keys(cart).length ? cart : { General: [] }
+        this.seccionActual      = this.sectionNames()[0] || 'General'
+        this.observacion        = cart.__observacion__ || ''
+        this.mostrarObservacion = !!cart.__observacion__
+        this.modalOrdenAbierto  = true
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar el pedido', true)
       }
@@ -161,6 +173,9 @@ function ordersModule() {
       this.errorOrden          = ''
       this.ordenBusqueda       = ''
       this.ordenResultados     = []
+      this.observacion              = ''
+      this.mostrarObservacion       = false
+      this.confirmarGuardadoModal   = { visible: false }
       this._resetIA()
     },
 
@@ -193,6 +208,62 @@ function ordersModule() {
         this.ordenResultados = []
         this.mostrarToast(err.message || 'Error al buscar productos', true)
       }
+    },
+
+    abrirAgregarModal(producto) {
+      const precio = parseFloat(producto.precio_base)
+      const sinPrecio = !precio || precio <= 0
+      this.agregarModal = {
+        visible:      true,
+        producto,
+        precio:       sinPrecio ? '' : precio.toFixed(2),
+        cantidad:     '1',
+        guardarPrecio: sinPrecio  // solo sugerir guardar cuando no hay precio previo
+      }
+      this.ordenBusqueda   = ''
+      this.ordenResultados = []
+    },
+
+    async confirmarAgregar() {
+      const prod     = this.agregarModal.producto
+      const precio   = parseFloat(this.agregarModal.precio)
+      const cantidad = parseFloat(this.agregarModal.cantidad) || 1
+      if (!precio || precio <= 0) return
+
+      // Guardar precio en el grupo si el usuario lo pidió
+      if (this.agregarModal.guardarPrecio && this.ordenForm.id_grupo) {
+        try {
+          await API.post('/api/productos/precio-rapido', {
+            id_producto: prod.id_producto,
+            id_grupo:    this.ordenForm.id_grupo,
+            precio_base: precio
+          })
+        } catch (e) {
+          console.warn('No se pudo guardar el precio:', e.message)
+        }
+      }
+
+      const sec = this.seccionActual || 'General'
+      if (!this.ordenCarrito[sec]) this.ordenCarrito[sec] = []
+      const existing = this.ordenCarrito[sec].find(i => i.id_producto === prod.id_producto)
+      if (existing) {
+        existing.cantidad        += cantidad
+        existing.precio_unitario  = precio
+      } else {
+        this.ordenCarrito[sec].push({
+          id_producto:     prod.id_producto,
+          nombre_producto: prod.nombre_producto,
+          unidad:          prod.unidad_producto,
+          cantidad,
+          precio_unitario: precio,
+          seccion:         sec
+        })
+      }
+      this.agregarModal = { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true }
+    },
+
+    cerrarAgregarModal() {
+      this.agregarModal = { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true }
     },
 
     agregarAlCarrito(producto) {
@@ -409,10 +480,61 @@ function ordersModule() {
         confianza:       100
       }
 
+      const newPrecio = parseFloat(seleccionado.precio_base) || 0
       this.iaCambiarModal = {
         visible: false, secIdx: -1, prodIdx: -1,
         busqueda: '', resultados: [], buscando: false, seleccionado: null
       }
+
+      // Si el producto recién seleccionado no tiene precio, abrimos el modal de precio
+      if (!newPrecio) {
+        this.iaAbrirPrecio(secIdx, prodIdx)
+      }
+    },
+
+    // ── Modal fijar precio ────────────────────────────────────
+
+    async iaAbrirPrecio(si, pi) {
+      const prod = this.iaResultados[si].productos[pi]
+      this.iaPrecioModal = { visible: true, secIdx: si, prodIdx: pi, precio: '', guardar: true, referencia: [] }
+
+      // Cargar precios en otros grupos como referencia
+      if (prod.producto_id) {
+        try {
+          const r = await API.get(`/api/productos/${prod.producto_id}/precios-grupos`)
+          const currentGid = String(this.ordenForm.id_grupo)
+          this.iaPrecioModal.referencia = (r.data || []).filter(x => String(x.id_grupo) !== currentGid)
+        } catch (e) { /* silent */ }
+      }
+
+      setTimeout(() => document.getElementById('ia-precio-input')?.focus(), 50)
+    },
+
+    async iaConfirmarPrecio() {
+      const { secIdx, prodIdx, precio, guardar } = this.iaPrecioModal
+      const p = parseFloat(precio)
+      if (!p || p <= 0) return
+
+      this.iaResultados[secIdx].productos[prodIdx].precio = p
+
+      if (guardar && this.ordenForm.id_grupo) {
+        const prod = this.iaResultados[secIdx].productos[prodIdx]
+        try {
+          await API.post('/api/productos/precio-rapido', {
+            id_producto: prod.producto_id,
+            id_grupo:    this.ordenForm.id_grupo,
+            precio_base: p
+          })
+        } catch (e) {
+          console.warn('No se pudo guardar el precio:', e.message)
+        }
+      }
+
+      this.iaPrecioModal = { visible: false, secIdx: -1, prodIdx: -1, precio: '', guardar: true, referencia: [] }
+    },
+
+    cerrarIaPrecioModal() {
+      this.iaPrecioModal = { visible: false, secIdx: -1, prodIdx: -1, precio: '', guardar: true, referencia: [] }
     },
 
     // ── Modal crear nuevo producto ────────────────────────────
@@ -525,17 +647,32 @@ function ordersModule() {
 
     // ══════════════════════════════════════════════════════════
 
+    abrirConfirmarGuardado() {
+      if (this.ordenReadOnly) return
+      if (!this.ordenForm.id_cliente) { this.errorOrden = 'Selecciona un cliente'; return }
+      if (this.cartItems().length === 0) { this.errorOrden = 'Agrega al menos un producto'; return }
+      this.errorOrden = ''
+      this.confirmarGuardadoModal = { visible: true }
+    },
+
     async guardarOrden() {
       if (this.ordenReadOnly) return
+      this.confirmarGuardadoModal = { visible: false }
       this.errorOrden     = ''
       this.ordenGuardadaOk = false
       if (!this.ordenForm.id_cliente) { this.errorOrden = 'Selecciona un cliente'; return }
       if (this.cartItems().length === 0) { this.errorOrden = 'Agrega al menos un producto'; return }
       this.guardandoOrden = true
       try {
+        const datosCarrito = { ...this.ordenCarrito }
+        if (this.observacion.trim()) {
+          datosCarrito.__observacion__ = this.observacion.trim()
+        } else {
+          delete datosCarrito.__observacion__
+        }
         const body = {
           id_cliente:    this.ordenForm.id_cliente,
-          datos_carrito: this.ordenCarrito
+          datos_carrito: datosCarrito
         }
         if (this.ordenForm.folio_numero) body.folio_numero = this.ordenForm.folio_numero
         const r = await API.post('/api/ordenes', body)

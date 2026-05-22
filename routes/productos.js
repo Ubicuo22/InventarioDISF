@@ -130,6 +130,43 @@ router.post('/', requireAuth, async (req, res) => {
   }
 })
 
+// Asignar o actualizar precio rápido en un grupo
+router.post('/precio-rapido', requireAuth, async (req, res) => {
+  try {
+    const { id_producto, id_grupo, precio_base } = req.body
+    if (!id_producto || !id_grupo || !precio_base || precio_base <= 0) {
+      return res.status(400).json({ ok: false, error: 'id_producto, id_grupo y precio_base requeridos' })
+    }
+    await q(
+      `INSERT INTO precio_por_grupo (id_producto, id_grupo, precio_base)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE precio_base = VALUES(precio_base)`,
+      [id_producto, id_grupo, precio_base]
+    )
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[productos] POST /precio-rapido', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// Precios de un producto en todos los grupos (para referencia al fijar precio)
+router.get('/:id/precios-grupos', requireAuth, async (req, res) => {
+  try {
+    const rows = await q(
+      `SELECT g.id_grupo, g.nombre_grupo, pg.precio_base
+       FROM grupo g
+       LEFT JOIN precio_por_grupo pg ON pg.id_grupo = g.id_grupo AND pg.id_producto = ?
+       WHERE pg.precio_base IS NOT NULL AND pg.precio_base > 0
+       ORDER BY g.nombre_grupo ASC`,
+      [req.params.id]
+    )
+    res.json({ ok: true, data: rows })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // Lista de proveedores
 router.get('/proveedores', requireAuth, async (req, res) => {
   try {

@@ -188,7 +188,7 @@ router.post('/:folio/revision', async (req, res) => {
     if (!folio || isNaN(folio)) {
       return res.status(400).json({ ok: false, error: 'folio inválido' })
     }
-    const { totalProductos, faltantes } = req.body || {}
+    const { totalProductos, faltantes, pendientes } = req.body || {}
     const usuario = req.user.username
 
     const [row] = await q(
@@ -205,12 +205,14 @@ router.post('/:folio/revision', async (req, res) => {
       : (row.datos_carrito || {})
 
     const historialPrevio = carrito.__historial__ || []
+    const pendientesArr = Array.isArray(pendientes) ? pendientes : []
     const nuevaEntrada = {
       usuario: usuario || 'BODEGA',
       fecha: new Date().toISOString(),
       tipoEvento: 'revision',
       totalProductos: parseInt(totalProductos, 10) || 0,
-      faltantes: Array.isArray(faltantes) ? faltantes : []
+      faltantes: Array.isArray(faltantes) ? faltantes : [],
+      pendientes: pendientesArr
     }
     carrito.__historial__ = [...historialPrevio, nuevaEntrada]
 
@@ -220,7 +222,12 @@ router.post('/:folio/revision', async (req, res) => {
       WHERE  folio_numero = ?
     `, [JSON.stringify(carrito), folio])
 
-    registrar(req, 'pedidos', 'orden_revisada', { folio, totalProductos: nuevaEntrada.totalProductos, faltantes: nuevaEntrada.faltantes.length })
+    registrar(req, 'pedidos', 'orden_revisada', {
+      folio,
+      totalProductos: nuevaEntrada.totalProductos,
+      faltantes: nuevaEntrada.faltantes.length,
+      pendientes: pendientesArr.length
+    })
     res.json({ ok: true })
   } catch (e) {
     console.error('[ordenes] POST /:folio/revision', e.message)

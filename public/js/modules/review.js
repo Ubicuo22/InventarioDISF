@@ -20,6 +20,8 @@ function reviewModule () {
     revisionCurrentIdx: 0,
     revisionReviewedIds: [],            // ["seccion::id_producto", ...]
     revisionMissingNames: [],
+    revisionPendingIds: [],             // ["seccion::id_producto", ...] — sigue en carrito pero flagueado
+    revisionPendingNames: [],
     revisionGuardando: false,
     revisionShowSidebar: false,         // collapsable en móvil
     // Undo toast
@@ -74,6 +76,15 @@ function reviewModule () {
       return c ? this.revisionIsReviewed(c.section, c.item.id_producto) : false
     },
 
+    revisionIsPending (section, productId) {
+      return this.revisionPendingIds.includes(this.revisionItemKey(section, productId))
+    },
+
+    revisionIsCurrentPending () {
+      const c = this.revisionCurrent()
+      return c ? this.revisionIsPending(c.section, c.item.id_producto) : false
+    },
+
     revisionReviewedCount () {
       return this.revisionReviewedIds.length
     },
@@ -125,6 +136,8 @@ function reviewModule () {
         this.revisionCurrentIdx = 0
         this.revisionReviewedIds = []
         this.revisionMissingNames = []
+        this.revisionPendingIds = []
+        this.revisionPendingNames = []
         this.revisionUndo = null
         this.revisionShowSidebar = false
         this.revisionTouchX0 = null
@@ -141,6 +154,8 @@ function reviewModule () {
       this.revisionFolio = null
       this.revisionReviewedIds = []
       this.revisionMissingNames = []
+      this.revisionPendingIds = []
+      this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
       this.revisionUndo = null
       if (this._revisionUndoTimer) {
@@ -242,6 +257,34 @@ function reviewModule () {
       }
     },
 
+    // ── Marcar pendiente (sigue en carrito, pero queda pendiente) ─
+    revisionMarcarPendiente () {
+      const c = this.revisionCurrent()
+      if (!c) return
+      const key = this.revisionItemKey(c.section, c.item.id_producto)
+
+      if (this.revisionPendingIds.includes(key)) {
+        // Toggle: si ya estaba pendiente, quitarlo
+        this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
+        this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== c.item.nombre_producto)
+        return
+      }
+
+      this.revisionPendingIds.push(key)
+      this.revisionPendingNames.push(c.item.nombre_producto)
+
+      // Marcar como revisado también para que avance el progreso
+      if (!this.revisionReviewedIds.includes(key)) {
+        this.revisionReviewedIds.push(key)
+      }
+
+      // Avanzar al siguiente automáticamente
+      const total = this.revisionTotal()
+      if (this.revisionCurrentIdx < total - 1) {
+        this.revisionCurrentIdx++
+      }
+    },
+
     // ── Swipe en card central (móvil) ──────────────────────────
     // Convención: swipe DERECHA = revisar ✓ · swipe IZQUIERDA = faltante ✗
     revisionTouchStart (e) {
@@ -324,7 +367,8 @@ function reviewModule () {
         // 2) Registrar la revisión completa en el historial
         const revBody = {
           totalProductos: this.revisionTotal() + this.revisionMissingNames.length,
-          faltantes: this.revisionMissingNames
+          faltantes: this.revisionMissingNames,
+          pendientes: this.revisionPendingNames
         }
         const rev = await API.post(`/api/ordenes/${this.revisionFolio}/revision`, revBody)
         if (!rev.ok) {
@@ -334,10 +378,13 @@ function reviewModule () {
         }
 
         if (window.sounds) window.sounds.finalize()
-        const faltantesMsg = this.revisionMissingNames.length > 0
-          ? ` · ${this.revisionMissingNames.length} faltante${this.revisionMissingNames.length !== 1 ? 's' : ''}`
-          : ''
-        this.mostrarToast(`Revisión completada${faltantesMsg}`)
+        const hasPendientes = this.revisionPendingNames.length > 0
+        const hasFaltantes  = this.revisionMissingNames.length > 0
+        const partes = []
+        if (hasFaltantes) partes.push(`${this.revisionMissingNames.length} faltante${this.revisionMissingNames.length !== 1 ? 's' : ''}`)
+        if (hasPendientes) partes.push(`${this.revisionPendingNames.length} pendiente${this.revisionPendingNames.length !== 1 ? 's' : ''}`)
+        const sufijo = partes.length ? ` · ${partes.join(' · ')}` : ''
+        this.mostrarToast(`Revisión completada${sufijo}`)
         this.cerrarRevision()
         await this.cargarOrdenes()
       } catch (e) {
@@ -362,9 +409,16 @@ function reviewModule () {
         for (let i = hist.length - 1; i >= 0; i--) {
           const e = hist[i]
           if (e.tipoEvento === 'revision') {
-            return i === hist.length - 1
-              ? { reviewed: true, usuario: e.usuario, fecha: e.fecha, faltantes: e.faltantes || [] }
-              : null
+            if (i !== hist.length - 1) return null  // hubo cambios después de la revisión
+            const pendientes = e.pendientes || []
+            return {
+              reviewed: pendientes.length === 0,  // solo "revisada" si no hay pendientes
+              conPendientes: pendientes.length > 0,
+              usuario: e.usuario,
+              fecha: e.fecha,
+              faltantes: e.faltantes || [],
+              pendientes
+            }
           }
         }
         return null
