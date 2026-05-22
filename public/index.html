@@ -2679,6 +2679,16 @@
             x-text="`${revisionCurrentIdx + 1} de ${revisionTotal()} · ${revisionReviewedCount()} ✓${revisionMissingNames.length ? ' · ' + revisionMissingNames.length + ' faltantes' : ''}${revisionPendingNames.length ? ' · ' + revisionPendingNames.length + ' pendientes' : ''}`"></p>
         </div>
       </div>
+      <!-- Botón Reset: visible cuando hay algo revisado o faltantes -->
+      <button
+        x-show="revisionReviewedIds.length > 0 || revisionMissingNames.length > 0"
+        @click="revisionReset()"
+        class="p-2 rounded-lg text-slate-400 hover:text-white transition-colors"
+        title="Reiniciar revisión">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+      </button>
       <!-- Toggle sidebar (solo móvil) -->
       <button @click="revisionShowSidebar = !revisionShowSidebar"
         class="md:hidden p-2 rounded-lg text-slate-400 hover:text-white" title="Ver lista">
@@ -2815,7 +2825,10 @@
                 min="0.001"
                 :value="revisionCurrent().item.cantidad"
                 @input="revisionActualizarCantidad($event.target.value)"
-                @focus="$event.target.select()"
+                @focus="$event.target.select(); revisionInputFocused = true"
+                @blur="revisionInputFocused = false"
+                @keydown.enter.prevent="revisionGuardarYSiguiente()"
+                @keydown.escape.prevent="$event.target.blur()"
                 class="w-44 sm:w-56 px-4 py-3 text-5xl sm:text-6xl font-bold text-center tabular-nums bg-transparent text-emerald-400 border-2 border-transparent focus:border-emerald-500 rounded-2xl focus:outline-none transition-colors"
                 style="appearance:textfield" />
               <p class="text-base text-slate-400 mt-1" x-text="revisionCurrent().item.unidad || ''"></p>
@@ -2911,6 +2924,14 @@
         </svg>
         <span>Anterior</span>
       </button>
+
+      <!-- Atajos de teclado — solo desktop, idénticos a ReviewModal.tsx del electron -->
+      <div class="hidden md:flex items-center gap-2 text-[10px] text-slate-600 flex-shrink-0">
+        <span><kbd class="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">Enter</kbd> siguiente</span>
+        <span><kbd class="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">F</kbd> faltante</span>
+        <span><kbd class="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">P</kbd> pendiente</span>
+        <span><kbd class="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">← →</kbd> navegar</span>
+      </div>
 
       <!-- Estado: si todos revisados, muestra Finalizar. Si no, muestra Siguiente -->
       <template x-if="!revisionAllReviewed()">

@@ -41,7 +41,37 @@ router.post('/', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
     `, [id_producto, cantidad_merma, tipo_merma, motivo.trim(), fecha, usuario, notas?.trim() || null])
 
-    // Actualizar stock del producto
+    // Consumir lotes PEPS en orden FIFO (idéntico a mermas:registrar del electron).
+    // Sin esto, el stock de `producto` baja pero `inventario_peps.cantidad_restante` queda
+    // inflado. La próxima compra desde electron reconciliaría stock = SUM(PEPS) y
+    // revertiría silenciosamente la merma.
+    const [[{ stock_peps }]] = await conn.execute(
+      `SELECT COALESCE(SUM(cantidad_restante), 0) AS stock_peps
+       FROM inventario_peps WHERE id_producto = ? AND activo = 1`,
+      [id_producto]
+    )
+    if (parseFloat(stock_peps) > 0) {
+      // Hay lotes PEPS — consumir FIFO
+      const [lotes] = await conn.execute(
+        `SELECT id_inventario_peps, cantidad_restante
+         FROM inventario_peps
+         WHERE id_producto = ? AND cantidad_restante > 0 AND activo = 1
+         ORDER BY fecha_movimiento ASC, id_inventario_peps ASC`,
+        [id_producto]
+      )
+      let pendiente = parseFloat(cantidad_merma)
+      for (const lote of lotes) {
+        if (pendiente <= 0) break
+        const consumir = Math.min(pendiente, parseFloat(lote.cantidad_restante))
+        await conn.execute(
+          'UPDATE inventario_peps SET cantidad_restante = cantidad_restante - ? WHERE id_inventario_peps = ?',
+          [consumir, lote.id_inventario_peps]
+        )
+        pendiente -= consumir
+      }
+    }
+
+    // Actualizar stock del producto (aritmético, igual que el electron en mermas)
     await conn.execute(
       'UPDATE producto SET stock = stock - ? WHERE id_producto = ?',
       [cantidad_merma, id_producto]

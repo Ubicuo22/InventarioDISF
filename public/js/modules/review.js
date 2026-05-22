@@ -31,6 +31,14 @@ function reviewModule () {
     revisionTouchX0: null,
     revisionTouchTx: 0,
     revisionSwipeLock: false,
+    // Throttle para Siguiente (previene avanzar varios de golpe con clic rápido o flecha mantenida)
+    _revisionLastNext: 0,
+    // Estado de foco del input de cantidad (para guardar atajos de teclado)
+    revisionInputFocused: false,
+    // Snapshot del carrito original (para Reset)
+    _revisionOriginalCart: null,
+    // Ref al handler de teclado registrado
+    _revisionKeyHandler: null,
 
     // ── Helpers ────────────────────────────────────────────────
     _revisionFilteredKeys () {
@@ -130,6 +138,7 @@ function reviewModule () {
           : (o.datos_carrito || {})
 
         this.revisionCart = Object.keys(cart).length ? cart : { General: [] }
+        this._revisionOriginalCart = JSON.parse(JSON.stringify(this.revisionCart))
         this.revisionFolio = o.folio_numero
         this.revisionNombreCliente = o.nombre_cliente
         this.revisionNombreGrupo = o.nombre_grupo
@@ -142,6 +151,20 @@ function reviewModule () {
         this.revisionShowSidebar = false
         this.revisionTouchX0 = null
         this.revisionTouchTx = 0
+        // Registrar atajos de teclado — mismos que ReviewModal.tsx del electron
+        this._revisionKeyHandler = (e) => {
+          if (!this.revisionModalOpen) return
+          // Si el input de cantidad está enfocado: solo Enter avanza
+          if (this.revisionInputFocused) {
+            if (e.key === 'Enter') { e.preventDefault(); this.revisionGuardarYSiguiente() }
+            return
+          }
+          if (e.key === 'ArrowRight') { e.preventDefault(); this.revisionSiguiente(); return }
+          if (e.key === 'ArrowLeft')  { e.preventDefault(); this.revisionAnterior();  return }
+          if (e.key === 'f' || e.key === 'F') { e.preventDefault(); this.revisionMarcarFaltante();  return }
+          if (e.key === 'p' || e.key === 'P') { e.preventDefault(); this.revisionMarcarPendiente(); return }
+        }
+        window.addEventListener('keydown', this._revisionKeyHandler)
         this.revisionModalOpen = true
       } catch (e) {
         this.mostrarToast(e.message || 'Error al cargar pedido', true)
@@ -149,6 +172,11 @@ function reviewModule () {
     },
 
     cerrarRevision () {
+      if (this._revisionKeyHandler) {
+        window.removeEventListener('keydown', this._revisionKeyHandler)
+        this._revisionKeyHandler = null
+      }
+      this._revisionOriginalCart = null
       this.revisionModalOpen = false
       this.revisionCart = { General: [] }
       this.revisionFolio = null
@@ -176,6 +204,9 @@ function reviewModule () {
     },
 
     revisionSiguiente () {
+      const now = Date.now()
+      if (now - this._revisionLastNext < 350) return
+      this._revisionLastNext = now
       this.revisionMarcarRevisado()
       const total = this.revisionTotal()
       if (this.revisionCurrentIdx < total - 1) {
@@ -187,6 +218,31 @@ function reviewModule () {
       if (this.revisionCurrentIdx > 0) {
         this.revisionCurrentIdx--
       }
+    },
+
+    // ── Reset — reinicia el estado de revisión restaurando el carrito original ──
+    revisionReset () {
+      if (this._revisionOriginalCart) {
+        this.revisionCart = JSON.parse(JSON.stringify(this._revisionOriginalCart))
+      }
+      this.revisionReviewedIds = []
+      this.revisionMissingNames = []
+      this.revisionPendingIds = []
+      this.revisionPendingNames = []
+      this.revisionCurrentIdx = 0
+      this.revisionUndo = null
+      this._revisionLastNext = 0
+      if (this._revisionUndoTimer) {
+        clearTimeout(this._revisionUndoTimer)
+        this._revisionUndoTimer = null
+      }
+    },
+
+    // ── Enter en input de cantidad → guardar y avanzar ─────────────
+    revisionGuardarYSiguiente () {
+      // La cantidad ya se actualizó via @input reactivo; solo avanzamos
+      this.$el?.querySelector('input[inputmode="decimal"]')?.blur()
+      this.revisionSiguiente()
     },
 
     revisionSaltarA (idx) {

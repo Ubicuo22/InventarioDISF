@@ -160,17 +160,17 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
          WHERE DATE(f.fecha_factura) = ?`, [ayer]),
 
-      // Compras del día
+      // Compras del día — fecha_registro = cuando fue ingresada al sistema (no la fecha del proveedor)
       q(`SELECT
            COUNT(*)                                AS num_compras,
            COALESCE(SUM(total_con_impuestos), 0)  AS total_gasto
          FROM compra
-         WHERE DATE(fecha_compra) = ?`, [hoy]),
+         WHERE DATE(fecha_registro) = ?`, [hoy]),
 
       // Compras ayer (para tendencia)
       q(`SELECT COALESCE(SUM(total_con_impuestos), 0) AS total_gasto
          FROM compra
-         WHERE DATE(fecha_compra) = ?`, [ayer]),
+         WHERE DATE(fecha_registro) = ?`, [ayer]),
 
       // Mermas del día (incluye monto)
       q(`SELECT
@@ -180,7 +180,7 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
                (SELECT ip.costo_unitario
                 FROM inventario_peps ip
                 WHERE ip.id_producto = m.id_producto
-                ORDER BY ip.fecha_compra DESC, ip.id_inventario_peps DESC
+                ORDER BY ip.fecha_movimiento DESC, ip.id_inventario_peps DESC
                 LIMIT 1),
                0
              )
@@ -195,7 +195,7 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
                (SELECT ip.costo_unitario
                 FROM inventario_peps ip
                 WHERE ip.id_producto = m.id_producto
-                ORDER BY ip.fecha_compra DESC, ip.id_inventario_peps DESC
+                ORDER BY ip.fecha_movimiento DESC, ip.id_inventario_peps DESC
                 LIMIT 1),
                0
              )
@@ -250,6 +250,10 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
     ])
 
     // Computar revisados / por revisar parseando __historial__
+    // Misma lógica que getReviewInfo() / isOrdenRevisada() del electron:
+    //   1. Busca la última entrada con tipoEvento === 'revision' (no necesariamente la última)
+    //   2. Si hay cambios de carrito POSTERIORES a esa revisión → no revisada
+    //   3. Si tiene pendientes → cuenta como "por revisar" (necesita atención)
     let porRevisar = 0
     let revisados = 0
     for (const orden of (pedidosActivosRows || [])) {
@@ -258,13 +262,31 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
           ? JSON.parse(orden.datos_carrito)
           : (orden.datos_carrito || {})
         const hist = cart.__historial__ || []
-        // Está revisada si la última entrada es de tipo 'revision'
-        const last = hist[hist.length - 1]
-        if (last && last.tipoEvento === 'revision') {
-          revisados++
-        } else {
-          porRevisar++
+
+        // Buscar la última revisión
+        let lastReview = null
+        let lastReviewIdx = -1
+        for (let i = hist.length - 1; i >= 0; i--) {
+          if (hist[i].tipoEvento === 'revision') { lastReview = hist[i]; lastReviewIdx = i; break }
         }
+
+        if (!lastReview) {
+          porRevisar++
+          continue
+        }
+
+        // ¿Hubo cambios de carrito DESPUÉS de la revisión?
+        const hayCambiosPosteriores = hist
+          .slice(lastReviewIdx + 1)
+          .some(e => !e.tipoEvento || e.tipoEvento === 'cambios')
+
+        if (hayCambiosPosteriores) { porRevisar++; continue }
+
+        // ¿Tiene pendientes? → también necesita atención
+        const pendientes = lastReview.pendientes || []
+        if (pendientes.length > 0) { porRevisar++; continue }
+
+        revisados++
       } catch {
         porRevisar++
       }

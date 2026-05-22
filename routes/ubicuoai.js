@@ -15,6 +15,20 @@ router.use(requireAuth)
 
 /* ─── helpers ─────────────────────────────────────────────── */
 
+/**
+ * Normalización idéntica a UbicuoMatcher.normalize() y al handler de electron.
+ * Garantiza que "Limón", "LIMON" y "limon" sean la misma clave en BD y no
+ * creen filas duplicadas en ubicuoai_learning.
+ */
+function normalizeText (text) {
+  return text
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quitar acentos / diacríticos
+    .replace(/\s+/g, ' ')
+}
+
 async function getProducts (groupId) {
   if (groupId) {
     return q(`
@@ -35,10 +49,18 @@ async function getProducts (groupId) {
   `)
 }
 
-async function getLearningDict () {
-  const rows = await q('SELECT incorrect, correct FROM ubicuoai_learning')
+async function getLearningDict (groupId) {
+  // Globales (id_grupo IS NULL) primero; las específicas del grupo las sobreescriben.
+  // Misma estrategia que getCachedLearning() del electron.
+  const rows = await q(
+    `SELECT incorrect, correct, id_grupo
+     FROM ubicuoai_learning
+     WHERE id_grupo IS NULL OR id_grupo = ?
+     ORDER BY id_grupo IS NULL DESC`,
+    [groupId ?? 0]
+  )
   const dict = {}
-  rows.forEach(r => { dict[r.incorrect.toLowerCase().trim()] = r.correct })
+  rows.forEach(r => { dict[normalizeText(r.incorrect)] = r.correct })
   return dict
 }
 
@@ -52,7 +74,7 @@ router.post('/analizar', async (req, res) => {
 
     const [products, learningDict] = await Promise.all([
       getProducts(groupId || null),
-      getLearningDict()
+      getLearningDict(groupId || null)
     ])
 
     const result = UbicuoEngine.process({ text, products, learningDict, threshold: 0.75 })
@@ -77,16 +99,22 @@ router.post('/analizar', async (req, res) => {
 /* ─── POST /api/ubicuoai/correccion ───────────────────────── */
 router.post('/correccion', async (req, res) => {
   try {
-    const { incorrect, correct } = req.body
+    const { incorrect, correct, grupoId = null } = req.body
     if (!incorrect || !correct) {
       return res.status(400).json({ ok: false, error: 'incorrect y correct son requeridos' })
     }
 
-    const inc = incorrect.trim().substring(0, 200)
+    // Misma normalización que getCachedLearning() en el electron: NFD + sin acentos + lowercase
+    const inc = normalizeText(incorrect).substring(0, 200)
     const cor = correct.trim().substring(0, 200)
+    const gid = grupoId ?? null
 
+    // Buscar fila existente para el mismo (incorrect, id_grupo) — evita duplicados
     const [existing] = await q(
-      'SELECT id FROM ubicuoai_learning WHERE incorrect = ?', [inc]
+      `SELECT id FROM ubicuoai_learning
+       WHERE incorrect = ?
+         AND (id_grupo = ? OR (id_grupo IS NULL AND ? IS NULL))`,
+      [inc, gid, gid]
     )
 
     if (existing) {
@@ -94,12 +122,13 @@ router.post('/correccion', async (req, res) => {
         UPDATE ubicuoai_learning
         SET    correct = ?, times_used = times_used + 1, last_used = NOW()
         WHERE  incorrect = ?
-      `, [cor, inc])
+          AND  (id_grupo = ? OR (id_grupo IS NULL AND ? IS NULL))
+      `, [cor, inc, gid, gid])
     } else {
       await q(`
-        INSERT INTO ubicuoai_learning (incorrect, correct, times_used, first_added, last_used)
-        VALUES (?, ?, 1, NOW(), NOW())
-      `, [inc, cor])
+        INSERT INTO ubicuoai_learning (incorrect, correct, id_grupo, times_used, first_added, last_used)
+        VALUES (?, ?, ?, 1, NOW(), NOW())
+      `, [inc, cor, gid])
     }
 
     res.json({ ok: true })

@@ -133,10 +133,18 @@ router.post('/', requireAuth, async (req, res) => {
       [idProducto, idCompra, fechaCompra, cantidadNum, cantidadNum, precioUnitario]
     )
 
-    // 3. Actualizar stock del producto
+    // 3. Reconciliar stock desde lotes PEPS activos (misma lógica que compras:crear en electron v3.7.0).
+    //    El lote que acabamos de insertar ya está en inventario_peps con cantidad_restante = cantidadNum,
+    //    así que la subquery devuelve el valor correcto directamente sin aritmética acumulativa.
     await conn.execute(
-      `UPDATE producto SET stock = stock + ? WHERE id_producto = ?`,
-      [cantidadNum, idProducto]
+      `UPDATE producto
+       SET stock = (
+         SELECT COALESCE(SUM(ip.cantidad_restante), 0)
+         FROM inventario_peps ip
+         WHERE ip.id_producto = ? AND ip.activo = 1
+       )
+       WHERE id_producto = ?`,
+      [idProducto, idProducto]
     )
 
     // 4. Actualizar stock de equivalentes seleccionados (solo stock, sin PEPS)
