@@ -134,7 +134,9 @@ router.post('/nuevo-pedido', requireNotifSecret, async (req, res) => {
       title: cliente ? `📦 Pedido nuevo — ${cliente}` : `📦 Pedido nuevo`,
       body:  [folioStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
-      tag:   `pedido-${folio || Date.now()}`
+      tag:   `pedido-${folio || Date.now()}`,
+      tab:   'pedidos',
+      url:   '/?tab=pedidos'
     })
 
     console.log(`[push] Pedido nuevo — ${result.enviados}/${result.total} dispositivos`)
@@ -159,7 +161,9 @@ router.post('/pedido-procesado', requireNotifSecret, async (req, res) => {
       title: cliente ? `💰 Pedido procesado — ${cliente}` : `💰 Pedido procesado`,
       body:  [folioStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
-      tag:   `procesado-${folio || Date.now()}`
+      tag:   `procesado-${folio || Date.now()}`,
+      tab:   'pedidos',
+      url:   '/?tab=pedidos'
     })
 
     console.log(`[push] Pedido procesado — ${result.enviados}/${result.total} dispositivos`)
@@ -184,7 +188,9 @@ router.post('/stock-entrada', requireNotifSecret, async (req, res) => {
       title: `📥 Entrada de stock`,
       body:  [producto, cantStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
-      tag:   `stock-entrada-${Date.now()}`
+      tag:   `stock-entrada-${Date.now()}`,
+      tab:   'entradas',
+      url:   '/?tab=entradas'
     })
 
     console.log(`[push] Stock entrada — ${result.enviados}/${result.total} dispositivos`)
@@ -208,7 +214,9 @@ router.post('/stock-bajo-multiple', requireNotifSecret, async (req, res) => {
       title: `⚠️ Stock bajo en ${cantidad} productos`,
       body:  `Varios productos quedaron en cero o negativo · ${usuario || ''}`.trim().replace(/·\s*$/, ''),
       icon:  '/assets/icon.png',
-      tag:   'stock-bajo-multiple'
+      tag:   'stock-bajo-multiple',
+      tab:   'inventario',
+      url:   '/?tab=inventario'
     })
 
     console.log(`[push] Stock bajo múltiple (${cantidad} productos) — ${result.enviados}/${result.total} dispositivos`)
@@ -233,7 +241,9 @@ router.post('/stock-bajo', requireNotifSecret, async (req, res) => {
       title: `⚠️ Stock bajo`,
       body:  [producto, stockStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
-      tag:   `stock-bajo-${producto || Date.now()}`
+      tag:   `stock-bajo-${producto || Date.now()}`,
+      tab:   'inventario',
+      url:   '/?tab=inventario'
     })
 
     console.log(`[push] Stock bajo — ${result.enviados}/${result.total} dispositivos`)
@@ -258,7 +268,9 @@ router.post('/cotizacion-importada', requireNotifSecret, async (req, res) => {
       title: `📋 Cotización importada`,
       body:  [grupo, productosStr, usuario].filter(Boolean).join(' · '),
       icon:  '/assets/icon.png',
-      tag:   `cotizacion-${Date.now()}`
+      tag:   `cotizacion-${Date.now()}`,
+      tab:   'analytics',
+      url:   '/?tab=analytics'
     })
 
     console.log(`[push] Cotización importada — ${result.enviados}/${result.total} dispositivos`)
@@ -317,6 +329,28 @@ router.post('/mensaje-personalizado', requireNotifSecret, async (req, res) => {
   } catch (e) {
     console.error('[notificaciones] POST /mensaje-personalizado', e.message)
     res.status(500).json({ ok: false, error: 'Error al enviar notificación' })
+  }
+})
+
+// ════════════════════════════════════════════════════════════
+// POST /api/notificaciones/desuscribir
+// El dispositivo se auto-desregistra (sin auth — solo necesita el endpoint)
+// Body: { endpoint }
+// ════════════════════════════════════════════════════════════
+router.post('/desuscribir', async (req, res) => {
+  try {
+    const { endpoint } = req.body
+    if (!endpoint) return res.status(400).json({ ok: false, error: 'endpoint requerido' })
+
+    await pool.query(
+      'UPDATE push_subscriptions SET activo = 0 WHERE endpoint = ?',
+      [endpoint]
+    )
+    console.log('[push] Desuscripción manual registrada')
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[notificaciones] POST /desuscribir', e.message)
+    res.status(500).json({ ok: false, error: 'Error al desuscribir' })
   }
 })
 

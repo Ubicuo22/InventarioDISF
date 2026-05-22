@@ -34,6 +34,20 @@ function notificationsModule() {
         const reg = await navigator.serviceWorker.register('/sw.js')
         await navigator.serviceWorker.ready
 
+        // Escuchar instrucciones de navegación del SW (click en notificación con app abierta)
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data?.type === 'NAVIGATE_TAB' && event.data?.tab) {
+            this.tab = event.data.tab
+            // Si estamos en home, mostrar la sección directamente
+            if (event.data.tab !== 'home') {
+              // Cargar datos del módulo al que navegamos
+              if (event.data.tab === 'pedidos')    this.cargarOrdenes?.()
+              if (event.data.tab === 'entradas')   this.cargarEntradasRecientes?.()
+              if (event.data.tab === 'inventario') this.cargarProductos?.()
+            }
+          }
+        })
+
         // Verificar si ya hay suscripción activa
         const sub = await reg.pushManager.getSubscription()
         this.pushSuscrito = !!sub
@@ -115,7 +129,20 @@ function notificationsModule() {
       try {
         const reg = await navigator.serviceWorker.ready
         const sub = await reg.pushManager.getSubscription()
-        if (sub) await sub.unsubscribe()
+        if (sub) {
+          const endpoint = sub.endpoint  // capturar antes de desuscribir
+          await sub.unsubscribe()
+          // Marcar inactiva en el servidor — best-effort
+          const token = localStorage.getItem('bodega_token') || ''
+          fetch('/api/notificaciones/desuscribir', {
+            method:  'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ endpoint })
+          }).catch(() => {})
+        }
         this.pushSuscrito = false
         this.mostrarToast('Notificaciones desactivadas')
       } catch (e) {

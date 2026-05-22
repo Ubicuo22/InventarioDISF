@@ -88,6 +88,15 @@ function authModule() {
         cargar(() => this.cargarDashboard(),        'cargarDashboard'),
       ])
       this.initPush().catch(() => {})
+
+      // Deep-link desde notificación push (app estaba cerrada)
+      // El SW abre /?tab=pedidos — aquí leemos el param y navegamos al tab correcto
+      const tabParam = new URLSearchParams(window.location.search).get('tab')
+      const tabsValidos = ['pedidos', 'inventario', 'entradas', 'analytics', 'compras', 'cobranza']
+      if (tabParam && tabsValidos.includes(tabParam)) {
+        this.tab = tabParam
+        window.history.replaceState({}, '', '/')
+      }
     },
 
     async verificarDB() {
