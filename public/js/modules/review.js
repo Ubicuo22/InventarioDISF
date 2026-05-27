@@ -395,7 +395,7 @@ function reviewModule () {
       if (tx >= 80) {
         this.revisionSiguiente()          // → Revisar y avanzar
       } else if (tx <= -70) {
-        this.revisionMarcarFaltante()     // ← Marcar como faltante
+        this.revisionAnterior()           // ← Producto anterior
       }
     },
 
