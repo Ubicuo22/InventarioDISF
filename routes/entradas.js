@@ -85,7 +85,8 @@ router.post('/', requireAuth, async (req, res) => {
       folio          = null,
       incluirIva     = true,
       notas          = null,
-      idsEquivalentes = []
+      idsEquivalentes = [],
+      pesoLote       = null   // kg totales del lote — opcional, para factor PEPS
     } = req.body
 
     // Validaciones
@@ -97,6 +98,15 @@ router.post('/', requireAuth, async (req, res) => {
     if (isNaN(cantidadNum) || cantidadNum <= 0)  return res.status(400).json({ ok: false, error: 'Cantidad inválida' })
     if (isNaN(precioConIVA) || precioConIVA < 0) return res.status(400).json({ ok: false, error: 'Precio inválido' })
 
+    // Peso del lote — calcula peso_por_pieza y factor_conversion del lote
+    const pesoLoteNum = pesoLote != null ? parseFloat(pesoLote) : NaN
+    const pesoPorPieza      = (!isNaN(pesoLoteNum) && pesoLoteNum > 0 && cantidadNum > 0)
+      ? parseFloat((pesoLoteNum / cantidadNum).toFixed(6))
+      : null
+    const factorConversionLote = pesoPorPieza
+      ? parseFloat((1 / pesoPorPieza).toFixed(6))
+      : null
+
     // Calcular impuestos — misma lógica que compras.handler.js
     // El precio recibido ya incluye IVA (se desglosa, no se suma encima)
     const precioUnitario = incluirIva ? precioConIVA / 1.16 : precioConIVA
@@ -107,30 +117,32 @@ router.post('/', requireAuth, async (req, res) => {
 
     await conn.beginTransaction()
 
-    // 1. Insertar en tabla compra
+    // 1. Insertar en tabla compra (con peso_por_pieza si viene)
     const [compraResult] = await conn.execute(
       `INSERT INTO compra (
         id_producto, id_proveedor, cantidad_compra, precio_unitario_compra,
         fecha_compra, folio_factura, importe_ieps, metodo_pago, forma_pago,
         subtotal, iva, incluye_iva, total_con_impuestos,
-        usuario_registro, notas, tasa_interes
-      ) VALUES (?, ?, ?, ?, ?, ?, 0, 'PUE', '03', ?, ?, ?, ?, ?, ?, 0)`,
+        usuario_registro, notas, tasa_interes, peso_por_pieza
+      ) VALUES (?, ?, ?, ?, ?, ?, 0, 'PUE', '03', ?, ?, ?, ?, ?, ?, 0, ?)`,
       [
         idProducto, idProveedor || null, cantidadNum, precioUnitario,
         fechaCompra, folio || null,
         subtotal, iva, incluirIva ? 1 : 0, total,
-        usuario, notas || null
+        usuario, notas || null,
+        pesoPorPieza  // NULL si no se capturó peso
       ]
     )
     const idCompra = compraResult.insertId
 
-    // 2. Crear lote en inventario_peps (FIFO)
+    // 2. Crear lote en inventario_peps con factor_conversion si se capturó peso
     await conn.execute(
       `INSERT INTO inventario_peps (
         id_producto, id_compra, fecha_movimiento,
-        cantidad_inicial, cantidad_restante, costo_unitario
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
-      [idProducto, idCompra, fechaCompra, cantidadNum, cantidadNum, precioUnitario]
+        cantidad_inicial, cantidad_restante, costo_unitario, factor_conversion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [idProducto, idCompra, fechaCompra, cantidadNum, cantidadNum, precioUnitario,
+       factorConversionLote]  // NULL si no se capturó peso
     )
 
     // 3. Reconciliar stock desde lotes PEPS activos (misma lógica que compras:crear en electron v3.7.0).

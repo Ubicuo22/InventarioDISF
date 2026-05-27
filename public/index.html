@@ -1993,6 +1993,67 @@
         </div>
       </template>
 
+      <!-- ── Peso del lote (sección PEPS) ── -->
+      <div x-show="form.idProducto" class="rounded-xl overflow-hidden"
+        style="background:rgba(15,23,42,.5); border:1px solid rgba(51,65,85,.5)">
+
+        <!-- Encabezado de sección -->
+        <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-700/50">
+          <svg class="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/>
+          </svg>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-cyan-400">Peso del lote</span>
+          <span class="text-[10px] text-slate-500 ml-auto">Opcional — para conversiones PEPS</span>
+        </div>
+
+        <div class="px-3 py-3 space-y-2.5">
+          <!-- Input: peso total -->
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1.5 font-semibold uppercase tracking-wide">
+              Peso total del lote (kg)
+            </label>
+            <div class="relative">
+              <input
+                x-model.number="form.pesoLote"
+                type="number" min="0" step="any"
+                placeholder="Ej: 13.0"
+                class="input-dark pr-10">
+              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">kg</span>
+            </div>
+          </div>
+
+          <!-- Cálculos automáticos (amber read-only, estilo electrón) -->
+          <template x-if="calcKgPorUnidad()">
+            <div class="grid grid-cols-2 gap-2">
+              <div class="rounded-lg px-3 py-2.5"
+                style="background:rgba(251,191,36,.06); border:1px solid rgba(251,191,36,.2)">
+                <p class="text-[10px] text-amber-500 uppercase tracking-wide font-semibold mb-0.5">
+                  kg / <span x-text="form.unidad || 'unidad'"></span>
+                </p>
+                <p class="text-base font-bold text-amber-300 tabular-nums" x-text="calcKgPorUnidad()"></p>
+              </div>
+              <div class="rounded-lg px-3 py-2.5"
+                style="background:rgba(99,102,241,.06); border:1px solid rgba(99,102,241,.2)">
+                <p class="text-[10px] text-indigo-400 uppercase tracking-wide font-semibold mb-0.5">
+                  Factor lote
+                </p>
+                <p class="text-base font-bold text-indigo-300 tabular-nums"
+                  x-text="`${calcFactorLote()} ${form.unidad || 'u'}/kg`"></p>
+              </div>
+            </div>
+          </template>
+
+          <!-- Hint cuando no hay datos -->
+          <template x-if="!calcKgPorUnidad()">
+            <p class="text-[11px] text-slate-600 leading-relaxed">
+              Pesa el bulto completo en báscula y escribe ese número.
+              El sistema calculará automáticamente el kg/unidad y el factor de conversión del lote.
+            </p>
+          </template>
+        </div>
+      </div>
+
       <!-- Fecha -->
       <div>
         <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Fecha de compra *</label>

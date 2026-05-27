@@ -17,6 +17,7 @@ function entriesModule() {
         this.form.idProducto     = prod.id_producto
         this.form.nombreProducto = prod.nombre_producto
         this.form.stockActual    = prod.stock
+        this.form.unidad         = prod.unidad_producto || ''
         this.form.busqueda       = prod.nombre_producto
         this.cargarEquivalentes(prod.id_producto)
       }
@@ -33,9 +34,11 @@ function entriesModule() {
       const hoy = new Date().toISOString().slice(0, 10)
       this.form = {
         idProducto: null, nombreProducto: '', stockActual: 0,
+        unidad: '',
         busqueda: '', cantidad: '', precio: '',
         incluirIva: true, fechaCompra: hoy,
-        idProveedor: '', folio: '', notas: ''
+        idProveedor: '', folio: '', notas: '',
+        pesoLote: ''     // kg totales del lote — opcional, para factor PEPS
       }
       this.dropResults          = []
       this.dropdownVisible      = false
@@ -71,6 +74,7 @@ function entriesModule() {
       this.form.idProducto     = p.id_producto
       this.form.nombreProducto = p.nombre_producto
       this.form.stockActual    = p.stock
+      this.form.unidad         = p.unidad_producto || ''
       this.form.busqueda       = p.nombre_producto
       this.dropdownVisible     = false
       this.dropResults         = []
@@ -80,8 +84,23 @@ function entriesModule() {
     limpiarSeleccion() {
       this.form.idProducto     = null; this.form.nombreProducto = ''
       this.form.stockActual    = 0;    this.form.busqueda = ''
+      this.form.unidad         = ''
       this.equivalentes        = []
       this.equivalentesChecked = []
+    },
+
+    // ── Cálculos de peso del lote ─────────────────────────────
+    calcKgPorUnidad() {
+      const peso = parseFloat(this.form.pesoLote)
+      const cant = parseFloat(this.form.cantidad)
+      if (!peso || !cant || peso <= 0 || cant <= 0) return null
+      return (peso / cant).toFixed(4)
+    },
+
+    calcFactorLote() {
+      const kgU = parseFloat(this.calcKgPorUnidad())
+      if (!kgU || kgU <= 0) return null
+      return (1 / kgU).toFixed(3)
     },
 
     calcDesglose() {
@@ -120,7 +139,8 @@ function entriesModule() {
           folio:           this.form.folio || null,
           incluirIva:      this.form.incluirIva,
           notas:           this.form.notas || null,
-          idsEquivalentes: this.equivalentesChecked
+          idsEquivalentes: this.equivalentesChecked,
+          pesoLote:        this.form.pesoLote ? parseFloat(this.form.pesoLote) : null
         })
         if (!r.ok) { this.errorModal = r.error || 'Error al guardar'; return }
 
