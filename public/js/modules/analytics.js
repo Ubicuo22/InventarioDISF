@@ -14,6 +14,12 @@ function analyticsModule() {
     // ── Ventas del día ────────────────────────────────────────
     ventasHoy: null,
 
+    // ── Lista de notas del día ────────────────────────────────
+    notasHoy:       [],
+    notasFecha:     null,   // fecha YYYY-MM-DD que está en memoria
+    notasFiltro:    '',     // búsqueda rápida por cliente/grupo
+    notaDetalle:    null,   // nota abierta en sheet de detalle
+
     // ── Período personalizado ─────────────────────────────────
     periodoInicio:  '',
     periodoFin:     '',
@@ -24,15 +30,39 @@ function analyticsModule() {
     async cargarVentasHoy() {
       this.cargandoAnalytics = true
       try {
-        const r = await API.get('/api/analytics/hoy')
-        this.ventasHoy = r.ok ? r.data : null
+        const hoy = new Date().toISOString().split('T')[0]
+        const [r, rn] = await Promise.all([
+          API.get('/api/analytics/hoy'),
+          API.get(`/api/analytics/notas?fecha=${hoy}`)
+        ])
+        this.ventasHoy = r.ok  ? r.data  : null
+        this.notasHoy  = rn.ok ? rn.data : []
+        this.notasFecha = hoy
         if (!r.ok) this.mostrarToast(r.error || 'Error al cargar ventas del día', true)
       } catch (err) {
         this.mostrarToast(err.message || 'Error de red', true)
         this.ventasHoy = null
+        this.notasHoy  = []
       } finally {
         this.cargandoAnalytics = false
       }
+    },
+
+    // ── Lista filtrada de notas ───────────────────────────────
+    notasHoyFiltradas() {
+      const q = (this.notasFiltro || '').toLowerCase().trim()
+      if (!q) return this.notasHoy
+      return this.notasHoy.filter(n =>
+        (n.nombre_cliente || '').toLowerCase().includes(q) ||
+        (n.nombre_grupo   || '').toLowerCase().includes(q)
+      )
+    },
+
+    // ── Hora corta de una nota, p.ej. "14:32" ────────────────
+    notaHora(fechaISO) {
+      if (!fechaISO) return ''
+      const d = new Date(fechaISO)
+      return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
     },
 
     // ── Cargar análisis por período ───────────────────────────

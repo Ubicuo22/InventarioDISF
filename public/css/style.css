@@ -149,6 +149,77 @@ nav.bottom-nav-glass, .glass, .glass-2, .glass-strong,
 }
 
 /* ══════════════════════════════
+   CLASES SEMÁNTICAS DE TEMA
+   Úsalas en lugar de Tailwind hardcodeado o rgba() inline.
+   Se adaptan automáticamente a dark/light.
+══════════════════════════════ */
+
+/* Texto */
+.t-primary   { color: var(--text) }
+.t-secondary { color: var(--text-muted) }
+.t-muted     { color: var(--text-dim) }
+.t-faint     { color: var(--text-faint) }
+
+/* Superficies (background) */
+.sf-lo  { background: var(--glass-1) }
+.sf     { background: var(--glass-2) }
+.sf-hi  { background: var(--glass-3) }
+.sf-top { background: var(--glass-4) }
+
+/* Hover variants para uso en class="" */
+.hover\:sf-lo:hover  { background: var(--glass-1) }
+.hover\:sf:hover     { background: var(--glass-2) }
+.hover\:sf-hi:hover  { background: var(--glass-3) }
+.hover\:sf-top:hover { background: var(--glass-4) }
+
+/* Bordes */
+.bd     { border-color: var(--glass-border) }
+.bd-hi  { border-color: var(--glass-border-hi) }
+
+/* Componente: botón/chip de cristal — reemplaza inline rgba(255,255,255,...) */
+.glass-btn {
+  background: var(--glass-2);
+  border: 1px solid var(--glass-border);
+}
+.glass-btn:hover {
+  background: var(--glass-3);
+}
+.glass-btn:active {
+  background: var(--glass-4);
+}
+
+/* Componente: chip pequeño / badge neutro */
+.glass-chip {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+}
+
+/* Componente: separador / divider */
+.glass-divider {
+  border-color: var(--glass-border);
+}
+
+/* Componente: input de texto */
+.glass-input {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+}
+.glass-input:focus {
+  border-color: var(--glass-border-hi);
+  outline: none;
+}
+.glass-input::placeholder {
+  color: var(--text-faint);
+}
+
+/* Panel/sección con fondo de tarjeta */
+.glass-card {
+  background: var(--glass-2);
+  border: 1px solid var(--glass-border);
+}
+
+/* ══════════════════════════════
    BASE
 ══════════════════════════════ */
 [x-cloak] { display: none !important; }
@@ -180,36 +251,42 @@ body {
    ══════════════════════════════════════════════════════════ */
 [data-theme="light"] {
   /* Texto: blancos y slates → escala oscura */
-  .text-white       { color: var(--text) !important; }
-  .text-slate-100   { color: var(--text) !important; }
-  .text-slate-200   { color: var(--text) !important; }
-  .text-slate-300   { color: var(--text-muted) !important; }
-  .text-slate-400   { color: var(--text-dim) !important; }
-  .text-slate-500   { color: var(--text-faint) !important; }
-  .text-slate-600   { color: #a1a1aa !important; }
-  .text-slate-700   { color: #d4d4d8 !important; }
+  .text-white       { color: var(--text); }
+  .text-slate-100   { color: var(--text); }
+  .text-slate-200   { color: var(--text); }
+  .text-slate-300   { color: var(--text-muted); }
+  .text-slate-400   { color: var(--text-dim); }
+  .text-slate-500   { color: var(--text-faint); }
+  .text-slate-600   { color: #a1a1aa; }
+  .text-slate-700   { color: #d4d4d8; }
 
   /* Fondos: glass blancos translúcidos → oscuros translúcidos */
-  .bg-white\/5      { background-color: var(--glass-1) !important; }
-  .bg-white\/10     { background-color: var(--glass-2) !important; }
-  .bg-white\/15     { background-color: var(--glass-3) !important; }
-  .bg-white\/20     { background-color: var(--glass-3) !important; }
-  .bg-white\/30     { background-color: var(--glass-4) !important; }
+  .bg-white\/5      { background-color: var(--glass-1); }
+  .bg-white\/10     { background-color: var(--glass-2); }
+  .bg-white\/15     { background-color: var(--glass-3); }
+  .bg-white\/20     { background-color: var(--glass-3); }
+  .bg-white\/30     { background-color: var(--glass-4); }
 
   /* Bordes blancos translúcidos */
   .border-white\/5,
   .border-white\/10,
-  .border-white\/20 { border-color: var(--glass-border) !important; }
+  .border-white\/20 { border-color: var(--glass-border); }
 
   /* Hover de texto: hover:text-white → hover oscuro */
-  .hover\:text-white:hover { color: var(--text) !important; }
+  .hover\:text-white:hover { color: var(--text); }
 
   /* Slate-700/800/900 → invertir para que badges/chips no queden tan oscuros */
   .bg-slate-700\/30, .bg-slate-700\/40, .bg-slate-700\/50,
   .bg-slate-800\/30, .bg-slate-800\/40, .bg-slate-800\/50,
   .bg-slate-900\/30, .bg-slate-900\/40, .bg-slate-900\/50 {
-    background-color: var(--glass-2) !important;
+    background-color: var(--glass-2);
   }
+
+  /* Dividers que usan border-slate-700/800 */
+  .border-slate-700\/40,
+  .border-slate-700\/50,
+  .border-slate-800\/40,
+  .border-slate-800\/50 { border-color: var(--glass-border); }
 
   /* Indicador del puntito de DB: bg-emerald-400 ya contrasta solo */
 
@@ -218,16 +295,19 @@ body {
      alguno se ve mal en pruebas, lo overrideamos puntualmente abajo. */
 
   /* Stats grandes con colores acentuados — bajamos un tono para mejor contraste */
-  .text-amber-400   { color: #b45309 !important; }
-  .text-cyan-400    { color: #0e7490 !important; }
-  .text-emerald-400 { color: #047857 !important; }
-  .text-blue-400    { color: #1d4ed8 !important; }
-  .text-violet-400  { color: #6d28d9 !important; }
-  .text-rose-400    { color: #be123c !important; }
-  .text-red-400     { color: #b91c1c !important; }
+  .text-amber-400   { color: #b45309; }
+  .text-cyan-400    { color: #0e7490; }
+  .text-emerald-400 { color: #047857; }
+  .text-blue-400    { color: #1d4ed8; }
+  .text-violet-400  { color: #6d28d9; }
+  .text-rose-400    { color: #be123c; }
+  .text-red-400     { color: #b91c1c; }
 
   /* Sombras de tiles bento — usar variable */
-  .shadow-2xl { box-shadow: var(--shadow-pop) !important; }
+  .shadow-2xl { box-shadow: var(--shadow-pop); }
+
+  /* Fondo hardcodeado #1e2433 (aparece en algunos dropdowns) */
+  [style*="background:#1e2433"] { background: var(--glass-2) !important; }
 }
 
 /* ══════════════════════════════════════════════════════════

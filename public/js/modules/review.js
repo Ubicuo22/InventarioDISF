@@ -326,7 +326,7 @@ function reviewModule () {
       const key = this.revisionItemKey(c.section, c.item.id_producto)
 
       if (this.revisionPendingIds.includes(key)) {
-        // Toggle: si ya estaba pendiente, quitarlo
+        // Toggle: si ya estaba pendiente, quitarlo sin avanzar
         this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
         this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== c.item.nombre_producto)
         return
@@ -341,6 +341,30 @@ function reviewModule () {
       }
 
       // Avanzar al siguiente automáticamente
+      const total = this.revisionTotal()
+      if (this.revisionCurrentIdx < total - 1) {
+        this.revisionCurrentIdx++
+      }
+    },
+
+    /**
+     * Confirmar que un producto pendiente ya está listo.
+     * Lo saca de pendientes, lo deja como revisado y avanza.
+     */
+    revisionConfirmarPendiente () {
+      const c = this.revisionCurrent()
+      if (!c) return
+      const key = this.revisionItemKey(c.section, c.item.id_producto)
+
+      this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== key)
+      this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== c.item.nombre_producto)
+
+      if (!this.revisionReviewedIds.includes(key)) {
+        this.revisionReviewedIds.push(key)
+      }
+
+      if (window.sounds) window.sounds.reviewed?.()
+
       const total = this.revisionTotal()
       if (this.revisionCurrentIdx < total - 1) {
         this.revisionCurrentIdx++

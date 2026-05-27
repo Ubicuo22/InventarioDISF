@@ -214,4 +214,79 @@ router.get('/top-productos', async (req, res) => {
   }
 })
 
+// ════════════════════════════════════════════════════════════
+// GET /api/analytics/notas?fecha=YYYY-MM-DD
+// Lista individual de facturas de un día con cliente, grupo,
+// monto, productos y ganancia PEPS.
+// ════════════════════════════════════════════════════════════
+router.get('/notas', async (req, res) => {
+  try {
+    const fecha = req.query.fecha || new Date().toISOString().split('T')[0]
+
+    const [notas, detalles] = await Promise.all([
+
+      // — Cabecera de cada nota —
+      q(`
+        SELECT
+          f.id_factura,
+          f.fecha_factura,
+          c.nombre_cliente,
+          g.nombre_grupo,
+          COALESCE(SUM(df.cantidad_factura * df.precio_unitario_venta), 0) AS total_vendido,
+          COUNT(df.id_detalle)                                              AS num_productos
+        FROM factura f
+        INNER JOIN cliente c         ON c.id_cliente = f.id_cliente
+        INNER JOIN grupo   g         ON g.id_grupo   = c.id_grupo
+        LEFT  JOIN detalle_factura df ON df.id_factura = f.id_factura
+        WHERE DATE(f.fecha_factura) = ?
+        GROUP BY f.id_factura, f.fecha_factura, c.nombre_cliente, g.nombre_grupo
+        ORDER BY f.fecha_factura DESC
+      `, [fecha]),
+
+      // — Ganancia PEPS por nota —
+      q(`
+        SELECT
+          df.id_factura,
+          COALESCE(SUM(dvl.utilidad_total), 0) AS ganancia
+        FROM detalle_venta_lote dvl
+        INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
+        INNER JOIN factura f          ON f.id_factura  = df.id_factura
+        WHERE DATE(f.fecha_factura) = ?
+        GROUP BY df.id_factura
+      `, [fecha])
+    ])
+
+    // Merge ganancia a cada nota
+    const gananciaMap = {}
+    for (const r of detalles) gananciaMap[r.id_factura] = parseFloat(r.ganancia || 0)
+
+    const lista = notas.map(n => {
+      const totalVendido = parseFloat(n.total_vendido || 0)
+      const ganancia     = gananciaMap[n.id_factura] || 0
+      const margen       = totalVendido > 0
+        ? parseFloat(((ganancia / totalVendido) * 100).toFixed(1))
+        : 0
+      // Serializa la fecha MySQL como ISO string si viene como Date
+      const fechaISO = n.fecha_factura instanceof Date
+        ? n.fecha_factura.toISOString()
+        : String(n.fecha_factura)
+      return {
+        id_factura:     n.id_factura,
+        fecha_factura:  fechaISO,
+        nombre_cliente: n.nombre_cliente,
+        nombre_grupo:   n.nombre_grupo,
+        total_vendido:  totalVendido,
+        ganancia:       parseFloat(ganancia.toFixed(2)),
+        margen,
+        num_productos:  parseInt(n.num_productos || 0)
+      }
+    })
+
+    res.json({ ok: true, fecha, data: lista })
+  } catch (err) {
+    console.error('[analytics] GET /notas:', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 module.exports = router
