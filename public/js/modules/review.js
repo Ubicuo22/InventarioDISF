@@ -15,6 +15,7 @@ function reviewModule () {
     revisionModalOpen: false,
     revisionCart: { General: [] },      // copia mutable del carrito durante revisión
     revisionFolio: null,
+    revisionIdGrupo: null,
     revisionNombreCliente: '',
     revisionNombreGrupo: '',
     revisionCurrentIdx: 0,
@@ -39,6 +40,8 @@ function reviewModule () {
     _revisionOriginalCart: null,
     // Ref al handler de teclado registrado
     _revisionKeyHandler: null,
+    // Modal buscar/cambiar producto desde revisión
+    revisionCambiarModal: { visible: false, busqueda: '', resultados: [], buscando: false },
 
     // ── Helpers ────────────────────────────────────────────────
     _revisionFilteredKeys () {
@@ -140,6 +143,7 @@ function reviewModule () {
         this.revisionCart = Object.keys(cart).length ? cart : { General: [] }
         this._revisionOriginalCart = JSON.parse(JSON.stringify(this.revisionCart))
         this.revisionFolio = o.folio_numero
+        this.revisionIdGrupo = o.id_grupo || null
         this.revisionNombreCliente = o.nombre_cliente
         this.revisionNombreGrupo = o.nombre_grupo
         this.revisionCurrentIdx = 0
@@ -180,12 +184,14 @@ function reviewModule () {
       this.revisionModalOpen = false
       this.revisionCart = { General: [] }
       this.revisionFolio = null
+      this.revisionIdGrupo = null
       this.revisionReviewedIds = []
       this.revisionMissingNames = []
       this.revisionPendingIds = []
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
       this.revisionUndo = null
+      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false }
       if (this._revisionUndoTimer) {
         clearTimeout(this._revisionUndoTimer)
         this._revisionUndoTimer = null
@@ -448,6 +454,80 @@ function reviewModule () {
       } finally {
         this.revisionGuardando = false
       }
+    },
+
+    // ── Ajuste rápido de cantidad ±delta ──────────────────────
+    revisionAjustarCantidad (delta) {
+      const c = this.revisionCurrent()
+      if (!c) return
+      const unidad = (c.item.unidad || '').toLowerCase()
+      // Para unidades de peso (kg, g, l) el paso mínimo es 0.5; para piezas es 1
+      const esDecimal = ['kg','g','l','lt','lts','litro','litros'].includes(unidad)
+      const paso = esDecimal ? 0.5 : 1
+      const actual = parseFloat(c.item.cantidad) || 0
+      const nueva = Math.max(paso, Math.round((actual + delta * paso) * 100) / 100)
+      this.revisionActualizarCantidad(nueva)
+    },
+
+    // Indica si la cantidad del producto actual fue modificada respecto al original
+    revisionCantidadModificada () {
+      const c = this.revisionCurrent()
+      if (!c || !this._revisionOriginalCart) return false
+      const origSection = this._revisionOriginalCart[c.section]
+      if (!origSection) return false
+      const origItem = origSection.find(i => i.id_producto === c.item.id_producto)
+      if (!origItem) return false
+      return parseFloat(origItem.cantidad) !== parseFloat(c.item.cantidad)
+    },
+
+    revisionCantidadOriginal () {
+      const c = this.revisionCurrent()
+      if (!c || !this._revisionOriginalCart) return null
+      const origSection = this._revisionOriginalCart[c.section]
+      if (!origSection) return null
+      const origItem = origSection.find(i => i.id_producto === c.item.id_producto)
+      return origItem ? origItem.cantidad : null
+    },
+
+    // ── Cambiar producto desde revisión ───────────────────────
+    revisionAbrirCambiar () {
+      const c = this.revisionCurrent()
+      if (!c) return
+      this.revisionCambiarModal = { visible: true, busqueda: '', resultados: [], buscando: false }
+      this.$nextTick(() => document.getElementById('rev-buscar-input')?.focus())
+    },
+
+    async revisionBuscarProducto () {
+      const q = this.revisionCambiarModal.busqueda.trim()
+      if (q.length < 2) { this.revisionCambiarModal.resultados = []; return }
+      this.revisionCambiarModal.buscando = true
+      try {
+        const gid = this.revisionIdGrupo ? `&groupId=${this.revisionIdGrupo}` : ''
+        const r = await API.get(`/api/productos/buscar?q=${encodeURIComponent(q)}${gid}`)
+        this.revisionCambiarModal.resultados = r.data || []
+      } catch { this.revisionCambiarModal.resultados = [] }
+      finally { this.revisionCambiarModal.buscando = false }
+    },
+
+    revisionConfirmarCambio (prod) {
+      const c = this.revisionCurrent()
+      if (!c || !prod) return
+      const items = this.revisionCart[c.section]
+      if (!items) return
+      const idx = items.findIndex(i => i.id_producto === c.item.id_producto)
+      if (idx >= 0) {
+        const cantidadActual = items[idx].cantidad
+        items[idx] = {
+          ...items[idx],
+          id_producto:     prod.id_producto,
+          nombre_producto: prod.nombre_producto,
+          unidad:          prod.unidad_producto,
+          precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
+          cantidad:        cantidadActual   // conservar cantidad pedida
+        }
+      }
+      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false }
+      this.mostrarToast(`Cambiado a ${prod.nombre_producto}`)
     },
 
     // ── Detección de revisada (para badge en lista) ────────────

@@ -6,7 +6,7 @@
 // Módulos disponibles en la appweb bodega
 const MODULOS_BODEGA = [
   { id: 'inventario', label: 'Inventario',  desc: 'Stock y entradas' },
-  { id: 'pedidos',    label: 'Pedidos',     desc: 'Órdenes y UbicuoAI' },
+  { id: 'pedidos',    label: 'Pedidos',     desc: 'Crear y gestionar órdenes' },
   { id: 'historial',  label: 'Historial',   desc: 'Historial de movimientos' },
   { id: 'analytics',  label: 'Ventas',      desc: 'Analytics y ganancias' },
   { id: 'mermas',     label: 'Mermas',      desc: 'Registro de mermas' },

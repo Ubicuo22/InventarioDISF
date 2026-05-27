@@ -37,7 +37,7 @@
     })()
   </script>
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/tailwind.min.css" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 
@@ -293,7 +293,7 @@
       <div class="pt-5 pb-3 flex items-start justify-between gap-3 fade-in">
         <div class="min-w-0">
           <p class="text-display text-white" x-text="`Hola, ${(session?.nombre || session?.username || '').split(' ')[0]}`"></p>
-          <p class="text-slate-500 text-xs mt-1.5 capitalize tracking-wide" x-text="dashFechaHoy()"></p>
+          <p class="text-slate-500 text-xs mt-1.5 tracking-wide" x-text="dashFechaHoy()"></p>
         </div>
         <button @click="cargarDashboard()" :disabled="dashCargando"
           class="glass flex items-center gap-1.5 px-3 py-2 text-xs transition-colors flex-shrink-0 mt-1 tap"
@@ -447,22 +447,6 @@
           </div>
         </button>
 
-        <!-- ▸ UbicuoAI — col-2 (reducido de full a mitad) -->
-        <button x-show="tienePermiso('pedidos')"
-          @click="tab = 'pedidos'; cargarOrdenes(); abrirNuevaOrden().then(() => modoIA = true)"
-          class="bento-tile bento-tile--violet bento-col-2 tap">
-          <div class="flex items-center justify-between mb-3">
-            <div class="icon-bubble" style="background: rgba(139,92,246,0.22);">
-              <svg class="w-5 h-5 text-violet-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
-              </svg>
-            </div>
-            <span class="ia-badge text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">AI</span>
-          </div>
-          <p class="text-white font-bold text-base">UbicuoAI</p>
-          <p class="text-[11px] text-slate-400 mt-1">Arma pedidos pegando texto</p>
-        </button>
-
         <!-- ▸ INVENTARIO -->
         <button x-show="tienePermiso('inventario')" @click="tab = 'inventario'"
           class="bento-tile bento-tile--accent bento-col-2 tap">
@@ -474,9 +458,9 @@
             </div>
             <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Inventario</span>
           </div>
-          <p class="stat-num text-white" x-text="resumen.total_productos ?? '—'"></p>
+          <p class="stat-num text-white" x-text="dashMetricas?.inventario?.total_productos ?? '—'"></p>
           <p class="text-[11px] text-emerald-400 mt-1.5 num-tab"
-            x-text="`${resumen.con_stock ?? 0} con stock`"></p>
+            x-text="dashMetricas?.inventario ? `${dashMetricas.inventario.con_stock} con stock` : '—'"></p>
         </button>
 
         <!-- ▸ STOCK CRÍTICO — tarjeta condicional, solo si hay productos críticos -->
@@ -984,10 +968,13 @@
                     x-text="['pz','caja','costal','paquete','bote','lata','bolsa','rollo','docena','par','pieza'].includes(p.unidad_producto) ? Math.round(p.stock) : p.stock"
                   ></span>
                 </td>
-                <td class="px-4 py-3.5 text-right">
-                  <button @click="abrirModal(p)"
-                    class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition-colors">
-                    + Entrada
+                <td class="px-3 py-3.5 text-right">
+                  <button @click="abrirModal(p)" title="Registrar entrada"
+                    class="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition-colors hover:bg-emerald-500/10 px-2 py-1.5 rounded-lg whitespace-nowrap">
+                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    <span class="hidden sm:inline">Entrada</span>
                   </button>
                 </td>
               </tr>
@@ -1193,8 +1180,18 @@
                 </tr>
               </template>
               <tr x-show="!cargandoEntradas && entradas.length === 0">
-                <td colspan="4" class="px-4 py-12 text-center text-slate-500 text-sm">
-                  Sin entradas registradas
+                <td colspan="4" class="px-4 py-14">
+                  <div class="flex flex-col items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center" style="background:rgba(168,85,247,.1)">
+                      <svg class="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                      </svg>
+                    </div>
+                    <div class="text-center">
+                      <p class="text-white text-sm font-medium">Sin entradas registradas</p>
+                      <p class="text-slate-500 text-xs mt-1">Las entradas de inventario aparecen aquí</p>
+                    </div>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -1318,18 +1315,42 @@
 
         <!-- Sin ventas -->
         <div x-show="!cargandoAnalytics && ventasHoy && ventasHoy.total_notas === 0"
-          class="py-10 flex flex-col items-center gap-3">
-          <p class="text-slate-500 text-sm">Sin ventas registradas hoy</p>
-          <button @click="cargarVentasHoy()" class="text-amber-400 text-sm font-medium hover:text-amber-300">
+          class="py-12 flex flex-col items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center" style="background:rgba(251,191,36,.1)">
+            <svg class="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="text-center">
+            <p class="text-white text-sm font-medium">Sin ventas registradas hoy</p>
+            <p class="text-slate-500 text-xs mt-1">Las ventas procesadas aparecen aquí</p>
+          </div>
+          <button @click="cargarVentasHoy()"
+            class="flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-amber-500/10">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
             Recargar
           </button>
         </div>
 
         <!-- Error / sin datos -->
         <div x-show="!cargandoAnalytics && !ventasHoy"
-          class="py-10 flex flex-col items-center gap-3">
-          <p class="text-slate-500 text-sm">No se pudieron cargar los datos</p>
-          <button @click="cargarVentasHoy()" class="text-amber-400 text-sm font-medium hover:text-amber-300">
+          class="py-12 flex flex-col items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center" style="background:rgba(248,113,113,.1)">
+            <svg class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+          </div>
+          <div class="text-center">
+            <p class="text-white text-sm font-medium">No se pudieron cargar los datos</p>
+            <p class="text-slate-500 text-xs mt-1">Verifica tu conexión e intenta de nuevo</p>
+          </div>
+          <button @click="cargarVentasHoy()"
+            class="flex items-center gap-1.5 text-red-400 text-xs font-semibold hover:text-red-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
             Reintentar
           </button>
         </div>
@@ -1671,7 +1692,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
       </svg>
       <span x-show="ordenes.length > 0 && pedidosTab === 'activos' || (tab !== 'pedidos' && ordenes.length > 0)"
-        x-text="ordenes.length" class="nav-dot"></span>
+        x-text="ordenes.length > 99 ? '99+' : ordenes.length" class="nav-dot"></span>
       <span>Pedidos</span>
     </button>
 
@@ -2049,256 +2070,10 @@
         </div>
       </div>
 
-      <!-- ── Botón UbicuoAI ── -->
-      <div x-show="ordenForm.id_cliente || ordenForm.folio_numero">
-        <button type="button" @click="toggleModoIA()"
-          class="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all duration-200"
-          :class="modoIA ? 'ia-btn-on' : 'ia-btn-off'"
-          :style="modoIA
-            ? 'background:rgba(139,92,246,.18); border:1px solid rgba(139,92,246,.5);'
-            : 'background:rgba(51,65,85,.25); border:1px solid rgba(71,85,105,.4);'">
-          <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
-            <path stroke-linecap="round" stroke-linejoin="round"
-              d="M18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/>
-          </svg>
-          <span x-text="modoIA ? 'Cerrar análisis IA' : 'Analizar pedido con IA'"></span>
-        </button>
-      </div>
 
-      <!-- ══════════════════════════════════════════════════════
-           PANEL UBICUOAI — FASE 2
-      ══════════════════════════════════════════════════════ -->
-      <div x-show="modoIA" class="space-y-3">
-
-        <!-- Input: textarea + analizar -->
-        <div class="space-y-2">
-          <label class="block text-[11px] font-semibold text-violet-400 mb-1 uppercase tracking-wide">Texto del pedido</label>
-          <textarea x-model="textoIA"
-            :rows="iaResultados.length ? 3 : 5"
-            placeholder="Ej:&#10;VERDURAS&#10;5 kg jitomate&#10;3 kg cebolla&#10;ABARROTES&#10;2 mayonesa institucional"
-            class="input-dark w-full resize-none text-sm leading-relaxed"
-            style="font-family:monospace"></textarea>
-          <p x-show="!iaResultados.length" class="text-[10px] text-slate-500">
-            💡 Un producto por línea. Secciones en MAYÚSCULAS o terminando en ":"
-          </p>
-          <button type="button" @click="analizarTexto()"
-            :disabled="!textoIA.trim() || analizando"
-            class="w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-40"
-            style="background:rgba(139,92,246,.82); color:white">
-            <svg x-show="analizando" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-            <span x-text="analizando ? 'Analizando...' : (iaResultados.length ? 'Re-analizar' : 'Analizar')"></span>
-          </button>
-        </div>
-
-        <!-- ── RESULTADOS ──────────────────────────────────── -->
-        <div x-show="iaResultados.length" class="space-y-3">
-
-          <!-- Stats bar -->
-          <div class="ia-stats-bar flex items-center justify-between px-3 py-2.5">
-            <div class="flex items-center gap-4">
-              <!-- Perfectos -->
-              <span class="flex items-center gap-1.5 text-emerald-400">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                </svg>
-                <span class="text-sm font-bold" x-text="iaResultados.reduce((s,sec)=>s+sec.productos.filter(p=>p.tipo==='perfecto').length,0)"></span>
-              </span>
-              <!-- Inciertos -->
-              <span class="flex items-center gap-1.5 text-blue-400">
-                <span class="text-base font-bold leading-none">~</span>
-                <span class="text-sm font-bold" x-text="iaResultados.reduce((s,sec)=>s+sec.productos.filter(p=>p.tipo==='incierto').length,0)"></span>
-              </span>
-              <!-- Sin match -->
-              <span class="flex items-center gap-1.5 text-red-400">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-                <span class="text-sm font-bold" x-text="iaSinMatchCount()"></span>
-              </span>
-            </div>
-            <!-- Total -->
-            <div x-show="iaTotalIA() > 0" class="text-right">
-              <p class="text-[9px] text-slate-400 uppercase tracking-wide">Total aprox.</p>
-              <p class="text-sm font-bold text-emerald-400"
-                x-text="'$' + iaTotalIA().toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})"></p>
-            </div>
-          </div>
-
-          <!-- Secciones con cards de producto -->
-          <template x-for="(sec, si) in iaResultados" :key="sec.id || si">
-            <div class="space-y-2">
-
-              <!-- Encabezado de sección -->
-              <div class="ia-section-hdr flex items-center gap-2 px-3 py-2">
-                <div class="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0"></div>
-                <span class="text-xs font-bold text-violet-300 uppercase tracking-wider truncate" x-text="sec.nombre"></span>
-                <span class="text-[10px] text-violet-500 flex-shrink-0" x-text="`(${sec.productos.length})`"></span>
-              </div>
-
-              <!-- Cards de producto -->
-              <template x-for="(prod, pi) in sec.productos" :key="prod.id || pi">
-                <div class="p-3 space-y-2.5"
-                  :class="{
-                    'ia-card-verde': prod.tipo === 'perfecto',
-                    'ia-card-azul':  prod.tipo === 'incierto',
-                    'ia-card-rojo':  prod.tipo === 'sin_match'
-                  }">
-
-                  <!-- Fila 1: badge de estado + botón eliminar -->
-                  <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
-                      :class="{
-                        'bg-emerald-500/20 text-emerald-400': prod.tipo === 'perfecto',
-                        'bg-blue-500/20 text-blue-400':       prod.tipo === 'incierto',
-                        'bg-red-500/20 text-red-400':         prod.tipo === 'sin_match'
-                      }">
-                      <span x-text="prod.tipo === 'perfecto' ? '✓ Perfecto' : prod.tipo === 'incierto' ? '~ Incierto' : '✗ Sin match'"></span>
-                      <span x-show="prod.tipo !== 'sin_match' && prod.confianza < 100"
-                        class="opacity-70" x-text="`${prod.confianza}%`"></span>
-                    </span>
-                    <button @click="iaEliminarProducto(si, pi)"
-                      class="ml-auto p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
-                      title="Eliminar">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                      </svg>
-                    </button>
-                  </div>
-
-                  <!-- Fila 2: nombre + texto original -->
-                  <div>
-                    <p class="text-sm font-semibold leading-tight"
-                      :class="{
-                        'text-emerald-300': prod.tipo === 'perfecto',
-                        'text-blue-300':    prod.tipo === 'incierto',
-                        'text-red-300':     prod.tipo === 'sin_match'
-                      }"
-                      x-text="prod.nombre_producto || prod.texto_original"></p>
-                    <p x-show="prod.tipo !== 'sin_match' && prod.texto_original && prod.texto_original.toLowerCase() !== (prod.nombre_producto||'').toLowerCase()"
-                      class="text-[10px] text-slate-500 mt-0.5"
-                      x-text="'Orig: \u201c' + prod.texto_original + '\u201d'"></p>
-                    <p x-show="prod.tipo === 'sin_match'"
-                      class="text-[10px] text-red-500/80 mt-0.5">Producto no encontrado en inventario</p>
-                  </div>
-
-                  <!-- Fila 3: cantidad editable + precio/subtotal (solo con match) -->
-                  <div x-show="prod.tipo !== 'sin_match'" class="flex items-center gap-3">
-                    <div class="flex items-center gap-1.5">
-                      <span class="text-[10px] text-slate-400">Cant.</span>
-                      <input type="number" min="0.01" step="0.01"
-                        :value="prod.cantidad"
-                        @change="iaEditarCantidad(si, pi, $event.target.value)"
-                        @focus="$event.target.select()"
-                        class="ia-qty-input" />
-                      <span class="text-[10px] text-slate-400 font-mono uppercase"
-                        x-text="prod.unidad || 'PZ'"></span>
-                    </div>
-                    <div class="ml-auto flex-shrink-0">
-                      <!-- Con precio -->
-                      <div x-show="prod.precio > 0" class="text-right">
-                        <p class="text-[10px] text-slate-400"
-                          x-text="'$' + parseFloat(prod.precio||0).toFixed(2) + '/u'"></p>
-                        <p class="text-sm font-bold text-emerald-400"
-                          x-text="'$' + ((parseFloat(prod.cantidad)||1)*(parseFloat(prod.precio)||0)).toFixed(2)"></p>
-                      </div>
-                      <!-- Sin precio: botón para fijar -->
-                      <button x-show="!(prod.precio > 0) && prod.tipo !== 'sin_match'"
-                        @click="iaAbrirPrecio(si, pi)"
-                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors hover:opacity-80"
-                        style="background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.35); color:#fbbf24">
-                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                        </svg>
-                        Precio
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Fila 4: acciones -->
-                  <!-- Perfecto / Incierto → Cambiar producto -->
-                  <div x-show="prod.tipo !== 'sin_match'">
-                    <button @click="iaAbrirCambiar(si, pi)"
-                      class="w-full py-1.5 rounded-lg text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition-colors"
-                      style="border:1px solid rgba(71,85,105,.4)">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                      </svg>
-                      Cambiar producto
-                    </button>
-                  </div>
-
-                  <!-- Sin match → Buscar | Es sección -->
-                  <div x-show="prod.tipo === 'sin_match'" class="grid grid-cols-2 gap-1.5">
-                    <button @click="iaAbrirCambiar(si, pi)"
-                      class="py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors hover:bg-blue-500/15"
-                      style="border:1px solid rgba(59,130,246,.3); color:#60a5fa">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                      </svg>
-                      Buscar
-                    </button>
-                    <button @click="iaMarcarSeccion(si, pi)"
-                      class="py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors hover:bg-violet-500/15"
-                      style="border:1px solid rgba(139,92,246,.3); color:#a78bfa">
-                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
-                      </svg>
-                      Es sección
-                    </button>
-                  </div>
-
-                </div>
-              </template>
-            </div>
-          </template>
-
-          <!-- Advertencia sin match -->
-          <div x-show="iaSinMatchCount() > 0"
-            class="flex items-center gap-2 rounded-xl px-3 py-2.5"
-            style="background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.25)">
-            <svg class="w-4 h-4 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-            </svg>
-            <p class="text-xs text-red-400 font-medium"
-              x-text="`${iaSinMatchCount()} producto${iaSinMatchCount()!==1?'s':''} sin match — búscalos o elimínalos antes de confirmar`"></p>
-          </div>
-
-          <!-- Advertencia sin precio -->
-          <div x-show="iaSinPrecioCount() > 0"
-            class="flex items-center gap-2 rounded-xl px-3 py-2.5"
-            style="background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.25)">
-            <svg class="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-            </svg>
-            <p class="text-xs text-amber-400 font-medium"
-              x-text="`${iaSinPrecioCount()} producto${iaSinPrecioCount()!==1?'s':''} sin precio — fíjalos antes de confirmar`"></p>
-          </div>
-
-          <!-- Botón confirmar -->
-          <button type="button" @click="confirmarIA()"
-            :disabled="iaMatchCount() === 0 || iaSinMatchCount() > 0 || iaSinPrecioCount() > 0"
-            class="w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
-            :class="iaMatchCount() > 0 && iaSinMatchCount() === 0 && iaSinPrecioCount() === 0
-              ? 'bg-violet-600 hover:bg-violet-500 text-white'
-              : 'opacity-40 cursor-not-allowed text-slate-500'"
-            :style="iaMatchCount() === 0 || iaSinMatchCount() > 0 || iaSinPrecioCount() > 0 ? 'background:rgba(51,65,85,.3)' : ''"
-            x-text="`Agregar ${iaMatchCount()} producto${iaMatchCount()!==1?'s':''} al carrito`">
-          </button>
-
-        </div><!-- /resultados -->
-      </div><!-- /panel modoIA -->
 
       <!-- Buscador de producto + selector de sección -->
-      <div x-show="(ordenForm.id_cliente || ordenForm.folio_numero) && !modoIA" class="space-y-2">
+      <div x-show="(ordenForm.id_cliente || ordenForm.folio_numero) " class="space-y-2">
         <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">Agregar producto</label>
 
         <!-- Selector de sección activa -->
@@ -2816,32 +2591,87 @@
               </div>
             </div>
 
-            <!-- Cantidad enorme — tap para editar -->
-            <div class="flex flex-col items-center mb-2">
-              <input
-                type="number"
-                inputmode="decimal"
-                step="any"
-                min="0.001"
-                :value="revisionCurrent().item.cantidad"
-                @input="revisionActualizarCantidad($event.target.value)"
-                @focus="$event.target.select(); revisionInputFocused = true"
-                @blur="revisionInputFocused = false"
-                @keydown.enter.prevent="revisionGuardarYSiguiente()"
-                @keydown.escape.prevent="$event.target.blur()"
-                class="w-44 sm:w-56 px-4 py-3 text-5xl sm:text-6xl font-bold text-center tabular-nums bg-transparent text-emerald-400 border-2 border-transparent focus:border-emerald-500 rounded-2xl focus:outline-none transition-colors"
-                style="appearance:textfield" />
-              <p class="text-base text-slate-400 mt-1" x-text="revisionCurrent().item.unidad || ''"></p>
+            <!-- Cantidad con botones +/− -->
+            <div class="flex flex-col items-center mb-1">
+              <div class="flex items-center gap-3">
+                <!-- Menos -->
+                <button @click="revisionAjustarCantidad(-1)"
+                  class="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-2xl font-light active:scale-90 transition-transform select-none"
+                  style="background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12)">
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"/>
+                  </svg>
+                </button>
+
+                <!-- Input cantidad -->
+                <div class="relative">
+                  <input
+                    type="number"
+                    inputmode="decimal"
+                    step="any"
+                    min="0.001"
+                    :value="revisionCurrent().item.cantidad"
+                    @input="revisionActualizarCantidad($event.target.value)"
+                    @focus="$event.target.select(); revisionInputFocused = true"
+                    @blur="revisionInputFocused = false"
+                    @keydown.enter.prevent="revisionGuardarYSiguiente()"
+                    @keydown.escape.prevent="$event.target.blur()"
+                    class="w-36 sm:w-44 px-2 py-3 text-5xl sm:text-6xl font-bold text-center tabular-nums bg-transparent rounded-2xl focus:outline-none transition-colors"
+                    :class="revisionCantidadModificada()
+                      ? 'text-amber-400 border-2 border-amber-500/60 focus:border-amber-400'
+                      : 'text-emerald-400 border-2 border-emerald-500/30 focus:border-emerald-500'"
+                    style="appearance:textfield" />
+                  <!-- Badge "modificado" -->
+                  <div x-show="revisionCantidadModificada()"
+                    class="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
+                    style="background:rgba(245,158,11,.9); color:#1c1400">
+                    MOD
+                  </div>
+                </div>
+
+                <!-- Más -->
+                <button @click="revisionAjustarCantidad(1)"
+                  class="w-12 h-12 rounded-2xl flex items-center justify-center text-white active:scale-90 transition-transform select-none"
+                  style="background:rgba(34,197,94,.15); border:1px solid rgba(34,197,94,.35)">
+                  <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Unidad + cantidad original si fue modificada -->
+              <div class="flex items-center gap-2 mt-1.5">
+                <p class="text-base text-slate-400" x-text="revisionCurrent().item.unidad || ''"></p>
+                <span x-show="revisionCantidadModificada()"
+                  class="text-[10px] text-amber-500/80 tabular-nums"
+                  x-text="`(pedido: ${revisionCantidadOriginal()})`"></span>
+              </div>
             </div>
 
-            <!-- Subtotal -->
-            <div class="text-center text-sm text-slate-500 mb-6">
-              Subtotal: <span class="font-semibold text-white"
+            <!-- Precio unitario + Subtotal -->
+            <div class="text-center mb-5">
+              <span class="text-xs text-slate-600 tabular-nums"
+                x-show="revisionCurrent().item.precio_unitario > 0"
+                x-text="`$${parseFloat(revisionCurrent().item.precio_unitario||0).toFixed(2)}/u`"></span>
+              <span class="text-xs text-slate-600" x-show="revisionCurrent().item.precio_unitario > 0"> · </span>
+              <span class="text-sm font-semibold text-white tabular-nums"
                 x-text="`$${((revisionCurrent().item.cantidad||0) * (revisionCurrent().item.precio_unitario||0)).toFixed(2)}`"></span>
             </div>
 
+            <!-- Cambiar producto -->
+            <div class="flex justify-center mb-4">
+              <button @click="revisionAbrirCambiar()"
+                class="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition-colors active:scale-95"
+                style="background:rgba(71,85,105,.25); border:1px solid rgba(71,85,105,.45)">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                </svg>
+                Cambiar producto
+              </button>
+            </div>
+
             <!-- Hint swipe (móvil) -->
-            <p class="text-center text-[10px] text-slate-600 mb-6 md:hidden">
+            <p class="text-center text-[10px] text-slate-600 mb-4 md:hidden">
               Deslizar a la derecha para revisar →
             </p>
 
@@ -2954,6 +2784,116 @@
         </button>
       </template>
     </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CAMBIAR PRODUCTO EN REVISIÓN
+     z-[75] — encima del modal de revisión (z-50)
+══════════════════════════════════════════════════════════ -->
+<div x-show="revisionCambiarModal.visible" x-cloak
+  class="fixed inset-0 z-[75] flex items-end justify-center"
+  style="background:rgba(0,0,0,.65); backdrop-filter:blur(4px)"
+  @keydown.escape.window="revisionCambiarModal.visible = false">
+  <div class="bg-modal w-full max-w-lg rounded-t-2xl max-h-[82vh] flex flex-col slide-up"
+    style="border-top:1px solid var(--border)" @click.stop>
+
+    <!-- Handle -->
+    <div class="flex justify-center pt-3 pb-1 flex-shrink-0">
+      <div class="w-10 h-1 rounded-full bg-slate-600"></div>
+    </div>
+
+    <!-- Cabecera -->
+    <div class="flex items-center justify-between px-4 py-3 flex-shrink-0"
+      style="border-bottom:1px solid var(--border)">
+      <div class="min-w-0">
+        <p class="font-semibold text-sm text-white">Cambiar producto</p>
+        <p class="text-[11px] text-slate-500 mt-0.5 truncate"
+          x-text="revisionCurrent() ? revisionCurrent().item.nombre_producto : ''"></p>
+      </div>
+      <button @click="revisionCambiarModal.visible = false"
+        class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0 ml-3">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Buscador -->
+    <div class="px-4 py-3 flex-shrink-0" style="border-bottom:1px solid var(--border)">
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input
+          id="rev-buscar-input"
+          type="text"
+          x-model="revisionCambiarModal.busqueda"
+          @input.debounce.350ms="revisionBuscarProducto()"
+          placeholder="Buscar producto..."
+          class="input-dark w-full pl-9 text-sm"
+          style="padding-top:9px; padding-bottom:9px"
+          autocomplete="off" />
+      </div>
+      <p x-show="revisionCambiarModal.busqueda.length < 2"
+        class="text-[10px] text-slate-500 mt-1.5">Escribe al menos 2 caracteres para buscar</p>
+    </div>
+
+    <!-- Lista de resultados -->
+    <div class="flex-1 overflow-y-auto">
+
+      <!-- Cargando -->
+      <div x-show="revisionCambiarModal.buscando"
+        class="flex flex-col items-center py-10 gap-2 text-slate-500">
+        <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+        <span class="text-sm">Buscando...</span>
+      </div>
+
+      <!-- Sin resultados -->
+      <div x-show="!revisionCambiarModal.buscando && revisionCambiarModal.resultados.length === 0 && revisionCambiarModal.busqueda.length >= 2"
+        class="flex flex-col items-center py-12 gap-2 text-slate-500">
+        <svg class="w-10 h-10 opacity-25" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <span class="text-sm">Sin resultados</span>
+      </div>
+
+      <!-- Estado inicial -->
+      <div x-show="!revisionCambiarModal.buscando && revisionCambiarModal.busqueda.length < 2"
+        class="flex flex-col items-center py-12 gap-2 text-slate-500">
+        <svg class="w-10 h-10 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <span class="text-sm">Escribe para buscar</span>
+      </div>
+
+      <!-- Resultados -->
+      <template x-for="prod in revisionCambiarModal.resultados" :key="prod.id_producto">
+        <button @click="revisionConfirmarCambio(prod)"
+          class="w-full px-4 py-3.5 flex items-center gap-3 text-left hover:bg-white/[0.05] active:bg-white/[0.08] transition-colors"
+          style="border-bottom:1px solid var(--border)">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-white truncate" x-text="prod.nombre_producto.toUpperCase()"></p>
+            <p class="text-[11px] text-slate-500 mt-0.5" x-text="prod.unidad_producto"></p>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="text-sm font-bold tabular-nums"
+              :class="prod.precio_base > 0 ? 'text-emerald-400' : 'text-slate-500'"
+              x-text="prod.precio_base > 0 ? '$' + parseFloat(prod.precio_base).toFixed(2) : 'Sin precio'"></p>
+            <p class="text-[10px] text-slate-600 mt-0.5 tabular-nums" x-text="`stock: ${prod.stock ?? '—'}`"></p>
+          </div>
+          <!-- Ícono de swap -->
+          <svg class="w-4 h-4 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+          </svg>
+        </button>
+      </template>
+    </div>
+
   </div>
 </div>
 
@@ -3176,216 +3116,6 @@
 </div>
 
 
-<!-- ══════════════════════════════════════════════════════════
-     UBICUOAI — MODAL BUSCAR / CAMBIAR PRODUCTO
-     Se muestra encima de todo cuando el usuario quiere
-     asignar o reemplazar un producto del análisis IA.
-══════════════════════════════════════════════════════════ -->
-<!-- ══════════════════════════════════════════════════════════
-     MODAL: FIJAR PRECIO IA
-══════════════════════════════════════════════════════════ -->
-<div x-show="iaPrecioModal.visible" x-cloak
-  class="fixed inset-0 z-[80] flex items-end justify-center"
-  style="background:rgba(0,0,0,.65); backdrop-filter:blur(4px)">
-  <div class="bg-modal w-full max-w-lg rounded-t-2xl slide-up"
-    style="border-top:1px solid var(--border)">
-
-    <!-- Cabecera -->
-    <div class="flex items-center justify-between px-4 py-3.5"
-      style="border-bottom:1px solid var(--border)">
-      <div class="min-w-0">
-        <p class="font-semibold text-sm truncate"
-          x-text="iaPrecioModal.secIdx >= 0 ? (iaResultados[iaPrecioModal.secIdx]?.productos[iaPrecioModal.prodIdx]?.nombre_producto || 'Producto') : 'Producto'"></p>
-        <p class="text-[10px] mt-0.5 font-medium"
-          style="color:#f59e0b"
-          x-text="'Sin precio para ' + (grupos.find(g => g.id_grupo == ordenForm.id_grupo)?.nombre_grupo || 'este grupo')"></p>
-      </div>
-      <button @click="cerrarIaPrecioModal()"
-        class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0 ml-3">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Cuerpo -->
-    <div class="px-5 py-4 space-y-4">
-
-      <!-- Precios de referencia en otros grupos -->
-      <div x-show="iaPrecioModal.referencia.length > 0">
-        <p class="text-[10px] text-slate-500 font-medium uppercase tracking-wide mb-2">Precio en otros grupos</p>
-        <div class="space-y-1.5">
-          <template x-for="ref in iaPrecioModal.referencia" :key="ref.id_grupo">
-            <button type="button"
-              @click="iaPrecioModal.precio = ref.precio_base"
-              class="w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors hover:opacity-80 text-left"
-              style="background:rgba(71,85,105,.25); border:1px solid rgba(71,85,105,.4)">
-              <span class="text-xs text-slate-300 font-medium" x-text="ref.nombre_grupo"></span>
-              <span class="text-xs font-bold text-emerald-400"
-                x-text="'$' + parseFloat(ref.precio_base).toFixed(2)"></span>
-            </button>
-          </template>
-        </div>
-        <p class="text-[10px] text-slate-600 mt-1.5">Toca un grupo para usar ese precio como base.</p>
-      </div>
-
-      <!-- Input precio -->
-      <div>
-        <label class="block text-[11px] text-slate-400 font-medium uppercase tracking-wide mb-1.5">
-          Precio para <span class="text-white font-bold"
-            x-text="grupos.find(g => g.id_grupo == ordenForm.id_grupo)?.nombre_grupo || 'este grupo'"></span>
-          <span class="text-red-400"> *</span>
-        </label>
-        <div class="relative">
-          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-          <input id="ia-precio-input"
-            x-model="iaPrecioModal.precio"
-            @keydown.enter="iaConfirmarPrecio()"
-            type="number" min="0.01" step="0.01" placeholder="0.00"
-            class="input-dark w-full pl-7" />
-        </div>
-      </div>
-
-      <!-- Guardar para el grupo -->
-      <label class="flex items-center gap-3 cursor-pointer">
-        <input type="checkbox" x-model="iaPrecioModal.guardar"
-          class="w-4 h-4 rounded accent-violet-500" />
-        <span class="text-xs text-slate-300">Guardar este precio en la base de datos para
-          <span class="font-semibold text-white"
-            x-text="grupos.find(g => g.id_grupo == ordenForm.id_grupo)?.nombre_grupo || 'este grupo'"></span>
-        </span>
-      </label>
-
-    </div>
-
-    <!-- Footer -->
-    <div class="px-5 py-4 flex gap-2" style="border-top:1px solid var(--border)">
-      <button @click="cerrarIaPrecioModal()" class="btn-ghost flex-1 py-2.5">Cancelar</button>
-      <button @click="iaConfirmarPrecio()"
-        :disabled="!iaPrecioModal.precio || parseFloat(iaPrecioModal.precio) <= 0"
-        class="btn-primary flex-1 py-2.5 disabled:opacity-40"
-        x-text="'Aplicar a ' + (grupos.find(g => g.id_grupo == ordenForm.id_grupo)?.nombre_grupo || 'este grupo')">
-      </button>
-    </div>
-
-  </div>
-</div>
-
-<div x-show="iaCambiarModal.visible" x-cloak
-  class="fixed inset-0 z-[70] flex items-end justify-center"
-  style="background:rgba(0,0,0,.65); backdrop-filter:blur(4px)">
-  <div class="bg-modal w-full max-w-lg rounded-t-2xl max-h-[82vh] flex flex-col slide-up"
-    style="border-top:1px solid var(--border)">
-
-    <!-- Cabecera -->
-    <div class="flex items-center justify-between px-4 py-3.5"
-      style="border-bottom:1px solid var(--border)">
-      <div class="min-w-0">
-        <p class="font-semibold text-sm"
-          x-text="iaCambiarModal.secIdx >= 0 && iaResultados[iaCambiarModal.secIdx]?.productos[iaCambiarModal.prodIdx]?.tipo === 'sin_match'
-            ? 'Buscar producto'
-            : 'Cambiar producto'"></p>
-        <p class="text-[10px] text-slate-500 mt-0.5 truncate"
-          x-show="iaCambiarModal.secIdx >= 0"
-          x-text="'Texto: \u201c' + (iaResultados[iaCambiarModal.secIdx]?.productos[iaCambiarModal.prodIdx]?.texto_original || '') + '\u201d'"></p>
-      </div>
-      <button @click="iaCambiarModal.visible = false"
-        class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0 ml-3">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Buscador -->
-    <div class="px-4 py-3" style="border-bottom:1px solid var(--border)">
-      <input id="ia-search-input"
-        type="text"
-        x-model="iaCambiarModal.busqueda"
-        @input.debounce.380ms="iaBuscarProducto()"
-        placeholder="Escribe el nombre del producto..."
-        class="input-dark w-full text-sm"
-        style="padding:9px 12px"
-        autocomplete="off" />
-      <p x-show="iaCambiarModal.busqueda.length < 2"
-        class="text-[10px] text-slate-500 mt-1.5">Mínimo 2 caracteres para buscar</p>
-    </div>
-
-    <!-- Resultados -->
-    <div class="flex-1 overflow-y-auto">
-
-      <!-- Cargando -->
-      <div x-show="iaCambiarModal.buscando"
-        class="flex flex-col items-center py-10 gap-2 text-slate-500">
-        <svg class="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-        </svg>
-        <span class="text-sm">Buscando...</span>
-      </div>
-
-      <!-- Sin resultados -->
-      <div x-show="!iaCambiarModal.buscando && iaCambiarModal.resultados.length === 0 && iaCambiarModal.busqueda.length >= 2"
-        class="flex flex-col items-center py-12 gap-2 text-slate-500">
-        <svg class="w-10 h-10 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-        </svg>
-        <span class="text-sm">Sin resultados</span>
-      </div>
-
-      <!-- Estado inicial -->
-      <div x-show="!iaCambiarModal.buscando && iaCambiarModal.busqueda.length < 2"
-        class="flex flex-col items-center py-12 gap-2 text-slate-500">
-        <svg class="w-10 h-10 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-        </svg>
-        <span class="text-sm">Comienza a escribir para buscar</span>
-      </div>
-
-      <!-- Lista de resultados -->
-      <template x-for="(p, i) in iaCambiarModal.resultados" :key="p.id_producto">
-        <button @click="iaCambiarModal.seleccionado = p"
-          class="w-full px-4 py-3 text-left flex items-center gap-3 transition-colors"
-          :class="iaCambiarModal.seleccionado?.id_producto === p.id_producto
-            ? 'border-l-2 border-emerald-400'
-            : 'hover:bg-white/[0.04]'"
-          :style="iaCambiarModal.seleccionado?.id_producto === p.id_producto
-            ? 'background:rgba(22,163,74,.08)'
-            : ''"
-          style="border-bottom:1px solid var(--border)">
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate" x-text="p.nombre_producto.toUpperCase()"></p>
-            <p class="text-[10px] text-slate-500 mt-0.5"
-              x-text="'Unidad: ' + p.unidad_producto"></p>
-          </div>
-          <div class="text-right flex-shrink-0 flex items-center gap-2">
-            <p class="text-sm font-bold"
-              :class="p.precio_base > 0 ? 'text-emerald-400' : 'text-slate-500'"
-              x-text="p.precio_base > 0 ? '$' + parseFloat(p.precio_base).toFixed(2) : 'Sin precio'"></p>
-            <svg x-show="iaCambiarModal.seleccionado?.id_producto === p.id_producto"
-              class="w-4 h-4 text-emerald-400"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-            </svg>
-          </div>
-        </button>
-      </template>
-    </div>
-
-    <!-- Footer de acción -->
-    <div class="px-4 py-3 flex gap-2" style="border-top:1px solid var(--border)">
-      <button @click="iaCambiarModal.visible = false" class="btn-ghost flex-1 py-2.5">
-        Cancelar
-      </button>
-      <button @click="iaConfirmarCambio()"
-        :disabled="!iaCambiarModal.seleccionado"
-        class="btn-primary flex-1 py-2.5 disabled:opacity-40">
-        Confirmar
-      </button>
-    </div>
-
-  </div>
-</div>
 
 
 <!-- ══════════════════════════════════════════════════════════
@@ -3713,23 +3443,59 @@
 <div
   x-show="toast.visible"
   x-cloak
-  x-transition:enter="transition ease-out duration-200"
-  x-transition:enter-start="opacity-0 translate-y-4"
-  x-transition:enter-end="opacity-100 translate-y-0"
-  x-transition:leave="transition ease-in duration-150"
-  x-transition:leave-end="opacity-0 translate-y-2"
-  class="fixed left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full shadow-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap"
-  style="bottom: calc(3.75rem + env(safe-area-inset-bottom) + 1rem)"
-  :style="toast.error ? 'background:#dc2626; color:white' : 'background:#059669; color:white'"
+  x-transition:enter="transition ease-out duration-250"
+  x-transition:enter-start="opacity-0 translate-y-3 scale-95"
+  x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+  x-transition:leave="transition ease-in duration-200"
+  x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+  x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+  class="fixed left-1/2 -translate-x-1/2 z-50 max-w-[90vw] rounded-2xl shadow-2xl overflow-hidden"
+  :style="`bottom: calc(3.75rem + env(safe-area-inset-bottom) + 14px); ${{ 'success': 'background:rgba(20,30,22,0.92);border:1px solid rgba(34,197,94,0.40)', 'error': 'background:rgba(30,18,18,0.92);border:1px solid rgba(239,68,68,0.40)', 'warning': 'background:rgba(30,26,14,0.92);border:1px solid rgba(245,158,11,0.40)', 'info': 'background:rgba(16,22,32,0.92);border:1px solid rgba(96,165,250,0.40)' }[toast.type] || 'background:rgba(20,30,22,0.92);border:1px solid rgba(34,197,94,0.40)'}`"
 >
-  <!-- Check / X icon -->
-  <svg x-show="!toast.error" class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-  </svg>
-  <svg x-show="toast.error" class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-  </svg>
-  <span x-text="toast.msg"></span>
+  <div class="px-4 py-3 flex items-center gap-2.5 whitespace-nowrap backdrop-blur-xl">
+    <!-- Ícono por tipo -->
+    <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+      :style="{
+        'success': 'background:rgba(34,197,94,0.2)',
+        'error':   'background:rgba(239,68,68,0.2)',
+        'warning': 'background:rgba(245,158,11,0.2)',
+        'info':    'background:rgba(96,165,250,0.2)',
+      }[toast.type]">
+      <!-- success -->
+      <svg x-show="toast.type === 'success'" class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+      </svg>
+      <!-- error -->
+      <svg x-show="toast.type === 'error'" class="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      <!-- warning -->
+      <svg x-show="toast.type === 'warning'" class="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <!-- info -->
+      <svg x-show="toast.type === 'info'" class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <span class="text-sm font-semibold text-white" x-text="toast.msg"></span>
+  </div>
+  <!-- Barra de progreso de auto-dismiss -->
+  <div class="h-0.5 w-full"
+    :style="{
+      'success': 'background:rgba(34,197,94,0.25)',
+      'error':   'background:rgba(239,68,68,0.25)',
+      'warning': 'background:rgba(245,158,11,0.25)',
+      'info':    'background:rgba(96,165,250,0.25)',
+    }[toast.type]">
+    <div class="h-full toast-progress"
+      :style="{
+        'success': 'background:#22c55e; animation-duration:3s',
+        'error':   'background:#ef4444; animation-duration:4.5s',
+        'warning': 'background:#f59e0b; animation-duration:4s',
+        'info':    'background:#60a5fa; animation-duration:3s',
+      }[toast.type]"></div>
+  </div>
 </div>
 
 
@@ -4168,7 +3934,7 @@
 <script src="/js/modules/compras.js"></script>
 <script src="/js/modules/dashboard.js"></script>
 <script src="/js/bodega.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script defer src="/js/alpine.min.js"></script>
 
 </body>
 </html>

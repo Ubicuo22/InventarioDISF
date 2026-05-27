@@ -3,7 +3,8 @@ function uiModule() {
     tab: 'home',
     dbOk: false,
     pedidosTab: 'activos',
-    toast: { visible: false, msg: '', error: false },
+    toast: { visible: false, msg: '', type: 'success' },
+    _toastTimer: null,
 
     // Tema — 'dark' | 'light'
     // El valor inicial lo resuelve el script anti-flash en <head> (var global __THEME),
@@ -42,9 +43,18 @@ function uiModule() {
       if (meta) meta.setAttribute('content', theme === 'dark' ? '#060608' : '#f2f2f7')
     },
 
-    mostrarToast(msg, error = false) {
-      this.toast = { visible: true, msg, error }
-      setTimeout(() => { this.toast.visible = false }, 3500)
+    // mostrarToast(msg)                → success
+    // mostrarToast(msg, true)          → error  (compat con todos los módulos existentes)
+    // mostrarToast(msg, 'warning')     → warning ámbar
+    // mostrarToast(msg, 'info')        → info azul
+    mostrarToast(msg, typeOrError = false) {
+      let type = 'success'
+      if (typeOrError === true)               type = 'error'
+      else if (typeof typeOrError === 'string') type = typeOrError
+      if (this._toastTimer) clearTimeout(this._toastTimer)
+      this.toast = { visible: true, msg, type, error: type === 'error' }
+      const duration = type === 'error' ? 4500 : type === 'warning' ? 4000 : 3000
+      this._toastTimer = setTimeout(() => { this.toast.visible = false }, duration)
     },
 
     // ── Pull-to-refresh ──────────────────────────────────────────

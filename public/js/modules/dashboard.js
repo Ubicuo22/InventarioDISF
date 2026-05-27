@@ -37,11 +37,12 @@ function dashboardModule() {
       return this.dashTs.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
     },
 
-    /** Fecha larga localizada, p.ej. "sábado, 5 de abril" */
+    /** Fecha larga localizada, p.ej. "Miércoles, 27 de mayo" */
     dashFechaHoy() {
-      return new Date().toLocaleDateString('es-MX', {
+      const s = new Date().toLocaleDateString('es-MX', {
         weekday: 'long', day: 'numeric', month: 'long'
       })
+      return s.charAt(0).toUpperCase() + s.slice(1)
     },
 
     /** ¿Llevan más de 5 minutos los datos sin refrescar? */

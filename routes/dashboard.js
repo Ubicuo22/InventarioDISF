@@ -127,7 +127,8 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
       topCritico,
       deudas,
       ultimaEntrada,
-      pedidosAtrasados
+      pedidosAtrasados,
+      inventarioStats
     ] = await Promise.all([
 
       // Pedidos creados hoy
@@ -175,7 +176,7 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
       // Mermas del día (incluye monto)
       q(`SELECT
            COUNT(*) AS total,
-           COALESCE(SUM(m.cantidad *
+           COALESCE(SUM(m.cantidad_merma *
              COALESCE(
                (SELECT ip.costo_unitario
                 FROM inventario_peps ip
@@ -190,7 +191,7 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
 
       // Mermas ayer (solo monto para tendencia)
       q(`SELECT
-           COALESCE(SUM(m.cantidad *
+           COALESCE(SUM(m.cantidad_merma *
              COALESCE(
                (SELECT ip.costo_unitario
                 FROM inventario_peps ip
@@ -246,7 +247,16 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
       q(`SELECT COUNT(*) AS total
          FROM ordenes_guardadas
          WHERE estado = 'guardada' AND activo = 1
-           AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY)`)
+           AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY)`),
+
+      // Totales de inventario para el tile del dashboard
+      q(`SELECT
+           COUNT(*)                                             AS total_productos,
+           SUM(CASE WHEN stock > 0 THEN 1 ELSE 0 END)         AS con_stock,
+           SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END)         AS sin_stock,
+           SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS stock_bajo
+         FROM producto
+         WHERE activo = 1`)
     ])
 
     // Computar revisados / por revisar parseando __historial__
@@ -328,6 +338,12 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
       deudas: {
         vencidas:      parseInt(deudas[0]?.vencidas      || 0),
         monto_vencido: parseFloat(deudas[0]?.monto_vencido || 0)
+      },
+      inventario: {
+        total_productos: parseInt(inventarioStats[0]?.total_productos || 0),
+        con_stock:       parseInt(inventarioStats[0]?.con_stock       || 0),
+        sin_stock:       parseInt(inventarioStats[0]?.sin_stock       || 0),
+        stock_bajo:      parseInt(inventarioStats[0]?.stock_bajo      || 0)
       },
       ultima_entrada: ultimaEntrada[0] || null
     })

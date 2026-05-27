@@ -16,7 +16,6 @@
  *   POST /api/entradas                — Registrar entrada (admin + supervisor/inventario)
  *   POST /api/mermas                  — Registrar merma (admin + supervisor/mermas)
  *   GET  /api/analytics/*             — Ventas (admin + supervisor/analytics)
- *   POST /api/ubicuoai/analizar       — IA pedidos (admin + supervisor/pedidos)
  *   GET  /api/admin/sesiones          — Sesiones activas (solo admin)
  *   DELETE /api/admin/sesiones/:jti   — Revocar sesión (solo admin)
  *   GET  /api/admin/usuarios          — Usuarios + permisos (solo admin)
@@ -62,7 +61,6 @@ app.use('/api/ordenes',    requireAuth, requireModulo('pedidos'),    require('./
 app.use('/api/entradas',   requireAuth, requireModulo('inventario'), require('./routes/entradas'))
 app.use('/api/mermas',     requireAuth, requireModulo('mermas'),     require('./routes/mermas'))
 app.use('/api/compras',    requireAuth, requireModulo('compras'),    require('./routes/compras'))
-app.use('/api/ubicuoai',   requireAuth, requireModulo('pedidos'),    require('./routes/ubicuoai'))
 app.use('/api/analytics',  requireAuth, requireModulo('analytics'),  require('./routes/analytics'))
 
 // ─── Cobranza (requiere módulo 'cobranza') ───────────────────

@@ -114,7 +114,7 @@ function historyModule() {
       if (!f) return '—'
       const d = new Date(f)
       const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000)
-      return utc.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+      return utc.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
     }
   }
 }
