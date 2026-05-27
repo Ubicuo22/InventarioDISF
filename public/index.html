@@ -2530,12 +2530,15 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
         </svg>
       </button>
-      <!-- Toggle sidebar (solo móvil) -->
+      <!-- Toggle lista (solo móvil) -->
       <button @click="revisionShowSidebar = !revisionShowSidebar"
-        class="md:hidden p-2 rounded-lg text-slate-400 hover:text-white" title="Ver lista">
-        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        class="md:hidden relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass-btn text-sm font-semibold transition-colors"
+        :class="revisionShowSidebar ? 'text-emerald-400' : 'text-slate-300'"
+        title="Ver lista">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
         </svg>
+        <span class="tabular-nums text-xs" x-text="`${revisionReviewedCount()}/${revisionTotal()}`"></span>
       </button>
     </div>
 
@@ -2548,60 +2551,123 @@
     <!-- BODY: sidebar + contenido -->
     <div class="flex-1 flex overflow-hidden">
 
-      <!-- SIDEBAR (siempre visible en md+, drawer en móvil) -->
-      <div
-        class="border-r bd glass-divider overflow-y-auto flex-shrink-0 bg-slate-900/40"
-        :class="revisionShowSidebar ? 'absolute inset-0 z-10 w-full md:relative md:w-64 md:z-auto' : 'hidden md:block md:w-64'">
-        <template x-for="[secName, items] in Object.entries(revisionItemsBySection())" :key="secName">
-          <div>
-            <div class="px-3 py-2 sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b bd glass-divider flex items-center justify-between">
-              <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-400" x-text="secName"></span>
-              <span class="text-[10px] text-slate-500 tabular-nums"
-                x-text="`${revisionSectionStats(secName).done}/${revisionSectionStats(secName).total}`"></span>
-            </div>
-            <template x-for="fi in items" :key="`${fi.section}::${fi.item.id_producto}`">
-              <button
-                @click="revisionSaltarA(revisionFlatItems().findIndex(x => x.section === fi.section && x.item.id_producto === fi.item.id_producto))"
-                class="w-full px-3 py-2.5 flex items-center gap-2 text-left transition-colors border-l-2"
-                :class="
-                  revisionCurrent() && revisionCurrent().item.id_producto === fi.item.id_producto && revisionCurrent().section === fi.section
-                    ? 'bg-emerald-500/15 border-l-emerald-400'
-                    : 'border-l-transparent hover:sf-lo'
-                ">
-                <div class="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-                  :class="revisionIsPending(fi.section, fi.item.id_producto)
-                    ? 'bg-amber-500 text-white'
-                    : revisionIsReviewed(fi.section, fi.item.id_producto)
-                      ? 'bg-emerald-500 text-white'
-                      : 'border border-slate-600'">
-                  <!-- Pendiente: reloj -->
-                  <svg x-show="revisionIsPending(fi.section, fi.item.id_producto)" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  <!-- Revisado: check -->
-                  <svg x-show="!revisionIsPending(fi.section, fi.item.id_producto) && revisionIsReviewed(fi.section, fi.item.id_producto)" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                  </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-xs font-medium truncate"
-                    :class="revisionIsPending(fi.section, fi.item.id_producto)
-                      ? 'text-amber-300'
-                      : revisionIsReviewed(fi.section, fi.item.id_producto)
-                        ? 'text-white line-through opacity-60'
-                        : 'text-white'"
-                    x-text="fi.item.nombre_producto"></p>
-                  <p class="text-[10px] text-slate-500 tabular-nums" x-text="`${fi.item.cantidad} ${fi.item.unidad || ''}`"></p>
-                </div>
-              </button>
-            </template>
-          </div>
-        </template>
+      <!-- Backdrop bottom-sheet (solo móvil) -->
+      <div x-show="revisionShowSidebar"
+        class="md:hidden absolute inset-0 z-10 bg-black/60 backdrop-blur-sm"
+        @click="revisionShowSidebar = false"
+        x-transition:enter="transition-opacity duration-200"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition-opacity duration-150"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0">
+      </div>
 
-        <!-- Vacío -->
-        <template x-if="revisionTotal() === 0">
-          <div class="p-6 text-center text-slate-500 text-xs">Carrito vacío</div>
-        </template>
+      <!-- SIDEBAR — bottom sheet en móvil, panel fijo en md+ -->
+      <div
+        class="flex-shrink-0 flex flex-col border-r bd glass-divider bg-slate-900/40
+               md:relative md:w-64 md:z-auto md:translate-y-0 md:rounded-none md:border-t-0 md:shadow-none"
+        :class="revisionShowSidebar
+          ? 'absolute inset-x-0 bottom-0 z-20 h-[72%] rounded-t-2xl bg-slate-900 shadow-2xl border-t border-slate-700/60'
+          : 'hidden md:flex'">
+
+        <!-- Handle + encabezado (solo móvil) -->
+        <div class="md:hidden flex-shrink-0">
+          <div class="flex justify-center pt-3 pb-2">
+            <div class="w-10 h-1 rounded-full bg-slate-600"></div>
+          </div>
+          <div class="flex items-center justify-between px-4 pb-3">
+            <div>
+              <p class="text-sm font-bold text-white">Lista completa</p>
+              <p class="text-[11px] text-slate-400 tabular-nums mt-0.5"
+                x-text="`${revisionReviewedCount()} de ${revisionTotal()} revisados`"></p>
+            </div>
+            <!-- Pills de estado -->
+            <div class="flex items-center gap-1.5">
+              <template x-if="revisionMissingNames.length > 0">
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400"
+                  x-text="`${revisionMissingNames.length} faltante${revisionMissingNames.length > 1 ? 's' : ''}`"></span>
+              </template>
+              <template x-if="revisionPendingNames.length > 0">
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400"
+                  x-text="`${revisionPendingNames.length} pendiente${revisionPendingNames.length > 1 ? 's' : ''}`"></span>
+              </template>
+            </div>
+          </div>
+          <div class="h-px bg-slate-700/60 mx-4"></div>
+        </div>
+
+        <!-- Lista scrollable -->
+        <div class="flex-1 overflow-y-auto">
+          <template x-for="[secName, items] in Object.entries(revisionItemsBySection())" :key="secName">
+            <div>
+              <!-- Encabezado de sección -->
+              <div class="px-4 py-2 sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700/40 flex items-center justify-between">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-400" x-text="secName"></span>
+                <span class="text-[10px] text-slate-500 tabular-nums font-medium"
+                  x-text="`${revisionSectionStats(secName).done}/${revisionSectionStats(secName).total}`"></span>
+              </div>
+
+              <template x-for="fi in items" :key="`${fi.section}::${fi.item.id_producto}`">
+                <button
+                  @click="revisionSaltarA(revisionFlatItems().findIndex(x => x.section === fi.section && x.item.id_producto === fi.item.id_producto)); revisionShowSidebar = false"
+                  class="w-full px-4 py-3 flex items-center gap-3 text-left transition-colors border-l-[3px]"
+                  :class="
+                    revisionCurrent() && revisionCurrent().item.id_producto === fi.item.id_producto && revisionCurrent().section === fi.section
+                      ? 'bg-emerald-500/10 border-l-emerald-400'
+                      : revisionIsPending(fi.section, fi.item.id_producto)
+                        ? 'border-l-amber-500/60 hover:sf-lo'
+                        : 'border-l-transparent hover:sf-lo'
+                  ">
+
+                  <!-- Estado circular -->
+                  <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+                    :class="revisionIsPending(fi.section, fi.item.id_producto)
+                      ? 'bg-amber-500 shadow-sm shadow-amber-500/30'
+                      : revisionIsReviewed(fi.section, fi.item.id_producto)
+                        ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30'
+                        : 'border-2 border-slate-600'">
+                    <!-- Pendiente: reloj -->
+                    <svg x-show="revisionIsPending(fi.section, fi.item.id_producto)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <!-- Revisado: check -->
+                    <svg x-show="!revisionIsPending(fi.section, fi.item.id_producto) && revisionIsReviewed(fi.section, fi.item.id_producto)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </div>
+
+                  <!-- Nombre + cantidad -->
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium leading-snug truncate"
+                      :class="revisionIsPending(fi.section, fi.item.id_producto)
+                        ? 'text-amber-300'
+                        : revisionIsReviewed(fi.section, fi.item.id_producto)
+                          ? 'text-slate-500 line-through'
+                          : 'text-white'"
+                      x-text="fi.item.nombre_producto"></p>
+                    <p class="text-xs text-slate-500 tabular-nums mt-0.5"
+                      x-text="`${fi.item.cantidad} ${fi.item.unidad || ''}`"></p>
+                  </div>
+
+                  <!-- Flecha si es el actual -->
+                  <svg x-show="revisionCurrent() && revisionCurrent().item.id_producto === fi.item.id_producto && revisionCurrent().section === fi.section"
+                    class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </template>
+            </div>
+          </template>
+
+          <!-- Vacío -->
+          <template x-if="revisionTotal() === 0">
+            <div class="p-6 text-center text-slate-500 text-sm">Carrito vacío</div>
+          </template>
+
+          <!-- Padding inferior para que el último item no quede cortado -->
+          <div class="h-6"></div>
+        </div>
       </div>
 
       <!-- PANEL CENTRAL -->
