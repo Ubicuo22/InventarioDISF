@@ -1,5 +1,5 @@
 # Flujo de Inventario — DISFRULEG
-> Versión del sistema: 3.7.9 | Actualizado: 27/05/2026 (conversiones y productos kg creados)
+> Versión del sistema: 3.8.4 | Actualizado: 27/05/2026
 
 ---
 
@@ -7,16 +7,17 @@
 
 1. [Conceptos clave](#1-conceptos-clave)
 2. [Antes de empezar: configurar conversiones](#2-antes-de-empezar-configurar-conversiones)
-3. [Registrar una compra](#3-registrar-una-compra)
-4. [Cómo se guarda el stock (PEPS)](#4-cómo-se-guarda-el-stock-peps)
-5. [Cómo se descuenta el stock al vender](#5-cómo-se-descuenta-el-stock-al-vender)
-6. [Flujo completo: ejemplo real](#6-flujo-completo-ejemplo-real)
-7. [Productos que se venden en kg y en pz](#7-productos-que-se-venden-en-kg-y-en-pz)
-8. [Validación de stock al procesar una venta](#8-validación-de-stock-al-procesar-una-venta)
-9. [Revertir una venta](#9-revertir-una-venta)
-10. [Eliminar una compra](#10-eliminar-una-compra)
-11. [Reglas y limitaciones importantes](#11-reglas-y-limitaciones-importantes)
-12. [Catálogo de productos base vs derivados](#12-catálogo-de-productos-base-vs-derivados)
+3. [Editar una conversión existente](#3-editar-una-conversión-existente)
+4. [Registrar una compra](#4-registrar-una-compra)
+5. [Cómo se guarda el stock (PEPS)](#5-cómo-se-guarda-el-stock-peps)
+6. [Cómo se descuenta el stock al vender](#6-cómo-se-descuenta-el-stock-al-vender)
+7. [Flujo completo: ejemplo real](#7-flujo-completo-ejemplo-real)
+8. [Productos que se venden en kg y en pz](#8-productos-que-se-venden-en-kg-y-en-pz)
+9. [Validación de stock al procesar una venta](#9-validación-de-stock-al-procesar-una-venta)
+10. [Revertir una venta](#10-revertir-una-venta)
+11. [Eliminar una compra](#11-eliminar-una-compra)
+12. [Reglas y limitaciones importantes](#12-reglas-y-limitaciones-importantes)
+13. [Catálogo de productos base vs derivados](#13-catálogo-de-productos-base-vs-derivados)
 
 ---
 
@@ -60,12 +61,39 @@ Para que el inventario funcione con productos que se venden en unidades distinta
 ### Cómo crear una conversión
 
 1. Abrir **Registro de Compras**
-2. Clic en **Conversiones PEPS**
-3. Seleccionar:
+2. Clic en **⚙️ Herramientas → Equivalencias de Venta** (o Conversiones PEPS)
+3. Clic en **"+ Agregar equivalencia"** al fondo del modal
+4. Seleccionar:
    - **Producto que se vende** → el producto derivado (ej: LECHUGA ITALIANA kg)
    - **Stock que se descuenta** → el producto base (ej: LECHUGA ITALIANA. pz)
-   - **Factor** → piezas por unidad vendida (ej: si 1 pieza pesa 0.5 kg en promedio → factor = 2)
-4. El factor global es un estimado. Se puede refinar en cada compra con el **peso por pieza**.
+   - **¿Solo para un grupo?** → dejar vacío para que aplique a todos los clientes, o seleccionar uno
+5. Elegir tipo de factor:
+   - **Factor fijo** → ingresar número constante (ej: SETAS = 4 charolas/kg — siempre igual)
+   - **Varía por lote** → activar checkbox — no se pone número; el factor se captura al registrar cada compra ingresando el **peso total del lote**
+6. Vista previa: el sistema muestra exactamente qué pasará antes de guardar
+7. Clic **"Guardar equivalencia"**
+
+### Tipos de factor: fijo vs variable por lote
+
+| Tipo | Cuándo usarlo | Cómo se configura | Indicador visual |
+|---|---|---|---|
+| **Factor fijo** | El peso/cantidad es siempre igual (ej. SETAS: 1 charola = 250g → 4/kg) | Número exacto en campo "Factor" | Texto teal: "Al vender 1 kg → descuenta 4 pz" |
+| **Variable por lote** | El peso cambia de compra en compra (ej. manojos de cilantro de distinto tamaño) | Checkbox "El factor varía por lote" activo | Badge azul "Peso del lote requerido al comprar" |
+| **Factor pendiente** | Se creó con factor=1 sin marcar como variable (hay que configurar) | — | Aviso ámbar "Factor pendiente — edita para configurarlo" |
+
+#### Comportamiento del factor en ventas (`ordenes.handler.ts`)
+```
+loteFactor = lote.factor_conversion ?? conversionGlobal.factor
+```
+- Si el lote tiene `factor_conversion` registrado (se ingresó peso total al comprar) → **usa el factor del lote** (más preciso)
+- Si no tiene `factor_conversion` → **usa el factor global** de `producto_conversion_peps`
+- Por eso en conversiones "variable por lote", es **obligatorio** ingresar el peso total al registrar cada compra.
+
+#### Marcador interno para conversiones variables
+Las conversiones de tipo "varía por lote" se guardan con:
+- `factor = 1` en la base de datos (valor numérico válido como fallback)
+- `notas` prefijadas con `[var]` → ej: `[var]` o `[var] el peso varía según proveedor`
+- El frontend detecta este prefijo para mostrar el badge azul (no el aviso ámbar de "pendiente")
 
 ### Conversiones ya configuradas en el sistema
 
@@ -116,10 +144,61 @@ Se crearon 11 productos kg nuevos + sus conversiones. **Factor global = 1 (place
 
 ---
 
-## 3. Registrar una compra
+## 3. Editar una conversión existente
+
+A partir de v3.8.4, el panel de edición permite **modificar completamente** una conversión — no solo el factor, sino también los productos y el grupo.
+
+### Cómo editar
+
+1. Abrir **⚙️ Herramientas → Equivalencias de Venta**
+2. Localizar la conversión en la lista
+3. Clic en botón **"Editar"** (lápiz) de la tarjeta
+4. El panel se expande con 5 secciones:
+
+### Secciones del panel de edición
+
+#### A — Productos
+Dos selectores con búsqueda en tiempo real. Permiten cambiar cualquiera de los dos extremos de la conversión:
+- **Producto que se vende** (derivado): lo que el cliente pide
+- **Stock que se descuenta** (base): lo que existe físicamente en el almacén
+
+#### B — Grupo de clientes
+Select para afinar a qué clientes aplica la conversión:
+- **"No — aplica a todos"**: todos los grupos usarán este factor
+- **Grupo específico**: solo ese grupo usa este factor (útil si AEROCOMIDAS necesita un factor distinto al de GENERAL para el mismo producto)
+
+#### C — Tipo de factor
+Toggle **"El factor varía por lote"**:
+- **Activo** → el input de número desaparece; se captura en cada compra mediante el peso del lote
+- **Inactivo** → input numérico obligatorio con preview de ejemplo: "Pedido de 4 kg → descuenta X unidades"
+
+#### D — Notas
+Campo libre opcional. Si la conversión es variable, las notas se guardan junto con el marcador `[var]` pero se muestran sin él.
+
+#### E — ¿Cómo afecta esta equivalencia? (dinámico)
+Panel azul que se actualiza en tiempo real según los productos y tipo de factor seleccionados:
+
+| Contexto | Mensaje si factor fijo | Mensaje si varía por lote |
+|---|---|---|
+| 🛒 Al registrar una compra de [BASE] | No necesitas ingresar peso adicional. El sistema usa factor X | Debes ingresar el peso total del lote para calcular el factor |
+| 📈 Al procesar una venta de [DERIVADO] | Se descuentan X [unidad_base] por cada [unidad_derivada] del lote más antiguo | Se descuenta según el factor registrado en cada lote (FIFO) |
+
+### Cuándo usar edición completa vs eliminar y recrear
+
+| Situación | Acción recomendada |
+|---|---|
+| Cambiar el factor (ej: se confirmó el peso real del lote) | Editar — clic Editar → cambiar factor |
+| Mover de "factor fijo" a "varía por lote" | Editar — activar el checkbox |
+| Cambiar a qué grupo aplica | Editar — sección B |
+| El producto base está mal (apunta a producto equivocado) | Editar — sección A, cambiar selector |
+| Eliminar una equivalencia que ya no tiene sentido | Botón 🗑️ en la tarjeta |
+
+---
+
+## 4. Registrar una compra
 
 ### Módulo
-**Registro de Compras** → formulario principal
+**Registro de Compras** — acceder desde el menú principal
 
 ### Campos requeridos
 
@@ -130,17 +209,19 @@ Se crearon 11 productos kg nuevos + sus conversiones. **Factor global = 1 (place
 | **Precio unitario** | Precio por unidad tal como lo cobra el proveedor |
 | **Fecha de compra** | Fecha en que llegó la mercancía |
 
-### Campo clave para conversiones (sección "Peso del lote")
+### Cuándo ingresar el peso del lote
 
-La sección **Peso del lote** aparece en el formulario de compra. Tiene un único campo editable:
+La sección **"Peso del lote"** (opcional) aparece en el formulario de compra. Es **obligatorio llenarla** si el producto tiene una conversión de tipo "varía por lote":
 
 | Campo | Quién lo llena | Descripción |
 |---|---|---|
 | **Peso total del lote (kg)** | El usuario | Se pesa el bulto completo en báscula y se escribe ese número |
-| **kg / unidad** | Calculado automático | `peso total ÷ cantidad` — aparece de solo lectura en ámbar |
-| **Factor lote** | Calculado automático | `1 / (kg por unidad)` — se guarda en `inventario_peps.factor_conversion` |
+| **kg / unidad** | Solo lectura, calculado | `peso total ÷ cantidad` — se muestra en ámbar |
+| **Factor lote** | Solo lectura, calculado | `1 / (kg por unidad)` — se guarda en `inventario_peps.factor_conversion` |
 
-Si cambia la **cantidad**, el kg/unidad y el factor se recalculan automáticamente con el mismo peso total.
+Si se cambia la **cantidad**, el kg/unidad y el factor se recalculan automáticamente con el mismo peso total.
+
+> Si la conversión es de **factor fijo** (ej. SETAS = 4 charolas/kg), no es necesario llenar el peso — el sistema usará el factor configurado en la equivalencia.
 
 **Ejemplo (lechugas):**
 ```
@@ -182,7 +263,7 @@ Siempre al **producto base** — el que se compra físicamente.
 
 ---
 
-## 4. Cómo se guarda el stock (PEPS)
+## 5. Cómo se guarda el stock (PEPS)
 
 Al registrar una compra, el sistema crea:
 
@@ -220,7 +301,7 @@ Stock total: 35 piezas
 
 ---
 
-## 5. Cómo se descuenta el stock al vender
+## 6. Cómo se descuenta el stock al vender
 
 El stock **solo se descuenta cuando se procesa una venta** (no al guardar una nota).
 
@@ -278,7 +359,7 @@ Ambas ventas (kg y pz) drenan del **mismo inventario físico**.
 
 ---
 
-## 6. Flujo completo: ejemplo real
+## 7. Flujo completo: ejemplo real
 
 ### Escenario: LECHUGA ITALIANA, semana del 27/05/2026
 
@@ -310,7 +391,7 @@ Ambas ventas (kg y pz) drenan del **mismo inventario físico**.
 
 ---
 
-## 7. Productos que se venden en kg y en pz
+## 8. Productos que se venden en kg y en pz
 
 Algunos productos tienen dos presentaciones de venta:
 - En **pz** para la mayoría de grupos (GENERAL, ULTRA, MRL, etc.)
@@ -343,7 +424,7 @@ El factor global es solo un punto de partida. Cada compra puede refinarlo con el
 
 ---
 
-## 8. Validación de stock al procesar una venta
+## 9. Validación de stock al procesar una venta
 
 Antes de procesar, el sistema verifica si hay stock suficiente.
 
@@ -369,7 +450,7 @@ La validación usa el **factor global** de `producto_conversion_peps`, no el fac
 
 ---
 
-## 9. Revertir una venta
+## 10. Revertir una venta
 
 Si se revierte un procesamiento (`Revertir` en gestión de órdenes):
 
@@ -383,7 +464,7 @@ Las piezas consumidas vuelven exactamente al mismo lote del que salieron, manten
 
 ---
 
-## 10. Eliminar una compra
+## 11. Eliminar una compra
 
 Una compra **solo puede eliminarse si el lote no ha sido consumido** (cantidad_inicial = cantidad_restante).
 
@@ -396,7 +477,14 @@ Para "corregir" una compra mal registrada cuyo lote ya tiene consumos, la opció
 
 ---
 
-## 11. Reglas y limitaciones importantes
+## 12. Reglas y limitaciones importantes
+
+### 🔒 Reglas de integridad automáticas
+
+| Regla | Implementación |
+|---|---|
+| Los productos derivados no aparecen en búsqueda de compras | `productos:buscarParaCompra` excluye `id_producto_derivado` de conversiones activas |
+| Al registrar una compra, siempre es en el producto base | El usuario no puede seleccionar accidentalmente CILANTRO KG para comprar |
 
 ### ✅ Lo que funciona bien
 
@@ -419,17 +507,18 @@ Para "corregir" una compra mal registrada cuyo lote ya tiene consumos, la opció
 
 ### 📌 Buenas prácticas
 
-1. **Siempre registrar compras en el producto base** (la unidad física de compra)
-2. **Capturar el peso por pieza cuando varía** — especialmente en verduras de hoja, lechugas, calabazas, melones
-3. **Configurar la conversión antes de la primera compra** del producto — no después
-4. **Actualizar el factor global** en Conversiones PEPS cuando cambie el peso promedio de la temporada
-5. **No registrar compras en productos derivados** (kg) si el stock debe vivir en el producto base (pz)
+1. **Siempre registrar compras en el producto base** — el que llega físicamente del proveedor
+2. **Marcar como "varía por lote"** todas las conversiones donde el peso del manojo/pieza no es constante (hierbas, lechugas, verduras de hoja)
+3. **Ingresar el peso total del lote** cada vez que se registre una compra de un producto con conversión variable — sin ese dato, el sistema usa el factor placeholder y el descuento de ventas será impreciso
+4. **Configurar la conversión antes de la primera compra** — crearla después no afecta lotes pasados
+5. **Actualizar el factor fijo** en Conversiones PEPS cuando cambie el peso promedio de la temporada (solo aplica a conversiones con factor fijo)
+6. **Usar "Editar" para corregir** conversiones mal configuradas — no es necesario eliminar y recrear; el panel de edición permite cambiar todo
 
 ---
 
-## 12. Catálogo de productos base vs derivados
+## 13. Catálogo de productos base vs derivados
 
-> **Estado al 27/05/2026:** Todas las conversiones conocidas están configuradas en la tabla `producto_conversion_peps`. Total: 26 registros.
+> **Estado al 27/05/2026:** Todas las conversiones conocidas están configuradas en la tabla `producto_conversion_peps`. Total: 26 registros activos.
 
 ### Productos con conversión configurada ✅
 
@@ -471,7 +560,8 @@ Para "corregir" una compra mal registrada cuyo lote ya tiene consumos, la opció
 | CILANTRO (manojo) | 961067 | CILANTRO FRESCO | 871091 | 0.25 | histórico |
 | PEREJIL (mj) | — | PEREJIL LISO | — | 1.0 | histórico |
 
-> `*` Factor = 1 (placeholder). El factor real se calcula automáticamente por lote cuando el usuario captura **Peso por pieza** al registrar la compra.
+> `*` Factor = 1 con marcador `[var]` en notas. El factor real se calcula en cada compra cuando el usuario ingresa el **Peso total del lote**. Si no se ingresa peso, se usa factor=1 como fallback (descuento impreciso).
+> `†` Factor = 1 sin marcador `[var]` — conversión histórica pendiente de configurar correctamente.
 
 ### Productos sin conversión (compra y venta en la misma unidad)
 
@@ -481,17 +571,22 @@ El stock se descuenta directamente sin transformación. Incluye la mayoría de p
 ### Regla para nuevos productos
 
 Al crear un producto que se vende en unidad diferente a la de compra:
-1. Crear el producto base (unidad de compra)
-2. Crear el producto derivado (unidad de venta) — activar la sección **Conversión PEPS** en el formulario de alta
-3. En esa sección, buscar y seleccionar el producto base + ajustar el factor global
+1. Crear el **producto base** (unidad de compra — ej. RÚCULA mj)
+2. Crear el **producto derivado** (unidad de venta — ej. RÚCULA KG) — activar la sección **"Conversión PEPS"** en el formulario de alta
+3. En esa sección:
+   - Buscar y seleccionar el producto base
+   - Elegir "Factor fijo" (con número) o "Varía por lote" (sin número)
 4. Al guardar, se inserta automáticamente en `producto_conversion_peps`
+
+Si el producto ya existe y falta la conversión, crearla desde **⚙️ Herramientas → Equivalencias de Venta → + Agregar equivalencia**.
 
 #### Sección "Conversión PEPS" en CreateProductModal
 Implementada en `src/renderer/components/CreateProductModal.tsx`.
-- Se activa con un toggle en el formulario de creación de producto
-- Muestra búsqueda de producto base (usa `buscarProductosParaCompra`)
-- Campo de factor (default 1 — estimado, el real se captura por lote vía `peso_por_pieza`)
-- Al guardar llama `crearConversionPeps({ idProductoDerivado, idProductoBase, factor })`
+- Toggle que activa/desactiva la sección (desactivado por defecto)
+- Búsqueda de producto base con debounce (usa `buscarProductosParaCompra`)
+- Campo de factor numérico (solo si no es variable)
+- Checkbox "varía por lote" — mismo comportamiento que en ConversionesPepsModal
+- Al guardar llama `crearConversionPeps({ idProductoDerivado, idProductoBase, factor, notas })`
 
 ---
 
@@ -499,19 +594,21 @@ Implementada en `src/renderer/components/CreateProductModal.tsx`.
 
 ```
 1. CONFIGURAR
-   Conversiones PEPS → definir qué producto base
-   corresponde a cada producto derivado y el factor estimado
+   ⚙️ Herramientas → Equivalencias de Venta
+   → Definir qué producto base corresponde a cada derivado
+   → Elegir: factor fijo (número) o varía por lote (checkbox)
 
 2. COMPRAR
-   Registro de Compras → producto BASE, cantidad, precio, peso por pieza
-   → Se crea lote PEPS con factor específico del lote
+   Registro de Compras → producto BASE, cantidad, precio
+   → Si la conversión es variable: ingresar Peso total del lote
+   → Se crea lote PEPS con factor_conversion específico del lote
 
 3. VENDER (guardar nota)
    El stock NO cambia — la nota queda en estado "guardada"
 
 4. PROCESAR VENTA
    El stock se descuenta usando FIFO + factor del lote (o global si no hay)
-   → Se registra qué lote cubrio qué venta (trazabilidad de costos)
+   → Se registra exactamente qué lote cubrió qué venta (trazabilidad de costos)
 
 5. (OPCIONAL) REVERTIR
    El stock se restaura exactamente en los lotes originales
