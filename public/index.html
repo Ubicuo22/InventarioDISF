@@ -2541,11 +2541,11 @@
       <!-- PANEL CENTRAL -->
       <div class="flex-1 overflow-y-auto relative" x-show="!revisionShowSidebar || true">
 
-        <!-- Overlay verde: se revela al deslizar A LA DERECHA (acción: REVISAR) -->
-        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center justify-start pl-6 z-10"
-          :style="`width: 50%; opacity: ${revisionTouchTx > 0 ? Math.min(1, revisionTouchTx / 80) : 0}`">
+        <!-- Overlay derecha: REVISAR → -->
+        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center justify-start pl-5 z-10"
+          :style="`width:50%; opacity:${revisionTouchTx > 0 ? Math.min(1, revisionTouchTx/80) : 0}`">
           <div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white font-bold text-sm"
-            style="background:linear-gradient(135deg, #10b981, #059669); box-shadow: 0 6px 22px rgba(16,185,129,.45)">
+            style="background:linear-gradient(135deg,#10b981,#059669); box-shadow:0 6px 22px rgba(16,185,129,.45)">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
             </svg>
@@ -2553,60 +2553,59 @@
           </div>
         </div>
 
-        <!-- Overlay rojo: se revela al deslizar A LA IZQUIERDA (acción: FALTANTE) -->
-        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end pr-6 z-10"
-          :style="`width: 50%; opacity: ${revisionTouchTx < 0 ? Math.min(1, -revisionTouchTx / 70) : 0}`">
+        <!-- Overlay izquierda: ← ANTERIOR -->
+        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end pr-5 z-10"
+          :style="`width:50%; opacity:${revisionTouchTx < 0 ? Math.min(1, -revisionTouchTx/70) : 0}`">
           <div class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white font-bold text-sm"
-            style="background:linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 6px 22px rgba(239,68,68,.45)">
+            style="background:linear-gradient(135deg,#475569,#334155); box-shadow:0 6px 22px rgba(71,85,105,.5)">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
             </svg>
-            <span>Faltante</span>
+            <span>Anterior</span>
           </div>
         </div>
 
-
         <template x-if="revisionCurrent()">
-          <div class="p-6 sm:p-10 relative"
+          <!-- max-w-sm en iPhone, max-w-md en iPad, centrado siempre -->
+          <div class="mx-auto w-full max-w-sm sm:max-w-md px-5 py-5 sm:py-8 relative"
             @touchstart.passive="revisionTouchStart($event)"
             @touchmove.passive="revisionTouchMove($event)"
             @touchend.passive="revisionTouchEnd($event)"
-            :style="`transform: translateX(${revisionTouchTx}px); transition: ${revisionTouchX0 === null ? 'transform .2s ease' : 'none'}; z-index: 20`">
+            :style="`transform:translateX(${revisionTouchTx}px); transition:${revisionTouchX0===null?'transform .2s ease':'none'}; z-index:20`">
 
-            <!-- Sección badge -->
-            <div class="flex items-center justify-center mb-6">
-              <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <!-- Sección badge + estado -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/12 text-emerald-300">
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                 </svg>
-                <span class="text-xs font-bold uppercase tracking-widest" x-text="revisionCurrent().section"></span>
+                <span class="text-[11px] font-bold uppercase tracking-wider" x-text="revisionCurrent().section"></span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div x-show="revisionIsCurrentPending()"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[11px] font-semibold">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  Pendiente
+                </div>
+                <div x-show="revisionIsCurrentReviewed() && !revisionIsCurrentPending()"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  Revisado
+                </div>
               </div>
             </div>
 
             <!-- Nombre del producto -->
-            <div class="text-center mb-6">
-              <h3 class="text-2xl sm:text-3xl font-bold text-white mb-2 break-words"
-                x-text="revisionCurrent().item.nombre_producto"></h3>
-              <div x-show="revisionIsCurrentPending()"
-                class="inline-flex items-center gap-1.5 text-xs text-amber-400 mt-1">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                Pendiente
-              </div>
-              <div x-show="revisionIsCurrentReviewed() && !revisionIsCurrentPending()"
-                class="inline-flex items-center gap-1.5 text-xs text-emerald-400 mt-1">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                </svg>
-                Revisado
-              </div>
-            </div>
+            <h3 class="text-[1.6rem] sm:text-4xl font-bold text-white mb-5 sm:mb-7 leading-tight break-words"
+              x-text="revisionCurrent().item.nombre_producto"></h3>
 
-            <!-- Cantidad con botones +/− -->
-            <!-- Cantidad — área grande de toque, teclado nativo al tocar -->
-            <div class="flex flex-col items-center mb-1">
-              <div class="relative">
+            <!-- Cantidad — número blanco grande, toque abre teclado nativo -->
+            <div class="flex flex-col items-center mb-4 sm:mb-6">
+              <div class="relative w-full">
                 <input
                   type="number"
                   inputmode="decimal"
@@ -2618,85 +2617,73 @@
                   @blur="revisionInputFocused = false"
                   @keydown.enter.prevent="revisionGuardarYSiguiente()"
                   @keydown.escape.prevent="$event.target.blur()"
-                  class="w-52 sm:w-64 px-4 py-4 text-6xl sm:text-7xl font-bold text-center tabular-nums bg-transparent rounded-3xl focus:outline-none transition-all cursor-text"
+                  class="w-full py-3 sm:py-4 text-[4.5rem] sm:text-8xl font-black text-center tabular-nums bg-transparent rounded-2xl focus:outline-none transition-all cursor-text"
                   :class="revisionCantidadModificada()
-                    ? 'text-amber-400 border-2 border-amber-500/60 focus:border-amber-400 focus:bg-amber-500/5'
-                    : 'text-emerald-400 border-2 border-emerald-500/30 focus:border-emerald-500 focus:bg-emerald-500/5'"
-                  style="appearance:textfield; -moz-appearance:textfield" />
-                <!-- Badge "modificado" -->
+                    ? 'text-amber-300 border-2 border-amber-500/70 focus:border-amber-400'
+                    : 'text-white border-2 border-white/10 focus:border-emerald-500/60'"
+                  style="appearance:textfield; -moz-appearance:textfield; line-height:1.1" />
+                <!-- Badge modificado -->
                 <div x-show="revisionCantidadModificada()"
-                  class="absolute -top-2.5 -right-2.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
-                  style="background:rgba(245,158,11,.9); color:#1c1400">
-                  MOD
-                </div>
-                <!-- Ícono lápiz — visible solo cuando NO está enfocado, para indicar que es editable -->
+                  class="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
+                  style="background:rgba(245,158,11,.9); color:#1c1400">MOD</div>
+                <!-- Hint "toca para editar" cuando no está enfocado -->
                 <div x-show="!revisionInputFocused"
-                  class="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full pointer-events-none"
-                  style="background:rgba(100,116,139,.18)">
-                  <svg class="w-3 h-3 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  class="absolute bottom-1.5 right-2 pointer-events-none">
+                  <svg class="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                   </svg>
-                  <span class="text-[9px] text-slate-500 font-medium">editar</span>
                 </div>
               </div>
 
-              <!-- Unidad + cantidad original si fue modificada -->
-              <div class="flex items-center gap-2 mt-4">
-                <p class="text-base text-slate-400" x-text="revisionCurrent().item.unidad || ''"></p>
-                <span x-show="revisionCantidadModificada()"
-                  class="text-[10px] text-amber-500/80 tabular-nums"
-                  x-text="`(pedido: ${revisionCantidadOriginal()})`"></span>
+              <!-- Unidad + cantidad original + precio -->
+              <div class="flex items-center justify-between w-full mt-2 px-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-base font-semibold text-slate-400" x-text="revisionCurrent().item.unidad || ''"></span>
+                  <span x-show="revisionCantidadModificada()"
+                    class="text-xs text-amber-500/70 tabular-nums"
+                    x-text="`(pedido: ${revisionCantidadOriginal()})`"></span>
+                </div>
+                <span x-show="revisionCurrent().item.precio_unitario > 0"
+                  class="text-sm font-semibold text-slate-300 tabular-nums"
+                  x-text="`$${((revisionCurrent().item.cantidad||0)*(revisionCurrent().item.precio_unitario||0)).toFixed(2)}`"></span>
               </div>
             </div>
 
-            <!-- Precio unitario + Subtotal -->
-            <div class="text-center mb-5">
-              <span class="text-xs text-slate-600 tabular-nums"
-                x-show="revisionCurrent().item.precio_unitario > 0"
-                x-text="`$${parseFloat(revisionCurrent().item.precio_unitario||0).toFixed(2)}/u`"></span>
-              <span class="text-xs text-slate-600" x-show="revisionCurrent().item.precio_unitario > 0"> · </span>
-              <span class="text-sm font-semibold text-white tabular-nums"
-                x-text="`$${((revisionCurrent().item.cantidad||0) * (revisionCurrent().item.precio_unitario||0)).toFixed(2)}`"></span>
-            </div>
-
-            <!-- Cambiar producto -->
-            <div class="flex justify-center mb-4">
+            <!-- Acciones: Cambiar producto · Faltante · Pendiente -->
+            <div class="grid grid-cols-3 gap-2 mb-4">
               <button @click="revisionAbrirCambiar()"
-                class="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition-colors active:scale-95"
-                style="background:rgba(71,85,105,.25); border:1px solid rgba(71,85,105,.45)">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                class="flex flex-col items-center gap-1 py-3 rounded-2xl text-slate-300 active:scale-95 transition-transform"
+                style="background:rgba(71,85,105,.2); border:1px solid rgba(71,85,105,.4)">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                 </svg>
-                Cambiar producto
+                <span class="text-[10px] font-semibold uppercase tracking-wide">Cambiar</span>
               </button>
-            </div>
-
-            <!-- Hint swipe (móvil) -->
-            <p class="text-center text-[10px] text-slate-600 mb-4 md:hidden">
-              ← Faltante &nbsp;·&nbsp; Revisar →
-            </p>
-
-            <!-- Acciones secundarias: Faltante + Pendiente -->
-            <div class="flex justify-center gap-2 flex-wrap">
               <button @click="revisionMarcarFaltante()"
-                class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95"
-                style="background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.25); color:#fca5a5">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                class="flex flex-col items-center gap-1 py-3 rounded-2xl active:scale-95 transition-transform"
+                style="background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); color:#fca5a5">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
-                Faltante
+                <span class="text-[10px] font-semibold uppercase tracking-wide">Faltante</span>
               </button>
               <button @click="revisionMarcarPendiente()"
-                class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95"
+                class="flex flex-col items-center gap-1 py-3 rounded-2xl active:scale-95 transition-transform"
                 :style="revisionIsCurrentPending()
-                  ? 'background:rgba(245,158,11,.25); border:1px solid rgba(245,158,11,.5); color:#fcd34d'
-                  : 'background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.25); color:#fcd34d'">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  ? 'background:rgba(245,158,11,.22); border:1px solid rgba(245,158,11,.55); color:#fcd34d'
+                  : 'background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25); color:#fcd34d'">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <span x-text="revisionIsCurrentPending() ? 'Quitar pendiente' : 'Pendiente'"></span>
+                <span class="text-[10px] font-semibold uppercase tracking-wide"
+                  x-text="revisionIsCurrentPending() ? 'Quitar' : 'Pendiente'"></span>
               </button>
             </div>
+
+            <!-- Hint swipe — solo móvil -->
+            <p class="text-center text-[10px] text-slate-700 md:hidden">
+              ← Anterior &nbsp;·&nbsp; Revisar →
+            </p>
           </div>
         </template>
 
