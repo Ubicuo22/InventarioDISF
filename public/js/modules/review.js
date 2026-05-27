@@ -376,7 +376,8 @@ function reviewModule () {
         return
       }
 
-      this.revisionTouchTx = Math.max(0, Math.min(120, dx))
+      // Derecha → revisar (positivo) · Izquierda → faltante (negativo)
+      this.revisionTouchTx = Math.max(-100, Math.min(120, dx))
     },
     revisionTouchEnd () {
       if (this.revisionTouchX0 == null) return
@@ -392,7 +393,9 @@ function reviewModule () {
       if (axis !== 'x') return
 
       if (tx >= 80) {
-        this.revisionSiguiente()
+        this.revisionSiguiente()          // → Revisar y avanzar
+      } else if (tx <= -70) {
+        this.revisionMarcarFaltante()     // ← Marcar como faltante
       }
     },
 
