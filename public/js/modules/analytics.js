@@ -14,11 +14,12 @@ function analyticsModule() {
     // ── Ventas del día ────────────────────────────────────────
     ventasHoy: null,
 
-    // ── Lista de notas del día ────────────────────────────────
-    notasHoy:       [],
-    notasFecha:     null,   // fecha YYYY-MM-DD que está en memoria
-    notasFiltro:    '',     // búsqueda rápida por cliente/grupo
-    notaDetalle:    null,   // nota abierta en sheet de detalle
+    // ── Lista de notas ────────────────────────────────────────
+    notasHoy:         [],
+    notasFecha:       null,   // fecha YYYY-MM-DD cargada actualmente
+    notasFiltro:      '',     // búsqueda rápida por cliente/grupo
+    notaDetalle:      null,   // nota abierta en sheet de detalle
+    cargandoNotas:    false,  // spinner independiente del summary
 
     // ── Período personalizado ─────────────────────────────────
     periodoInicio:  '',
@@ -46,6 +47,60 @@ function analyticsModule() {
       } finally {
         this.cargandoAnalytics = false
       }
+    },
+
+    // ── Cargar notas para una fecha específica (independiente del summary) ──
+    async cargarNotas(fecha) {
+      if (!fecha) fecha = new Date().toISOString().split('T')[0]
+      this.cargandoNotas = true
+      this.notasFiltro   = ''
+      try {
+        const r = await API.get(`/api/analytics/notas?fecha=${fecha}`)
+        this.notasHoy   = r.ok ? r.data : []
+        this.notasFecha = fecha
+        if (!r.ok) this.mostrarToast(r.error || 'Error al cargar notas', true)
+      } catch (err) {
+        this.mostrarToast(err.message || 'Error de red', true)
+        this.notasHoy = []
+      } finally {
+        this.cargandoNotas = false
+      }
+    },
+
+    // ── Accesos rápidos de fecha para notas ──────────────────
+    notasIrHoy() {
+      this.cargarNotas(new Date().toISOString().split('T')[0])
+    },
+
+    notasIrAyer() {
+      const d = new Date(); d.setDate(d.getDate() - 1)
+      this.cargarNotas(d.toISOString().split('T')[0])
+    },
+
+    notasIrFecha(fecha) {
+      if (fecha) this.cargarNotas(fecha)
+    },
+
+    // ── Etiqueta legible de la fecha cargada ─────────────────
+    notasFechaLabel() {
+      if (!this.notasFecha) return ''
+      const hoy  = new Date().toISOString().split('T')[0]
+      const ayer = (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().split('T')[0] })()
+      if (this.notasFecha === hoy)  return 'Hoy'
+      if (this.notasFecha === ayer) return 'Ayer'
+      // Fecha larga: "mar 20 may"
+      return new Date(this.notasFecha + 'T12:00:00').toLocaleDateString('es-MX', {
+        weekday: 'short', day: 'numeric', month: 'short'
+      })
+    },
+
+    notasFechaEsHoy() {
+      return this.notasFecha === new Date().toISOString().split('T')[0]
+    },
+
+    notasFechaEsAyer() {
+      const d = new Date(); d.setDate(d.getDate() - 1)
+      return this.notasFecha === d.toISOString().split('T')[0]
     },
 
     // ── Lista filtrada de notas ───────────────────────────────

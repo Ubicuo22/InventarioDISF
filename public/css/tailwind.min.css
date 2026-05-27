@@ -1911,6 +1911,11 @@ video {
   padding-bottom: 1.5rem;
 }
 
+.py-8 {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
 .pb-1 {
   padding-bottom: 0.25rem;
 }
@@ -1985,6 +1990,10 @@ video {
 
 .pr-3 {
   padding-right: 0.75rem;
+}
+
+.pr-7 {
+  padding-right: 1.75rem;
 }
 
 .text-left {
@@ -2651,6 +2660,11 @@ video {
 .hover\:text-white:hover {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+.hover\:text-slate-200:hover {
+  --tw-text-opacity: 1;
+  color: rgb(226 232 240 / var(--tw-text-opacity, 1));
 }
 
 .focus\:border-amber-400:focus {
