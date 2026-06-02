@@ -128,6 +128,16 @@ function ordersModule() {
       this.confirmarGuardadoModal   = { visible: false }
     },
 
+    /** Extrae la observación de una orden de la lista (datos_carrito puede ser string o objeto) */
+    getOrdenObservacion(o) {
+      try {
+        const c = typeof o.datos_carrito === 'string'
+          ? JSON.parse(o.datos_carrito)
+          : (o.datos_carrito || {})
+        return c.__observacion__ || ''
+      } catch { return '' }
+    },
+
     // Retorna los nombres de sección con General siempre primero
     // Filtra keys internas que empiecen con _ (metadata del Electron)
     sectionNames() {

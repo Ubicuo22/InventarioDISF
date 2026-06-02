@@ -16,6 +16,7 @@ const { resolverAvatares } = require('../utils/avatar')
 router.use(requireAuth, requireAdmin)
 
 // ─── GET /api/admin/sesiones ──────────────────────────────
+// Devuelve las 5 sesiones más recientes por usuario (no muestra las 49 acumuladas)
 router.get('/sesiones', async (req, res) => {
   try {
     const [rows] = await pool.execute(`
@@ -26,13 +27,62 @@ router.get('/sesiones', async (req, res) => {
       FROM bodega_sesiones s
       JOIN usuarios_sistema u ON s.id_usuario = u.id_usuario
       WHERE s.activo = 1
+        AND s.id IN (
+          SELECT id FROM (
+            SELECT id,
+              ROW_NUMBER() OVER (PARTITION BY id_usuario ORDER BY ultimo_uso DESC) AS rn
+            FROM bodega_sesiones WHERE activo = 1
+          ) ranked WHERE rn <= 5
+        )
       ORDER BY s.ultimo_uso DESC
     `)
-    // Resolver avatar_r2_key → avatar_url_publica
-    res.json({ ok: true, sesiones: resolverAvatares(rows) })
+
+    // Total de sesiones activas por usuario (para mostrar badge "49 sesiones" en la UI)
+    const [totals] = await pool.execute(`
+      SELECT id_usuario, COUNT(*) AS total
+      FROM bodega_sesiones WHERE activo = 1
+      GROUP BY id_usuario
+    `)
+    const totalPorUsuario = {}
+    for (const t of totals) totalPorUsuario[t.id_usuario] = parseInt(t.total)
+
+    const sesiones = resolverAvatares(rows).map(s => ({
+      ...s,
+      total_sesiones: totalPorUsuario[s.id_usuario] || 1
+    }))
+
+    res.json({ ok: true, sesiones })
   } catch (e) {
     console.error('[admin] GET /sesiones:', e.message)
     res.status(500).json({ ok: false, error: 'Error al obtener sesiones' })
+  }
+})
+
+// ─── POST /api/admin/sesiones/limpiar ─────────────────────
+// Cierra todas las sesiones antiguas del usuario, dejando solo la más reciente
+router.post('/sesiones/limpiar', async (req, res) => {
+  try {
+    const { id_usuario } = req.body
+    if (!id_usuario) return res.status(400).json({ ok: false, error: 'Falta id_usuario' })
+
+    const [result] = await pool.execute(`
+      UPDATE bodega_sesiones
+      SET activo = 0
+      WHERE id_usuario = ?
+        AND activo = 1
+        AND jti != (
+          SELECT jti FROM (
+            SELECT jti FROM bodega_sesiones
+            WHERE id_usuario = ? AND activo = 1
+            ORDER BY ultimo_uso DESC LIMIT 1
+          ) sub
+        )
+    `, [id_usuario, id_usuario])
+
+    res.json({ ok: true, cerradas: result.affectedRows })
+  } catch (e) {
+    console.error('[admin] POST /sesiones/limpiar:', e.message)
+    res.status(500).json({ ok: false, error: e.message })
   }
 })
 

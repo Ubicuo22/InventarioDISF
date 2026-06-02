@@ -1,3 +1,4 @@
+
 # Flujo de Inventario — DISFRULEG
 > Versión del sistema: 3.8.4 | Actualizado: 27/05/2026
 

@@ -1,6 +1,6 @@
 const router  = require('express').Router()
 const { q }   = require('../db/pool')
-const { requireAuth } = require('../middleware/auth')
+const { requireAuth, requireModulo } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
 
 router.use(requireAuth)
@@ -182,7 +182,7 @@ router.post('/', async (req, res) => {
 })
 
 /* ─── POST /api/ordenes/:folio/revision — registrar revisión completa ─── */
-router.post('/:folio/revision', async (req, res) => {
+router.post('/:folio/revision', requireModulo('pedidos'), async (req, res) => {
   try {
     const folio = parseInt(req.params.folio, 10)
     if (!folio || isNaN(folio)) {

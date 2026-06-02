@@ -78,14 +78,20 @@ function authModule() {
         catch (e) { console.warn(`[cargarTodo] ${nombre} falló:`, e.message) }
       }
 
+      // Primera tanda: datos críticos para la vista inicial (inventario + pedidos)
       await Promise.all([
         cargar(() => this.verificarDB(),           'verificarDB'),
         cargar(() => this.cargarProductos(),        'cargarProductos'),
+        cargar(() => this.cargarOrdenes(),          'cargarOrdenes'),
+      ])
+
+      // Segunda tanda: dashboard (~17 queries en paralelo internamente) +
+      // datos secundarios. Corre después para no saturar el pool en startup.
+      await Promise.all([
+        cargar(() => this.cargarDashboard(),        'cargarDashboard'),
         cargar(() => this.cargarResumen(),          'cargarResumen'),
         cargar(() => this.cargarProveedores(),      'cargarProveedores'),
         cargar(() => this.cargarMermasRecientes(),  'cargarMermasRecientes'),
-        cargar(() => this.cargarOrdenes(),          'cargarOrdenes'),
-        cargar(() => this.cargarDashboard(),        'cargarDashboard'),
       ])
       this.initPush().catch(() => {})
 

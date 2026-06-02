@@ -5,7 +5,8 @@
       "name": "bodega-main",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js"],
-      "port": 3032
+      "port": 3030,
+      "autoPort": false
     }
   ]
 }

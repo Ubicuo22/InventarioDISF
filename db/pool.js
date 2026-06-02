@@ -14,10 +14,12 @@ const pool = mysql.createPool({
   ssl: { rejectUnauthorized: true },
   timezone: '-06:00',
 
-  // Pool
-  connectionLimit:    5,
+  // Pool — se sube porque /api/dashboard/metricas-hoy hace ~17 queries en paralelo
+  // más las ~6 llamadas simultáneas de cargarTodo en startup (total ~23 concurrent).
+  // TiDB Cloud Serverless soporta ≥25 conexiones; usamos 15 para tener margen.
+  connectionLimit:    15,
   waitForConnections: true,
-  queueLimit:         20,       // máx requests en cola antes de rechazar (evita colgar indefinidamente)
+  queueLimit:         60,       // máx requests en cola antes de rechazar
 
   // Keep-alive — previene que TiDB cierre conexiones inactivas silenciosamente
   enableKeepAlive:       true,

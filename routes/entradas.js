@@ -1,7 +1,8 @@
 /**
  * routes/entradas.js — Registro de entradas de inventario
- * POST /api/entradas          — Crear entrada (compra + lote PEPS + stock)
- * GET  /api/entradas/recientes — Últimas 50 entradas
+ * POST /api/entradas               — Crear entrada (compra + lote PEPS + stock)
+ * GET  /api/entradas/recientes     — Últimas 50 entradas
+ * GET  /api/entradas/lotes/:id     — Lotes PEPS activos de un producto (orden PEPS)
  */
 
 const router = require('express').Router()
@@ -39,6 +40,81 @@ router.get('/equivalentes/:idProducto', requireAuth, async (req, res) => {
     `, [...ids, idProducto])
 
     res.json({ ok: true, data: miembros })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// Conversiones PEPS activas cuyo BASE es este producto
+// Retorna los derivados que usan este producto como fuente de stock
+router.get('/peps-info/:idProducto', requireAuth, async (req, res) => {
+  try {
+    const { idProducto } = req.params
+
+    const [derivados, esDerivado] = await Promise.all([
+      // ¿Este producto ES BASE de alguna conversión?
+      q(`
+        SELECT
+          c.factor,
+          c.notas,
+          pd.id_producto,
+          pd.nombre_producto,
+          pd.unidad_producto
+        FROM producto_conversion_peps c
+        JOIN producto pd ON pd.id_producto = c.id_producto_derivado
+        WHERE c.id_producto_base = ? AND c.activo = 1
+        ORDER BY pd.nombre_producto
+      `, [idProducto]),
+
+      // ¿Este producto ES DERIVADO de alguna conversión? (alerta: compra incorrecta)
+      q(`
+        SELECT
+          c.factor,
+          pb.id_producto,
+          pb.nombre_producto,
+          pb.unidad_producto
+        FROM producto_conversion_peps c
+        JOIN producto pb ON pb.id_producto = c.id_producto_base
+        WHERE c.id_producto_derivado = ? AND c.activo = 1
+        LIMIT 1
+      `, [idProducto])
+    ])
+
+    res.json({
+      ok: true,
+      // Productos de venta que consumen el stock de este producto base
+      derivados,
+      // Si este producto es en realidad un derivado, advertir y mostrar cuál es el base correcto
+      esDerivado: esDerivado.length > 0 ? esDerivado[0] : null
+    })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// Lotes PEPS activos de un producto — orden PEPS (más antiguo primero)
+router.get('/lotes/:idProducto', requireAuth, async (req, res) => {
+  try {
+    const { idProducto } = req.params
+    const rows = await q(`
+      SELECT
+        ip.id_inventario_peps,
+        ip.fecha_movimiento,
+        ip.cantidad_inicial,
+        ip.cantidad_restante,
+        ip.costo_unitario,
+        ip.factor_conversion,
+        ip.fecha_registro,
+        COALESCE(prov.nombre_proveedor, c.proveedor, '—') AS proveedor,
+        c.folio_factura,
+        c.notas
+      FROM inventario_peps ip
+      LEFT JOIN compra c ON c.id_compra = ip.id_compra
+      LEFT JOIN proveedor prov ON prov.id_proveedor = c.id_proveedor
+      WHERE ip.id_producto = ? AND ip.activo = 1
+      ORDER BY ip.fecha_movimiento ASC, ip.id_inventario_peps ASC
+    `, [idProducto])
+    res.json({ ok: true, data: rows })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }

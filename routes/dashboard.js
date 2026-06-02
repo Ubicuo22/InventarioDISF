@@ -113,22 +113,18 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
     const hoy = new Date().toISOString().slice(0, 10)
     const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
 
+    // ── Batch 1: queries ligeras (sin JOINs pesados) ─────────────────────────
     const [
       pedidosHoy,
       pedidosAyer,
       pedidosActivosRows,
-      ventas,
-      ventasAyer,
       compras,
       comprasAyer,
-      mermas,
-      mermasAyer,
       stockStats,
       topCritico,
-      deudas,
-      ultimaEntrada,
+      inventarioStats,
       pedidosAtrasados,
-      inventarioStats
+      lotesAntiguos
     ] = await Promise.all([
 
       // Pedidos creados hoy
@@ -146,6 +142,67 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          FROM ordenes_guardadas
          WHERE estado = 'guardada' AND activo = 1`),
 
+      // Compras del día
+      q(`SELECT
+           COUNT(*)                                AS num_compras,
+           COALESCE(SUM(total_con_impuestos), 0)  AS total_gasto
+         FROM compra
+         WHERE DATE(fecha_registro) = ?`, [hoy]),
+
+      // Compras ayer (para tendencia)
+      q(`SELECT COALESCE(SUM(total_con_impuestos), 0) AS total_gasto
+         FROM compra
+         WHERE DATE(fecha_registro) = ?`, [ayer]),
+
+      // Stock crítico (≤ 5 unidades)
+      q(`SELECT
+           COUNT(*)                                          AS criticos,
+           SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END)       AS sin_stock,
+           SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS bajo_stock
+         FROM producto
+         WHERE activo = 1 AND stock <= 5`),
+
+      // Top 5 productos con menos stock
+      q(`SELECT nombre_producto, stock, unidad_producto
+         FROM producto
+         WHERE activo = 1 AND stock <= 5
+         ORDER BY stock ASC
+         LIMIT 5`),
+
+      // Totales de inventario para el tile del dashboard
+      q(`SELECT
+           COUNT(*)                                             AS total_productos,
+           SUM(CASE WHEN stock > 0 THEN 1 ELSE 0 END)         AS con_stock,
+           SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END)         AS sin_stock,
+           SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS stock_bajo
+         FROM producto
+         WHERE activo = 1`),
+
+      // Pedidos atrasados (activos creados hace >24h)
+      q(`SELECT COUNT(*) AS total
+         FROM ordenes_guardadas
+         WHERE estado = 'guardada' AND activo = 1
+           AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY)`),
+
+      // Lotes PEPS estancados: con stock restante > 0 y más de 60 días desde entrada
+      q(`SELECT COUNT(DISTINCT ip.id_producto) AS total
+         FROM inventario_peps ip
+         WHERE ip.activo = 1
+           AND ip.cantidad_restante > 0
+           AND ip.fecha_movimiento < DATE_SUB(CURDATE(), INTERVAL 60 DAY)`)
+    ])
+
+    // ── Batch 2: queries con JOINs (ventas, mermas, deudas) ──────────────────
+    const [
+      ventas,
+      ventasAyer,
+      mermas,
+      mermasAyer,
+      deudas,
+      ultimaEntrada,
+      gananciaHoy
+    ] = await Promise.all([
+
       // Ventas del día
       q(`SELECT
            COUNT(DISTINCT f.id_factura)                                     AS notas,
@@ -160,18 +217,6 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          FROM factura f
          INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
          WHERE DATE(f.fecha_factura) = ?`, [ayer]),
-
-      // Compras del día — fecha_registro = cuando fue ingresada al sistema (no la fecha del proveedor)
-      q(`SELECT
-           COUNT(*)                                AS num_compras,
-           COALESCE(SUM(total_con_impuestos), 0)  AS total_gasto
-         FROM compra
-         WHERE DATE(fecha_registro) = ?`, [hoy]),
-
-      // Compras ayer (para tendencia)
-      q(`SELECT COALESCE(SUM(total_con_impuestos), 0) AS total_gasto
-         FROM compra
-         WHERE DATE(fecha_registro) = ?`, [ayer]),
 
       // Mermas del día (incluye monto)
       q(`SELECT
@@ -204,21 +249,6 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          FROM merma m
          WHERE DATE(m.fecha_registro) = ? AND m.activo = 1`, [ayer]),
 
-      // Stock crítico (≤ 5 unidades)
-      q(`SELECT
-           COUNT(*)                                          AS criticos,
-           SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END)       AS sin_stock,
-           SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS bajo_stock
-         FROM producto
-         WHERE activo = 1 AND stock <= 5`),
-
-      // Top 5 productos con menos stock
-      q(`SELECT nombre_producto, stock, unidad_producto
-         FROM producto
-         WHERE activo = 1 AND stock <= 5
-         ORDER BY stock ASC
-         LIMIT 5`),
-
       // Deudas vencidas y su monto total
       q(`SELECT
            COUNT(*)                                        AS vencidas,
@@ -243,20 +273,12 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          ORDER BY c.fecha_registro DESC
          LIMIT 1`),
 
-      // Pedidos atrasados (activos creados hace >24h)
-      q(`SELECT COUNT(*) AS total
-         FROM ordenes_guardadas
-         WHERE estado = 'guardada' AND activo = 1
-           AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY)`),
-
-      // Totales de inventario para el tile del dashboard
-      q(`SELECT
-           COUNT(*)                                             AS total_productos,
-           SUM(CASE WHEN stock > 0 THEN 1 ELSE 0 END)         AS con_stock,
-           SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END)         AS sin_stock,
-           SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS stock_bajo
-         FROM producto
-         WHERE activo = 1`)
+      // Ganancia del día (utilidad real PEPS)
+      q(`SELECT COALESCE(SUM(dvl.utilidad_total), 0) AS ganancia
+         FROM detalle_venta_lote dvl
+         INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
+         INNER JOIN factura f ON f.id_factura = df.id_factura
+         WHERE DATE(f.fecha_factura) = ?`, [hoy])
     ])
 
     // Computar revisados / por revisar parseando __historial__
@@ -317,8 +339,10 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
         total_vendido:      parseFloat(ventas[0]?.total_vendido || 0),
         total_vendido_ayer: parseFloat(ventasAyer[0]?.total_vendido || 0),
         notas:              parseInt(ventas[0]?.notas    || 0),
-        clientes:           parseInt(ventas[0]?.clientes || 0)
+        clientes:           parseInt(ventas[0]?.clientes || 0),
+        ganancia_hoy:       parseFloat(gananciaHoy[0]?.ganancia || 0)
       },
+      lotes_antiguos: parseInt(lotesAntiguos[0]?.total || 0),
       compras: {
         num_compras:     parseInt(compras[0]?.num_compras || 0),
         total_gasto:     parseFloat(compras[0]?.total_gasto || 0),

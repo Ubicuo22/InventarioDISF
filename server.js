@@ -48,7 +48,12 @@ const { requireAuth, requireModulo } = require('./middleware/auth')
 // ─── Middleware global ────────────────────────────────────────
 app.use(require('cors')())
 app.use(express.json())
-app.use(express.static(path.join(__dirname, 'public')))
+
+// Assets con versión (JS/CSS) → 7 días de cache; HTML → sin cache (SPA siempre fresco)
+app.use('/js',  express.static(path.join(__dirname, 'public/js'),  { maxAge: '7d', immutable: true }))
+app.use('/css', express.static(path.join(__dirname, 'public/css'), { maxAge: '7d', immutable: true }))
+app.use('/assets', express.static(path.join(__dirname, 'public/assets'), { maxAge: '30d', immutable: true }))
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }))
 
 // ─── Rutas públicas / con auth propio ────────────────────────
 app.use('/api/auth',           require('./routes/auth'))
@@ -146,6 +151,16 @@ app.listen(PORT, async () => {
 
     // Programar resumen diario automático a las 20:00
     agendarResumenDiario()
+
+    // ── Keep-alive de TiDB Serverless ────────────────────────
+    // TiDB Serverless pausa las conexiones tras ~5 min sin actividad.
+    // Un ping cada 3 minutos mantiene el pool caliente y evita que
+    // el primer query de "revisionFinalizar" o "buscarProducto" tarde
+    // 5-10s o falle con PROTOCOL_CONNECTION_LOST.
+    setInterval(async () => {
+      try { await q('SELECT 1') } catch { /* el pool se recuperará solo en el siguiente query real */ }
+    }, 3 * 60 * 1000)
+
   } catch (err) {
     console.error('❌ Error iniciando:', err.message)
   }

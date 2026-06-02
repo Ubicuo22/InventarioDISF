@@ -69,13 +69,11 @@ router.post('/suscribir', async (req, res) => {
         'UPDATE push_subscriptions SET p256dh = ?, auth = ?, activo = 1 WHERE endpoint = ?',
         [keys.p256dh, keys.auth, endpoint]
       )
-      console.log(`[push] Suscripción ${existing[0].id} reactivada/actualizada`)
     } else {
       await pool.query(
         'INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (?, ?, ?)',
         [endpoint, keys.p256dh, keys.auth]
       )
-      console.log('[push] Nueva suscripción registrada')
     }
 
     // Si conocemos al usuario: desactivar sus otras suscripciones con distinto endpoint
@@ -98,7 +96,7 @@ router.post('/suscribir', async (req, res) => {
             'UPDATE push_subscriptions SET user_id = ? WHERE endpoint = ?',
             [userId, endpoint]
           )
-          console.log(`[push] Usuario ${userId}: suscripciones antiguas desactivadas, user_id asignado`)
+          // suscripciones antiguas desactivadas, user_id asignado
         } else {
           // Sin duplicados — solo asignar user_id
           await pool.query(

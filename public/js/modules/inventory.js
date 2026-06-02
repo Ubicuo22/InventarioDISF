@@ -84,6 +84,57 @@ function inventoryModule() {
       this.errorProducto        = ''
     },
 
+    // ── Lotes PEPS ────────────────────────────────────────────
+    lotesDrawerAbierto: false,
+    lotesProducto:      null,
+    lotes:              [],
+    lotesCargando:      false,
+
+    async abrirLotes(producto) {
+      this.lotesProducto      = producto
+      this.lotes              = []
+      this.lotesDrawerAbierto = true
+      this.lotesCargando      = true
+      try {
+        const r = await API.get(`/api/entradas/lotes/${producto.id_producto}`)
+        if (r.ok) this.lotes = r.data || []
+      } catch (_) {}
+      this.lotesCargando = false
+    },
+
+    cerrarLotes() {
+      this.lotesDrawerAbierto = false
+      this.lotesProducto      = null
+      this.lotes              = []
+    },
+
+    loteFechaCorta(fechaStr) {
+      if (!fechaStr) return '—'
+      const d = new Date(fechaStr + 'T12:00:00')
+      return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+    },
+
+    loteDiasDesde(fechaStr) {
+      if (!fechaStr) return null
+      const d = new Date(fechaStr + 'T12:00:00')
+      return Math.floor((Date.now() - d.getTime()) / 86400000)
+    },
+
+    // Cuánto se ha consumido de un lote (%)
+    lotePct(lote) {
+      const ini = parseFloat(lote.cantidad_inicial)
+      if (!ini) return 0
+      return Math.round((1 - parseFloat(lote.cantidad_restante) / ini) * 100)
+    },
+
+    // Color de la barra de progreso según antigüedad del lote
+    loteBarColor(dias, idx) {
+      if (idx === 0) return 'bg-emerald-400'   // el que se consume primero
+      if (dias === null || dias <= 30) return 'bg-slate-500'
+      if (dias <= 75) return 'bg-amber-500'
+      return 'bg-red-500'
+    },
+
     async guardarProducto() {
       this.errorProducto = ''
       if (!this.productoForm.nombre_producto.trim())

@@ -99,6 +99,21 @@ function adminModule() {
       }
     },
 
+    /** Cierra todas las sesiones antiguas de un usuario dejando solo la más reciente */
+    async limpiarSesionesUsuario(idUsuario, nombre) {
+      try {
+        const r = await API.post('/api/admin/sesiones/limpiar', { id_usuario: idUsuario })
+        if (r.ok) {
+          this.mostrarToast(`${r.cerradas} sesiones antiguas de ${nombre} cerradas`)
+          await this.cargarSesiones()
+        } else {
+          this.mostrarToast(r.error || 'Error al limpiar', true)
+        }
+      } catch {
+        this.mostrarToast('Error de conexión', true)
+      }
+    },
+
     fmtSesionFecha(fecha) {
       if (!fecha) return '—'
       const d = new Date(fecha)

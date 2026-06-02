@@ -18,12 +18,15 @@ function reviewModule () {
     revisionIdGrupo: null,
     revisionNombreCliente: '',
     revisionNombreGrupo: '',
+    revisionIdCliente: null,            // guardado en abrirRevision para evitar GET extra al finalizar
     revisionCurrentIdx: 0,
     revisionReviewedIds: [],            // ["seccion::id_producto", ...]
     revisionMissingNames: [],
     revisionPendingIds: [],             // ["seccion::id_producto", ...] — sigue en carrito pero flagueado
     revisionPendingNames: [],
     revisionGuardando: false,
+    revisionGuardandoMensaje: '',       // mensaje de progreso visible al usuario
+    revisionErrorGuardado: null,        // null | string — error del último intento de guardar
     revisionShowSidebar: false,         // collapsable en móvil
     // Undo toast
     revisionUndo: null,                 // { item, section } | null
@@ -41,7 +44,8 @@ function reviewModule () {
     // Ref al handler de teclado registrado
     _revisionKeyHandler: null,
     // Modal buscar/cambiar producto desde revisión
-    revisionCambiarModal: { visible: false, busqueda: '', resultados: [], buscando: false },
+    revisionCambiarModal: { visible: false, busqueda: '', resultados: [], buscando: false, error: null },
+    _revisionSearchId: null,            // anti-race: solo procesa el resultado de la última búsqueda
 
     // ── Helpers ────────────────────────────────────────────────
     _revisionFilteredKeys () {
@@ -143,6 +147,7 @@ function reviewModule () {
         this.revisionCart = Object.keys(cart).length ? cart : { General: [] }
         this._revisionOriginalCart = JSON.parse(JSON.stringify(this.revisionCart))
         this.revisionFolio = o.folio_numero
+        this.revisionIdCliente = o.id_cliente || null
         this.revisionIdGrupo = o.id_grupo || null
         this.revisionNombreCliente = o.nombre_cliente
         this.revisionNombreGrupo = o.nombre_grupo
@@ -184,6 +189,7 @@ function reviewModule () {
       this.revisionModalOpen = false
       this.revisionCart = { General: [] }
       this.revisionFolio = null
+      this.revisionIdCliente = null
       this.revisionIdGrupo = null
       this.revisionReviewedIds = []
       this.revisionMissingNames = []
@@ -191,7 +197,8 @@ function reviewModule () {
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
       this.revisionUndo = null
-      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false }
+      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
+      this._revisionSearchId = null
       if (this._revisionUndoTimer) {
         clearTimeout(this._revisionUndoTimer)
         this._revisionUndoTimer = null
@@ -279,19 +286,29 @@ function reviewModule () {
       const c = this.revisionCurrent()
       if (!c) return
       const snapshot = JSON.parse(JSON.stringify(c.item))
-      const section = c.section
+      const section  = c.section
+      const key      = this.revisionItemKey(section, c.item.id_producto)
 
       // Eliminar del carrito
       const items = this.revisionCart[section]
       if (!items) return
-      const idx = items.findIndex(i => i.id_producto === c.item.id_producto)
-      if (idx >= 0) items.splice(idx, 1)
+      const originalIdx = items.findIndex(i => i.id_producto === c.item.id_producto)
+      if (originalIdx < 0) return
+      items.splice(originalIdx, 1)
+
+      // Limpiar de pendientes por si estaba flagueado antes de marcarse faltante
+      if (this.revisionPendingIds.includes(key)) {
+        this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== key)
+        this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== snapshot.nombre_producto)
+      }
+      // Limpiar de revisados también
+      this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
 
       this.revisionMissingNames.push(snapshot.nombre_producto)
       if (window.sounds) window.sounds.missing()
 
-      // Toast undo
-      this.revisionUndo = { item: snapshot, section }
+      // Toast undo — guarda posición original para restaurar en su lugar
+      this.revisionUndo = { item: snapshot, section, originalIdx }
       if (this._revisionUndoTimer) clearTimeout(this._revisionUndoTimer)
       this._revisionUndoTimer = setTimeout(() => {
         this.revisionUndo = null
@@ -307,9 +324,12 @@ function reviewModule () {
 
     revisionDeshacerFaltante () {
       if (!this.revisionUndo) return
-      const { item, section } = this.revisionUndo
+      const { item, section, originalIdx } = this.revisionUndo
       if (!this.revisionCart[section]) this.revisionCart[section] = []
-      this.revisionCart[section].push(item)
+      // Restaurar en la posición original (o al final si ya no aplica)
+      const arr = this.revisionCart[section]
+      const insertAt = (originalIdx != null && originalIdx <= arr.length) ? originalIdx : arr.length
+      arr.splice(insertAt, 0, item)
       this.revisionMissingNames = this.revisionMissingNames.filter(n => n !== item.nombre_producto)
       if (window.sounds) window.sounds.undo()
       this.revisionUndo = null
@@ -428,58 +448,64 @@ function reviewModule () {
       if (this.revisionGuardando) return
       if (!this.revisionFolio) return
       this.revisionGuardando = true
+      this.revisionErrorGuardado = null
+
+      // Helper de retry — intenta la llamada hasta 2 veces con pausa entre intentos
+      const tryFetch = async (fn, intentos = 2) => {
+        for (let i = 0; i < intentos; i++) {
+          try {
+            return await fn()
+          } catch (e) {
+            const esRed = !navigator.onLine || e.message?.includes('fetch') || e.message?.includes('network')
+            if (i < intentos - 1 && esRed) {
+              this.revisionGuardandoMensaje = 'Reconectando…'
+              await new Promise(r => setTimeout(r, 1800))
+              this.revisionGuardandoMensaje = 'Reintentando…'
+            } else throw e
+          }
+        }
+      }
+
       try {
-        // 1) Guardar cambios de cantidad (POST a /api/ordenes con folio existente)
-        //    El backend computa el diff vs el carrito previo y agrega al __historial__
+        // Paso 1 — guardar carrito
+        this.revisionGuardandoMensaje = 'Guardando cambios…'
         const cartParaGuardar = JSON.parse(JSON.stringify(this.revisionCart))
         delete cartParaGuardar.__historial__
         delete cartParaGuardar.__orden__
-        const detalle = await API.get(`/api/ordenes/${this.revisionFolio}`)
-        if (!detalle.ok) {
-          this.mostrarToast(detalle.error || 'Error al validar la orden', true)
-          this.revisionGuardando = false
-          return
-        }
 
-        const saveBody = {
-          folio_numero: this.revisionFolio,
-          id_cliente: detalle.data.id_cliente,
+        const saved = await tryFetch(() => API.post('/api/ordenes', {
+          folio_numero:  this.revisionFolio,
+          id_cliente:    this.revisionIdCliente,
           datos_carrito: cartParaGuardar
-        }
-        const saved = await API.post('/api/ordenes', saveBody)
-        if (!saved.ok) {
-          this.mostrarToast(saved.error || 'Error al guardar cambios', true)
-          this.revisionGuardando = false
-          return
-        }
+        }))
+        if (!saved.ok) throw new Error(saved.error || 'Error al guardar cambios')
 
-        // 2) Registrar la revisión completa en el historial
-        const revBody = {
+        // Paso 2 — registrar revisión en historial
+        this.revisionGuardandoMensaje = 'Registrando revisión…'
+        const rev = await tryFetch(() => API.post(`/api/ordenes/${this.revisionFolio}/revision`, {
           totalProductos: this.revisionTotal() + this.revisionMissingNames.length,
-          faltantes: this.revisionMissingNames,
-          pendientes: this.revisionPendingNames
-        }
-        const rev = await API.post(`/api/ordenes/${this.revisionFolio}/revision`, revBody)
-        if (!rev.ok) {
-          this.mostrarToast(rev.error || 'Error al registrar la revisión', true)
-          this.revisionGuardando = false
-          return
-        }
+          faltantes:      this.revisionMissingNames,
+          pendientes:     this.revisionPendingNames
+        }))
+        if (!rev.ok) throw new Error(rev.error || 'Error al registrar la revisión')
 
-        if (window.sounds) window.sounds.finalize()
-        const hasPendientes = this.revisionPendingNames.length > 0
-        const hasFaltantes  = this.revisionMissingNames.length > 0
+        if (window.sounds) window.sounds.finalize?.()
         const partes = []
-        if (hasFaltantes) partes.push(`${this.revisionMissingNames.length} faltante${this.revisionMissingNames.length !== 1 ? 's' : ''}`)
-        if (hasPendientes) partes.push(`${this.revisionPendingNames.length} pendiente${this.revisionPendingNames.length !== 1 ? 's' : ''}`)
-        const sufijo = partes.length ? ` · ${partes.join(' · ')}` : ''
-        this.mostrarToast(`Revisión completada${sufijo}`)
+        if (this.revisionMissingNames.length) partes.push(`${this.revisionMissingNames.length} faltante${this.revisionMissingNames.length !== 1 ? 's' : ''}`)
+        if (this.revisionPendingNames.length)  partes.push(`${this.revisionPendingNames.length} pendiente${this.revisionPendingNames.length !== 1 ? 's' : ''}`)
+        this.mostrarToast(`Revisión guardada${partes.length ? ' · ' + partes.join(' · ') : ''}`)
         this.cerrarRevision()
         await this.cargarOrdenes()
       } catch (e) {
-        this.mostrarToast(e.message || 'Error de conexión', true)
+        // Mostrar error en el modal con botón de reintentar (no cerrar el modal)
+        const msg = !navigator.onLine
+          ? 'Sin conexión — revisa tu red y vuelve a intentarlo'
+          : (e.message || 'Error al guardar')
+        this.revisionErrorGuardado = msg
+        this.mostrarToast(msg, true)
       } finally {
         this.revisionGuardando = false
+        this.revisionGuardandoMensaje = ''
       }
     },
 
@@ -520,20 +546,47 @@ function reviewModule () {
     revisionAbrirCambiar () {
       const c = this.revisionCurrent()
       if (!c) return
-      this.revisionCambiarModal = { visible: true, busqueda: '', resultados: [], buscando: false }
+      this.revisionCambiarModal = { visible: true, busqueda: '', resultados: [], buscando: false, error: null }
       this.$nextTick(() => document.getElementById('rev-buscar-input')?.focus())
     },
 
     async revisionBuscarProducto () {
       const q = this.revisionCambiarModal.busqueda.trim()
-      if (q.length < 2) { this.revisionCambiarModal.resultados = []; return }
+      if (q.length < 2) {
+        this.revisionCambiarModal.resultados = []
+        this.revisionCambiarModal.error = null
+        return
+      }
+      // Token de sesión para ignorar resultados de búsquedas anteriores (race condition)
+      const searchId = Date.now()
+      this._revisionSearchId = searchId
+
       this.revisionCambiarModal.buscando = true
+      this.revisionCambiarModal.error = null
       try {
         const gid = this.revisionIdGrupo ? `&groupId=${this.revisionIdGrupo}` : ''
-        const r = await API.get(`/api/productos/buscar?q=${encodeURIComponent(q)}${gid}`)
-        this.revisionCambiarModal.resultados = r.data || []
-      } catch { this.revisionCambiarModal.resultados = [] }
-      finally { this.revisionCambiarModal.buscando = false }
+        const url = `/api/productos/buscar?q=${encodeURIComponent(q)}${gid}`
+        let r
+        try {
+          r = await API.get(url)
+        } catch {
+          // Primer intento fallido — espera 1.5s y reintenta (TiDB cold-start)
+          await new Promise(res => setTimeout(res, 1500))
+          r = await API.get(url)
+        }
+        // Descartar si ya hay una búsqueda más reciente en vuelo
+        if (this._revisionSearchId !== searchId) return
+        this.revisionCambiarModal.resultados = r.ok ? (r.data || []) : []
+        if (!r.ok) this.revisionCambiarModal.error = r.error || 'Error al buscar'
+      } catch (e) {
+        if (this._revisionSearchId !== searchId) return
+        this.revisionCambiarModal.resultados = []
+        this.revisionCambiarModal.error = !navigator.onLine ? 'Sin conexión' : 'Error al buscar productos'
+      } finally {
+        if (this._revisionSearchId === searchId) {
+          this.revisionCambiarModal.buscando = false
+        }
+      }
     },
 
     revisionConfirmarCambio (prod) {
@@ -542,18 +595,37 @@ function reviewModule () {
       const items = this.revisionCart[c.section]
       if (!items) return
       const idx = items.findIndex(i => i.id_producto === c.item.id_producto)
-      if (idx >= 0) {
-        const cantidadActual = items[idx].cantidad
-        items[idx] = {
-          ...items[idx],
-          id_producto:     prod.id_producto,
-          nombre_producto: prod.nombre_producto,
-          unidad:          prod.unidad_producto,
-          precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
-          cantidad:        cantidadActual   // conservar cantidad pedida
-        }
+      if (idx < 0) return
+
+      const oldId      = c.item.id_producto
+      const oldNombre  = c.item.nombre_producto
+      const oldKey     = this.revisionItemKey(c.section, oldId)
+      const newKey     = this.revisionItemKey(c.section, prod.id_producto)
+
+      // Sustituir el item en el carrito
+      items[idx] = {
+        ...items[idx],
+        id_producto:     prod.id_producto,
+        nombre_producto: prod.nombre_producto,
+        unidad:          prod.unidad_producto,
+        precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
+        cantidad:        items[idx].cantidad   // conservar cantidad pedida
       }
-      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false }
+
+      // Limpiar IDs huérfanos del producto viejo
+      this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== oldKey)
+      if (this.revisionPendingIds.includes(oldKey)) {
+        this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== oldKey)
+        this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== oldNombre)
+      }
+
+      // Marcar el producto nuevo como revisado (el usuario eligió activamente el reemplazo)
+      if (!this.revisionReviewedIds.includes(newKey)) {
+        this.revisionReviewedIds.push(newKey)
+        if (window.sounds) window.sounds.reviewed?.()
+      }
+
+      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
       this.mostrarToast(`Cambiado a ${prod.nombre_producto}`)
     },
 

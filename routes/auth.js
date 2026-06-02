@@ -106,21 +106,20 @@ router.post('/login', rateLimitLogin, async (req, res) => {
       return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos' })
     }
 
-    // Resetear intentos + registrar acceso
-    await pool.execute(
-      `UPDATE usuarios_sistema SET intentos_fallidos = 0, ultimo_acceso = NOW() WHERE id_usuario = ?`,
-      [user.id_usuario]
-    )
-
-    // Módulos permitidos para supervisores (reutiliza tabla permisos_usuario del Electron)
-    let modulosPermitidos = null
-    if (user.rol === 'supervisor') {
-      const [perms] = await pool.execute(
-        'SELECT modulo_id FROM permisos_usuario WHERE id_usuario = ?',
+    // Correr en paralelo: resetear intentos + obtener permisos de supervisor
+    const [, permsResult] = await Promise.all([
+      pool.execute(
+        `UPDATE usuarios_sistema SET intentos_fallidos = 0, ultimo_acceso = NOW() WHERE id_usuario = ?`,
         [user.id_usuario]
-      )
-      modulosPermitidos = perms.map(r => r.modulo_id)
-    }
+      ),
+      user.rol === 'supervisor'
+        ? pool.execute('SELECT modulo_id FROM permisos_usuario WHERE id_usuario = ?', [user.id_usuario])
+        : Promise.resolve([null])
+    ])
+
+    const modulosPermitidos = user.rol === 'supervisor'
+      ? (permsResult[0] || []).map(r => r.modulo_id)
+      : null
 
     // JTI único para rastrear esta sesión
     const jti = crypto.randomUUID()
@@ -140,22 +139,11 @@ router.post('/login', rateLimitLogin, async (req, res) => {
       { expiresIn: '12h' }
     )
 
-    // Guardar sesión en BD (no crítico — si falla, igual devolvemos el token)
-    const ip = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '').slice(0, 45)
-    const ua = (req.headers['user-agent'] || '').slice(0, 255)
-    try {
-      await pool.execute(
-        `INSERT INTO bodega_sesiones (jti, id_usuario, ip, user_agent) VALUES (?, ?, ?, ?)`,
-        [jti, user.id_usuario, ip, ua]
-      )
-    } catch (e) {
-      console.warn('[auth] No se pudo guardar sesión (tabla bodega_sesiones?):', e.message)
-    }
-
     // Registrar en historial de actividad
     req.user = { username: user.username, nombre: user.nombre_completo }
     registrar(req, 'auth', 'login', { rol: user.rol })
 
+    // Responder YA — el guardado de sesión es no crítico y se hace después
     res.json({
       ok: true,
       token,
@@ -167,6 +155,37 @@ router.post('/login', rateLimitLogin, async (req, res) => {
         color:            user.avatar_color,
         avatar:           user.avatar_url_publica,
         modulosPermitidos
+      }
+    })
+
+    // Guardar sesión en BD en segundo plano (no bloquea la respuesta)
+    const ip = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '').slice(0, 45)
+    const ua = (req.headers['user-agent'] || '').slice(0, 255)
+    setImmediate(async () => {
+      try {
+        await pool.execute(
+          `UPDATE bodega_sesiones
+           SET activo = 0
+           WHERE id_usuario = ?
+             AND activo = 1
+             AND (
+               fecha_login < DATE_SUB(NOW(), INTERVAL 30 DAY)
+               OR id NOT IN (
+                 SELECT id FROM (
+                   SELECT id FROM bodega_sesiones
+                   WHERE id_usuario = ? AND activo = 1
+                   ORDER BY ultimo_uso DESC LIMIT 4
+                 ) sub
+               )
+             )`,
+          [user.id_usuario, user.id_usuario]
+        )
+        await pool.execute(
+          `INSERT INTO bodega_sesiones (jti, id_usuario, ip, user_agent) VALUES (?, ?, ?, ?)`,
+          [jti, user.id_usuario, ip, ua]
+        )
+      } catch (e) {
+        console.warn('[auth] No se pudo guardar sesión:', e.message)
       }
     })
   } catch (err) {

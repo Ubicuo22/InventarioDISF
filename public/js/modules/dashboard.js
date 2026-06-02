@@ -107,13 +107,14 @@ function dashboardModule() {
      */
     _dashAnimateNumbers() {
       const targets = {
-        pedidos_hoy:     this.dashMetricas?.pedidos?.total_hoy     || 0,
-        pedidos_revisar: this.dashMetricas?.pedidos?.por_revisar   || 0,
-        ventas:          this.dashMetricas?.ventas?.total_vendido  || 0,
-        compras:         this.dashMetricas?.compras?.total_gasto   || 0,
-        mermas:          this.dashMetricas?.mermas?.monto_perdido  || 0,
-        deudas:          this.dashMetricas?.deudas?.monto_vencido  || 0,
-        stock_critico:   this.dashMetricas?.stock?.criticos        || 0,
+        pedidos_hoy:     this.dashMetricas?.pedidos?.total_hoy      || 0,
+        pedidos_revisar: this.dashMetricas?.pedidos?.por_revisar    || 0,
+        ventas:          this.dashMetricas?.ventas?.total_vendido   || 0,
+        ganancia:        this.dashMetricas?.ventas?.ganancia_hoy    || 0,
+        compras:         this.dashMetricas?.compras?.total_gasto    || 0,
+        mermas:          this.dashMetricas?.mermas?.monto_perdido   || 0,
+        deudas:          this.dashMetricas?.deudas?.monto_vencido   || 0,
+        stock_critico:   this.dashMetricas?.stock?.criticos         || 0,
       }
       const start = { ...this.dashAnimNums }
       const t0 = performance.now()
@@ -190,7 +191,20 @@ function dashboardModule() {
         })
       }
 
-      // 3. Pedidos atrasados (medio)
+      // 3. Lotes PEPS estancados (>60 días con stock)
+      if ((m.lotes_antiguos || 0) > 0) {
+        const n = m.lotes_antiguos
+        out.push({
+          tipo: 'lotes_antiguos',
+          color: 'amber',
+          mensaje: `${n} ${n === 1 ? 'producto con lote' : 'productos con lotes'} sin mover +60 días`,
+          monto: '',
+          accion: 'Ver',
+          onClick: () => { this.tab = 'inventario' }
+        })
+      }
+
+      // 4. Pedidos atrasados (medio)
       if ((m.pedidos?.atrasados || 0) > 0) {
         out.push({
           tipo: 'atrasados',

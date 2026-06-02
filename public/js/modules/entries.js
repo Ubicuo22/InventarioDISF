@@ -7,8 +7,10 @@ function entriesModule() {
     dropdownVisible: false,
     dropResults: [],
     form: {},
-    equivalentes: [],           // productos equivalentes del producto seleccionado
+    equivalentes: [],           // sinónimos (familia) — misma unidad, stock manual
     equivalentesChecked: [],    // ids seleccionados para actualizar stock
+    pepsDerivados: [],          // productos de venta que usan este como base (solo informativo)
+    pepsEsDerivado: null,       // si el producto seleccionado ES un derivado (alerta)
 
     abrirModal(prod = null) {
       this.resetForm()
@@ -61,11 +63,20 @@ function entriesModule() {
     async cargarEquivalentes(idProducto) {
       this.equivalentes        = []
       this.equivalentesChecked = []
+      this.pepsDerivados       = []
+      this.pepsEsDerivado      = null
       try {
-        const r = await API.get(`/api/entradas/equivalentes/${idProducto}`)
-        if (r.ok && r.data.length > 0) {
-          this.equivalentes        = r.data
-          this.equivalentesChecked = r.data.map(e => e.id_producto) // todos marcados por defecto
+        const [re, rp] = await Promise.all([
+          API.get(`/api/entradas/equivalentes/${idProducto}`),
+          API.get(`/api/entradas/peps-info/${idProducto}`)
+        ])
+        if (re.ok && re.data.length > 0) {
+          this.equivalentes        = re.data
+          this.equivalentesChecked = re.data.map(e => e.id_producto)
+        }
+        if (rp.ok) {
+          this.pepsDerivados  = rp.derivados  || []
+          this.pepsEsDerivado = rp.esDerivado || null
         }
       } catch (_) {}
     },
@@ -87,6 +98,8 @@ function entriesModule() {
       this.form.unidad         = ''
       this.equivalentes        = []
       this.equivalentesChecked = []
+      this.pepsDerivados       = []
+      this.pepsEsDerivado      = null
     },
 
     // ── Cálculos de peso del lote ─────────────────────────────

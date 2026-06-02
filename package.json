@@ -5,9 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "lsof -ti :3030 | xargs kill -9 2>/dev/null; launchctl unload ~/Library/LaunchAgents/icu.ubicuo.disfruleg-bodega.plist 2>/dev/null; node --watch server.js",
     "build:css": "tailwindcss -i public/css/tailwind.css -o public/css/tailwind.min.css --minify",
-    "watch:css": "tailwindcss -i public/css/tailwind.css -o public/css/tailwind.min.css --watch"
+    "build:js": "node scripts/bundle-js.js",
+    "build": "npm run build:css && npm run build:js",
+    "watch:css": "tailwindcss -i public/css/tailwind.css -o public/css/tailwind.min.css --watch",
+    "deploy": "npm run build && launchctl unload ~/Library/LaunchAgents/icu.ubicuo.disfruleg-bodega.plist; launchctl load ~/Library/LaunchAgents/icu.ubicuo.disfruleg-bodega.plist && sleep 2 && tail -5 ~/disfruleg-bodega/logs/server.log"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
