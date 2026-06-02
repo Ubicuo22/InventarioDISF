@@ -1,5 +1,6 @@
-/* bodega-bundle.js — generado por scripts/bundle-js.js — 2026-06-02T21:12:35.106Z */
-/* ── public/js/api.js ── */
+/* bodega-bundle.5a70d11d.js — 2026-06-02T21:46:52.796Z */
+
+;/* ── public/js/api.js ── */
 /**
  * api.js — Wrapper de fetch con autenticación JWT
  * Todas las llamadas al servidor pasan por aquí
@@ -133,7 +134,7 @@ const API = {
 }
 
 
-/* ── public/js/sounds.js ── */
+;/* ── public/js/sounds.js ── */
 /**
  * sounds.js — Sonidos sintéticos vía Web Audio API.
  * Misma firma que la app Electron (utils/sounds.ts) para mantener consistencia UX.
@@ -198,7 +199,7 @@ const API = {
 })()
 
 
-/* ── public/js/modules/ui.js ── */
+;/* ── public/js/modules/ui.js ── */
 function uiModule() {
   return {
     tab: 'home',
@@ -303,7 +304,7 @@ function uiModule() {
 }
 
 
-/* ── public/js/modules/auth.js ── */
+;/* ── public/js/modules/auth.js ── */
 function authModule() {
   return {
     session:    null,
@@ -534,7 +535,7 @@ function authModule() {
 }
 
 
-/* ── public/js/modules/inventory.js ── */
+;/* ── public/js/modules/inventory.js ── */
 function inventoryModule() {
   return {
     productos: [],
@@ -709,7 +710,7 @@ function inventoryModule() {
 }
 
 
-/* ── public/js/modules/entries.js ── */
+;/* ── public/js/modules/entries.js ── */
 function entriesModule() {
   return {
     modalAbierto: false,
@@ -904,7 +905,7 @@ function entriesModule() {
 }
 
 
-/* ── public/js/modules/orders.js ── */
+;/* ── public/js/modules/orders.js ── */
 function ordersModule() {
   return {
     ordenes: [],
@@ -1223,7 +1224,7 @@ function ordersModule() {
 }
 
 
-/* ── public/js/modules/review.js ── */
+;/* ── public/js/modules/review.js ── */
 /**
  * review.js — Modo Revisión para Bodega
  *
@@ -1257,10 +1258,12 @@ function reviewModule () {
     // Undo toast
     revisionUndo: null,                 // { item, section } | null
     _revisionUndoTimer: null,
-    // Swipe state
+    // Swipe state — todos deben estar en el estado inicial para que Alpine los trackee
     revisionTouchX0: null,
+    revisionTouchY0: null,
     revisionTouchTx: 0,
     revisionSwipeLock: false,
+    revisionSwipeAxisLocked: null,
     // Throttle para Siguiente (previene avanzar varios de golpe con clic rápido o flecha mantenida)
     _revisionLastNext: 0,
     // Estado de foco del input de cantidad (para guardar atajos de teclado)
@@ -1386,18 +1389,14 @@ function reviewModule () {
         this.revisionShowSidebar = false
         this.revisionTouchX0 = null
         this.revisionTouchTx = 0
-        // Registrar atajos de teclado — mismos que ReviewModal.tsx del electron
+        // Solo Enter en el input de cantidad → avanzar.
+        // Los atajos F/P/←/→ se eliminaron porque interceptan el buscador de "cambiar producto".
         this._revisionKeyHandler = (e) => {
           if (!this.revisionModalOpen) return
-          // Si el input de cantidad está enfocado: solo Enter avanza
-          if (this.revisionInputFocused) {
-            if (e.key === 'Enter') { e.preventDefault(); this.revisionGuardarYSiguiente() }
-            return
+          if (this.revisionInputFocused && e.key === 'Enter') {
+            e.preventDefault()
+            this.revisionGuardarYSiguiente(e)
           }
-          if (e.key === 'ArrowRight') { e.preventDefault(); this.revisionSiguiente(); return }
-          if (e.key === 'ArrowLeft')  { e.preventDefault(); this.revisionAnterior();  return }
-          if (e.key === 'f' || e.key === 'F') { e.preventDefault(); this.revisionMarcarFaltante();  return }
-          if (e.key === 'p' || e.key === 'P') { e.preventDefault(); this.revisionMarcarPendiente(); return }
         }
         window.addEventListener('keydown', this._revisionKeyHandler)
         this.revisionModalOpen = true
@@ -1423,8 +1422,14 @@ function reviewModule () {
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
       this.revisionUndo = null
-      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
-      this._revisionSearchId = null
+      this.revisionCambiarModal   = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
+      this._revisionSearchId      = null
+      this.revisionGuardandoMensaje = ''
+      this.revisionErrorGuardado  = null
+      this.revisionTouchX0        = null
+      this.revisionTouchY0        = null
+      this.revisionTouchTx        = 0
+      this.revisionSwipeAxisLocked = null
       if (this._revisionUndoTimer) {
         clearTimeout(this._revisionUndoTimer)
         this._revisionUndoTimer = null
@@ -1464,13 +1469,15 @@ function reviewModule () {
       if (this._revisionOriginalCart) {
         this.revisionCart = JSON.parse(JSON.stringify(this._revisionOriginalCart))
       }
-      this.revisionReviewedIds = []
-      this.revisionMissingNames = []
-      this.revisionPendingIds = []
-      this.revisionPendingNames = []
-      this.revisionCurrentIdx = 0
-      this.revisionUndo = null
-      this._revisionLastNext = 0
+      this.revisionReviewedIds    = []
+      this.revisionMissingNames   = []
+      this.revisionPendingIds     = []
+      this.revisionPendingNames   = []
+      this.revisionCurrentIdx     = 0
+      this.revisionUndo           = null
+      this._revisionLastNext      = 0
+      this.revisionErrorGuardado  = null
+      this.revisionGuardandoMensaje = ''
       if (this._revisionUndoTimer) {
         clearTimeout(this._revisionUndoTimer)
         this._revisionUndoTimer = null
@@ -1478,9 +1485,9 @@ function reviewModule () {
     },
 
     // ── Enter en input de cantidad → guardar y avanzar ─────────────
-    revisionGuardarYSiguiente () {
-      // La cantidad ya se actualizó via @input reactivo; solo avanzamos
-      this.$el?.querySelector('input[inputmode="decimal"]')?.blur()
+    revisionGuardarYSiguiente ($event) {
+      // La cantidad ya se actualizó via @input reactivo; solo cerramos teclado y avanzamos
+      if ($event?.target) $event.target.blur()
       this.revisionSiguiente()
     },
 
@@ -1889,7 +1896,7 @@ function reviewModule () {
 }
 
 
-/* ── public/js/modules/history.js ── */
+;/* ── public/js/modules/history.js ── */
 function historyModule() {
   return {
     // ── Entradas de inventario ────────────────────────────────
@@ -2012,7 +2019,7 @@ function historyModule() {
 }
 
 
-/* ── public/js/modules/mermas.js ── */
+;/* ── public/js/modules/mermas.js ── */
 function mermasModule() {
   return {
     // ── Estado modal ──────────────────────────────────────────
@@ -2174,7 +2181,7 @@ function mermasModule() {
 }
 
 
-/* ── public/js/modules/notifications.js ── */
+;/* ── public/js/modules/notifications.js ── */
 /**
  * DISFRULEG BODEGA — Módulo de Notificaciones Push
  *
@@ -2341,7 +2348,7 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 
-/* ── public/js/modules/analytics.js ── */
+;/* ── public/js/modules/analytics.js ── */
 /**
  * DISFRULEG BODEGA — Módulo de Análisis de Ventas
  *
@@ -2533,7 +2540,7 @@ function analyticsModule() {
 }
 
 
-/* ── public/js/modules/admin.js ── */
+;/* ── public/js/modules/admin.js ── */
 /**
  * admin.js — Módulo Alpine.js para gestión de sesiones y permisos
  * Solo visible/funcional para rol "admin"
@@ -2780,7 +2787,7 @@ function adminModule() {
 }
 
 
-/* ── public/js/modules/cobranza.js ── */
+;/* ── public/js/modules/cobranza.js ── */
 /**
  * cobranza.js — Módulo Alpine.js para el panel de cobranza móvil
  *
@@ -2999,7 +3006,7 @@ function cobranzaModule() {
 }
 
 
-/* ── public/js/modules/compras.js ── */
+;/* ── public/js/modules/compras.js ── */
 /**
  * compras.js — Módulo Alpine.js para el tab de Compras
  *
@@ -3094,7 +3101,7 @@ function comprasModule() {
 }
 
 
-/* ── public/js/modules/dashboard.js ── */
+;/* ── public/js/modules/dashboard.js ── */
 /**
  * dashboard.js — Módulo Alpine.js para el panel de métricas del día (pantalla home)
  *
@@ -3324,7 +3331,7 @@ function dashboardModule() {
 }
 
 
-/* ── public/js/bodega.js ── */
+;/* ── public/js/bodega.js ── */
 // Composición del store Alpine.js.
 // Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard
 function bodega() {

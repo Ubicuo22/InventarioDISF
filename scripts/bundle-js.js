@@ -1,15 +1,15 @@
 /**
  * scripts/bundle-js.js
- * Concatena todos los módulos JS de la app en un solo archivo.
- * Orden estricto: api → sounds → modules/* → bodega
- * Resultado: public/js/bodega-bundle.js
+ * Concatena todos los módulos JS de la app en un solo archivo versionado.
+ * Genera: public/js/bodega-bundle.<hash>.js
+ * Actualiza el <script src> en public/index.html automáticamente.
  */
 
-const fs   = require('fs')
-const path = require('path')
+const fs     = require('fs')
+const path   = require('path')
+const crypto = require('crypto')
 
-const ROOT   = path.join(__dirname, '..')
-const OUT    = path.join(ROOT, 'public/js/bodega-bundle.js')
+const ROOT = path.join(__dirname, '..')
 
 const FILES = [
   'public/js/api.js',
@@ -31,15 +31,35 @@ const FILES = [
   'public/js/bodega.js',
 ]
 
-const banner = `/* bodega-bundle.js — generado por scripts/bundle-js.js — ${new Date().toISOString()} */\n`
-
 const bundle = FILES.map(f => {
   const full = path.join(ROOT, f)
   const src  = fs.readFileSync(full, 'utf8')
-  return `/* ── ${f} ── */\n${src}`
-}).join('\n\n')
+  // Punto y coma de seguridad al inicio: evita que una IIFE del archivo siguiente
+  // sea interpretada como llamada al valor final del archivo anterior
+  return `\n;/* ── ${f} ── */\n${src}`
+}).join('\n')
 
-fs.writeFileSync(OUT, banner + bundle)
+// Hash corto (8 chars) del contenido — cambia solo cuando el código cambia
+const hash    = crypto.createHash('sha1').update(bundle).digest('hex').slice(0, 8)
+const outName = `bodega-bundle.${hash}.js`
+const outPath = path.join(ROOT, 'public/js', outName)
 
-const kb = (fs.statSync(OUT).size / 1024).toFixed(1)
-console.log(`✓ bodega-bundle.js generado — ${kb} KB (${FILES.length} archivos)`)
+// Borrar bundles anteriores para no acumular
+const jsDir = path.join(ROOT, 'public/js')
+fs.readdirSync(jsDir)
+  .filter(f => f.startsWith('bodega-bundle.') && f.endsWith('.js') && f !== outName)
+  .forEach(f => fs.unlinkSync(path.join(jsDir, f)))
+
+const banner = `/* ${outName} — ${new Date().toISOString()} */\n`
+fs.writeFileSync(outPath, banner + bundle)
+
+// Actualizar la referencia en index.html
+const htmlPath = path.join(ROOT, 'public/index.html')
+let html = fs.readFileSync(htmlPath, 'utf8')
+
+// Reemplazar cualquier bodega-bundle.*.js (script src y preload)
+html = html.replace(/bodega-bundle\.[a-f0-9]+\.js/g, outName)
+fs.writeFileSync(htmlPath, html)
+
+const kb = (fs.statSync(outPath).size / 1024).toFixed(1)
+console.log(`✓ ${outName} generado — ${kb} KB (${FILES.length} archivos)`)

@@ -31,10 +31,12 @@ function reviewModule () {
     // Undo toast
     revisionUndo: null,                 // { item, section } | null
     _revisionUndoTimer: null,
-    // Swipe state
+    // Swipe state — todos deben estar en el estado inicial para que Alpine los trackee
     revisionTouchX0: null,
+    revisionTouchY0: null,
     revisionTouchTx: 0,
     revisionSwipeLock: false,
+    revisionSwipeAxisLocked: null,
     // Throttle para Siguiente (previene avanzar varios de golpe con clic rápido o flecha mantenida)
     _revisionLastNext: 0,
     // Estado de foco del input de cantidad (para guardar atajos de teclado)
@@ -160,18 +162,14 @@ function reviewModule () {
         this.revisionShowSidebar = false
         this.revisionTouchX0 = null
         this.revisionTouchTx = 0
-        // Registrar atajos de teclado — mismos que ReviewModal.tsx del electron
+        // Solo Enter en el input de cantidad → avanzar.
+        // Los atajos F/P/←/→ se eliminaron porque interceptan el buscador de "cambiar producto".
         this._revisionKeyHandler = (e) => {
           if (!this.revisionModalOpen) return
-          // Si el input de cantidad está enfocado: solo Enter avanza
-          if (this.revisionInputFocused) {
-            if (e.key === 'Enter') { e.preventDefault(); this.revisionGuardarYSiguiente() }
-            return
+          if (this.revisionInputFocused && e.key === 'Enter') {
+            e.preventDefault()
+            this.revisionGuardarYSiguiente(e)
           }
-          if (e.key === 'ArrowRight') { e.preventDefault(); this.revisionSiguiente(); return }
-          if (e.key === 'ArrowLeft')  { e.preventDefault(); this.revisionAnterior();  return }
-          if (e.key === 'f' || e.key === 'F') { e.preventDefault(); this.revisionMarcarFaltante();  return }
-          if (e.key === 'p' || e.key === 'P') { e.preventDefault(); this.revisionMarcarPendiente(); return }
         }
         window.addEventListener('keydown', this._revisionKeyHandler)
         this.revisionModalOpen = true
@@ -197,8 +195,14 @@ function reviewModule () {
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
       this.revisionUndo = null
-      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
-      this._revisionSearchId = null
+      this.revisionCambiarModal   = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
+      this._revisionSearchId      = null
+      this.revisionGuardandoMensaje = ''
+      this.revisionErrorGuardado  = null
+      this.revisionTouchX0        = null
+      this.revisionTouchY0        = null
+      this.revisionTouchTx        = 0
+      this.revisionSwipeAxisLocked = null
       if (this._revisionUndoTimer) {
         clearTimeout(this._revisionUndoTimer)
         this._revisionUndoTimer = null
@@ -238,13 +242,15 @@ function reviewModule () {
       if (this._revisionOriginalCart) {
         this.revisionCart = JSON.parse(JSON.stringify(this._revisionOriginalCart))
       }
-      this.revisionReviewedIds = []
-      this.revisionMissingNames = []
-      this.revisionPendingIds = []
-      this.revisionPendingNames = []
-      this.revisionCurrentIdx = 0
-      this.revisionUndo = null
-      this._revisionLastNext = 0
+      this.revisionReviewedIds    = []
+      this.revisionMissingNames   = []
+      this.revisionPendingIds     = []
+      this.revisionPendingNames   = []
+      this.revisionCurrentIdx     = 0
+      this.revisionUndo           = null
+      this._revisionLastNext      = 0
+      this.revisionErrorGuardado  = null
+      this.revisionGuardandoMensaje = ''
       if (this._revisionUndoTimer) {
         clearTimeout(this._revisionUndoTimer)
         this._revisionUndoTimer = null
@@ -252,9 +258,9 @@ function reviewModule () {
     },
 
     // ── Enter en input de cantidad → guardar y avanzar ─────────────
-    revisionGuardarYSiguiente () {
-      // La cantidad ya se actualizó via @input reactivo; solo avanzamos
-      this.$el?.querySelector('input[inputmode="decimal"]')?.blur()
+    revisionGuardarYSiguiente ($event) {
+      // La cantidad ya se actualizó via @input reactivo; solo cerramos teclado y avanzamos
+      if ($event?.target) $event.target.blur()
       this.revisionSiguiente()
     },
 
