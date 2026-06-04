@@ -10,32 +10,35 @@
 const router = require('express').Router()
 const { q }  = require('../db/pool')
 const { requireAuth, requireModulo } = require('../middleware/auth')
+const { fechaMexico } = require('../utils/fecha')
 
 router.use(requireAuth, requireModulo('cobranza'))
 
 // ── Semáforo: calcula estado según días de crédito ────────
-const SEMAFORO_SQL = `
+function semaforoSQL(placeholder = '?') {
+  return `
   CASE
     WHEN COALESCE(c.dias_credito_override, g.dias_credito, 0) = 0
       THEN 'sin_plazo'
     WHEN DATEDIFF(
       DATE_ADD(d.fecha_generada, INTERVAL COALESCE(c.dias_credito_override, g.dias_credito, 0) DAY),
-      CURDATE()
+      ${placeholder}
     ) < 0
       THEN 'vencida'
     WHEN DATEDIFF(
       DATE_ADD(d.fecha_generada, INTERVAL COALESCE(c.dias_credito_override, g.dias_credito, 0) DAY),
-      CURDATE()
+      ${placeholder}
     ) <= 3
       THEN 'por_vencer'
     ELSE 'al_dia'
-  END
-`
+  END`
+}
 
 // ── GET /api/deudas ───────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
     const { busqueda, estado } = req.query
+    const hoy = fechaMexico()
 
     let where = `d.pagado = 0`
     const params = []
@@ -49,6 +52,9 @@ router.get('/', async (req, res) => {
     if (estado && estado !== 'todos') {
       // Filtrar por semáforo — se hace en JS después del query para simplicidad
     }
+
+    // 1 for dias_restantes + 2 per semaforoSQL() × 2 calls = 5
+    params.push(hoy, hoy, hoy, hoy, hoy)
 
     const rows = await q(`
       SELECT
@@ -69,15 +75,15 @@ router.get('/', async (req, res) => {
         DATEDIFF(
           DATE_ADD(d.fecha_generada,
             INTERVAL COALESCE(c.dias_credito_override, g.dias_credito, 0) DAY
-          ), CURDATE()
+          ), ?
         )                                                             AS dias_restantes,
-        (${SEMAFORO_SQL})                                             AS semaforo
+        (${semaforoSQL()})                                            AS semaforo
       FROM deudas d
       LEFT JOIN cliente c ON d.id_cliente = c.id_cliente
       LEFT JOIN grupo   g ON c.id_grupo   = g.id_grupo
       WHERE ${where}
       ORDER BY
-        CASE (${SEMAFORO_SQL})
+        CASE (${semaforoSQL()})
           WHEN 'vencida'    THEN 1
           WHEN 'por_vencer' THEN 2
           WHEN 'al_dia'     THEN 3
@@ -114,6 +120,7 @@ router.get('/stats', async (req, res) => {
       `)
     ])
 
+    const hoy = fechaMexico()
     const vencidas = await q(`
       SELECT COUNT(*) AS vencidas
       FROM deudas d
@@ -124,9 +131,9 @@ router.get('/stats', async (req, res) => {
         AND DATEDIFF(
           DATE_ADD(d.fecha_generada,
             INTERVAL COALESCE(c.dias_credito_override, g.dias_credito, 0) DAY
-          ), CURDATE()
+          ), ?
         ) < 0
-    `)
+    `, [hoy])
 
     res.json({
       ok: true,
@@ -144,6 +151,7 @@ router.get('/stats', async (req, res) => {
 // ── GET /api/deudas/:id ───────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
+    const hoy = fechaMexico()
     const rows = await q(`
       SELECT
         d.*,
@@ -156,14 +164,14 @@ router.get('/:id', async (req, res) => {
         DATEDIFF(
           DATE_ADD(d.fecha_generada,
             INTERVAL COALESCE(c.dias_credito_override, g.dias_credito, 0) DAY
-          ), CURDATE()
+          ), ?
         )                                                            AS dias_restantes,
-        (${SEMAFORO_SQL})                                            AS semaforo
+        (${semaforoSQL()})                                           AS semaforo
       FROM deudas d
       LEFT JOIN cliente c ON d.id_cliente = c.id_cliente
       LEFT JOIN grupo   g ON c.id_grupo   = g.id_grupo
       WHERE d.id_deuda = ?
-    `, [req.params.id])
+    `, [hoy, hoy, hoy, req.params.id])
 
     if (!rows.length) return res.status(404).json({ ok: false, error: 'Deuda no encontrada' })
     res.json({ ok: true, data: rows[0] })

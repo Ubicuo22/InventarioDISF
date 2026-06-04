@@ -8,10 +8,11 @@
 
 const { q }            = require('../db/pool')
 const { enviarATodos } = require('./push')
+const { fechaMexico } = require('./fecha')
 
 async function enviarResumen() {
   try {
-    const hoy = new Date().toISOString().slice(0, 10)
+    const hoy = fechaMexico()
 
     // Pedidos del día (guardados + registrados)
     const [pedidosRow] = await q(

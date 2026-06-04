@@ -14,6 +14,7 @@
 const router = require('express').Router()
 const { q }  = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
+const { fechaMexico } = require('../utils/fecha')
 
 function requireDashboardToken(req, res, next) {
   const token = req.query.token
@@ -25,6 +26,8 @@ function requireDashboardToken(req, res, next) {
 
 router.get('/data', requireDashboardToken, async (req, res) => {
   try {
+    const hoy = fechaMexico()
+
     const [
       ventasRows,
       pedidosRows,
@@ -41,8 +44,8 @@ router.get('/data', requireDashboardToken, async (req, res) => {
           COALESCE(SUM(df.cantidad_factura * df.precio_unitario_venta), 0)  AS total_vendido
         FROM factura f
         INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
-        WHERE DATE(f.fecha_factura) = CURDATE()
-      `),
+        WHERE DATE(f.fecha_factura) = ?
+      `, [hoy]),
 
       // ── Pedidos activos (guardados, sin procesar) ───────
       q(`
@@ -67,8 +70,8 @@ router.get('/data', requireDashboardToken, async (req, res) => {
           COUNT(*)                                    AS total_entradas,
           COALESCE(SUM(c.total_con_impuestos), 0)    AS costo_total
         FROM compra c
-        WHERE DATE(c.fecha_registro) = CURDATE()
-      `),
+        WHERE DATE(c.fecha_registro) = ?
+      `, [hoy]),
 
       // ── Stock crítico (≤ 5 unidades) ────────────────────
       q(`
@@ -86,10 +89,10 @@ router.get('/data', requireDashboardToken, async (req, res) => {
       q(`
         SELECT
           COUNT(*)                         AS total_mermas,
-          COALESCE(SUM(cantidad), 0)       AS cantidad_total
+          COALESCE(SUM(cantidad_merma), 0) AS cantidad_total
         FROM merma
-        WHERE DATE(fecha_merma) = CURDATE()
-      `)
+        WHERE DATE(fecha_merma) = ?
+      `, [hoy])
     ])
 
     res.json({
@@ -110,8 +113,8 @@ router.get('/data', requireDashboardToken, async (req, res) => {
 // ─── GET /api/dashboard/metricas-hoy — autenticado, para el home de la appweb ─
 router.get('/metricas-hoy', requireAuth, async (req, res) => {
   try {
-    const hoy = new Date().toISOString().slice(0, 10)
-    const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const hoy = fechaMexico()
+    const ayer = fechaMexico(-1)
 
     // ── Batch 1: queries ligeras (sin JOINs pesados) ─────────────────────────
     const [
@@ -189,7 +192,7 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          FROM inventario_peps ip
          WHERE ip.activo = 1
            AND ip.cantidad_restante > 0
-           AND ip.fecha_movimiento < DATE_SUB(CURDATE(), INTERVAL 60 DAY)`)
+           AND ip.fecha_movimiento < DATE_SUB(?, INTERVAL 60 DAY)`, [hoy])
     ])
 
     // ── Batch 2: queries con JOINs (ventas, mermas, deudas) ──────────────────
@@ -261,8 +264,8 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
            AND DATEDIFF(
                  DATE_ADD(d.fecha_generada,
                    INTERVAL COALESCE(c.dias_credito_override, g.dias_credito, 0) DAY
-                 ), CURDATE()
-               ) < 0`),
+                 ), ?
+               ) < 0`, [hoy]),
 
       // Última entrada de inventario (para tarjeta Historial)
       q(`SELECT c.fecha_registro, c.cantidad_compra, c.total_con_impuestos,

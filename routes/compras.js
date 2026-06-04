@@ -8,11 +8,12 @@
 const router = require('express').Router()
 const { q }  = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
+const { fechaMexico } = require('../utils/fecha')
 
 router.get('/resumen', requireAuth, async (req, res) => {
   try {
-    const hoy   = new Date().toISOString().slice(0, 10)
-    const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    const hoy    = fechaMexico()
+    const hace30 = fechaMexico(-30)
 
     const desde = req.query.desde || hace30
     const hasta = req.query.hasta || hoy

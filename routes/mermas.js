@@ -2,6 +2,7 @@ const router = require('express').Router()
 const { q }   = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
+const { fechaMexico } = require('../utils/fecha')
 
 router.use(requireAuth)
 
@@ -18,7 +19,7 @@ router.post('/', async (req, res) => {
   if (!tiposValidos.includes(tipo_merma))
     return res.status(400).json({ ok: false, error: 'tipo_merma inválido' })
 
-  const fecha  = fecha_merma || new Date().toISOString().slice(0, 10)
+  const fecha  = fecha_merma || fechaMexico()
   const usuario = req.user.username
 
   const conn = await require('../db/pool').pool.getConnection()

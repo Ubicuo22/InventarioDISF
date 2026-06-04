@@ -9,6 +9,7 @@
 const router      = require('express').Router()
 const { q }       = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
+const { fechaMexico } = require('../utils/fecha')
 
 router.use(requireAuth)
 
@@ -17,6 +18,7 @@ router.use(requireAuth)
 // ════════════════════════════════════════════════════════════
 router.get('/hoy', async (req, res) => {
   try {
+    const hoy = fechaMexico()
     // Q1: Ventas del día (notas, clientes, total)
     const [ventas, peps] = await Promise.all([
       q(`
@@ -26,8 +28,8 @@ router.get('/hoy', async (req, res) => {
           COALESCE(SUM(df.cantidad_factura * df.precio_unitario_venta), 0)   AS total_vendido
         FROM factura f
         INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
-        WHERE DATE(f.fecha_factura) = CURDATE()
-      `),
+        WHERE DATE(f.fecha_factura) = ?
+      `, [hoy]),
       // Q2: Ganancias PEPS del día
       q(`
         SELECT
@@ -36,8 +38,8 @@ router.get('/hoy', async (req, res) => {
         FROM detalle_venta_lote dvl
         INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
         INNER JOIN factura f          ON f.id_factura  = df.id_factura
-        WHERE DATE(f.fecha_factura) = CURDATE()
-      `)
+        WHERE DATE(f.fecha_factura) = ?
+      `, [hoy])
     ])
 
     const v = ventas[0]  || {}

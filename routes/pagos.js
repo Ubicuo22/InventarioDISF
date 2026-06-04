@@ -8,6 +8,7 @@ const router = require('express').Router()
 const { pool } = require('../db/pool')
 const { requireAuth, requireModulo } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
+const { fechaMexico } = require('../utils/fecha')
 
 router.use(requireAuth, requireModulo('cobranza'))
 
@@ -70,8 +71,8 @@ router.post('/', async (req, res) => {
       `INSERT INTO pago_registrado
          (id_deuda, monto_pagado, fecha_pago, metodo_pago, referencia_pago,
           notas, razon_pago_parcial, usuario_registro, estado_pago)
-       VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, 'PROCESSED')`,
-      [idDeuda, montoNum, metodoPago, referencia, notas, razonParcial || null, usuario]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PROCESSED')`,
+      [idDeuda, montoNum, fechaMexico(), metodoPago, referencia, notas, razonParcial || null, usuario]
     )
 
     // ── Actualizar deudas ─────────────────────────────────
