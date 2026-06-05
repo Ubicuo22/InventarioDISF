@@ -1,4 +1,4 @@
-/* bodega-bundle.5a70d11d.js — 2026-06-02T21:46:52.796Z */
+/* bodega-bundle.f99e80d1.js — 2026-06-05T19:34:55.501Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -911,6 +911,8 @@ function ordersModule() {
     ordenes: [],
     cargandoOrdenes: false,
     ordenesFiltroRevision: 'todas',  // 'todas' | 'pendientes' | 'revisadas'
+    filtroFechaPedidos: '',
+    filtroClientePedidos: '',
     grupos: [],
     clientesGrupo: [],
     modalOrdenAbierto: false,
@@ -929,6 +931,27 @@ function ordersModule() {
     mostrarObservacion: false,
     confirmarGuardadoModal: { visible: false },
     agregarModal: { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true },
+
+    ordenesFiltradas() {
+      return this.ordenes.filter(o => {
+        if (this.filtroClientePedidos) {
+          const txt = this.filtroClientePedidos.toLowerCase()
+          const coincide = (o.nombre_cliente || '').toLowerCase().includes(txt)
+            || (o.nombre_grupo || '').toLowerCase().includes(txt)
+          if (!coincide) return false
+        }
+        if (this.filtroFechaPedidos) {
+          const fecha = o.fecha_creacion ? o.fecha_creacion.slice(0, 10) : ''
+          if (fecha !== this.filtroFechaPedidos) return false
+        }
+        return true
+      })
+    },
+
+    limpiarFiltrosPedidos() {
+      this.filtroFechaPedidos = ''
+      this.filtroClientePedidos = ''
+    },
 
     async cargarOrdenes() {
       this.cargandoOrdenes = true

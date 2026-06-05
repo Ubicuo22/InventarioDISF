@@ -38,7 +38,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.5a70d11d.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.f99e80d1.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css" as="style">
@@ -1158,7 +1158,7 @@
 
       <!-- Sub-tabs: Activos / Revisadas / Registrados -->
       <div class="flex gap-1 mb-3 overflow-x-auto">
-        <button @click="pedidosTab = 'activos'; cargarOrdenes()"
+        <button @click="pedidosTab = 'activos'; limpiarFiltrosPedidos(); cargarOrdenes()"
           class="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap"
           :class="pedidosTab === 'activos' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500 hover:text-slate-300'">
           Activos
@@ -1166,7 +1166,7 @@
             class="ml-1 text-[10px] tabular-nums opacity-70"
             x-text="ordenes.filter(o => !isOrdenRevisada(o)?.reviewed).length"></span>
         </button>
-        <button @click="pedidosTab = 'revisadas'; cargarOrdenes()"
+        <button @click="pedidosTab = 'revisadas'; filtroFechaPedidos = new Date().toISOString().slice(0,10); cargarOrdenes()"
           class="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap"
           :class="pedidosTab === 'revisadas' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-500 hover:text-slate-300'">
           Revisadas
@@ -1174,10 +1174,31 @@
             class="ml-1 text-[10px] tabular-nums opacity-70"
             x-text="ordenes.filter(o => isOrdenRevisada(o)?.reviewed).length"></span>
         </button>
-        <button @click="pedidosTab = 'registrados'; cargarOrdenes()"
+        <button @click="pedidosTab = 'registrados'; limpiarFiltrosPedidos(); cargarOrdenes()"
           class="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap"
           :class="pedidosTab === 'registrados' ? 'bg-slate-700 text-slate-300' : 'text-slate-500 hover:text-slate-300'">
           Registrados
+        </button>
+      </div>
+
+      <!-- Filtros -->
+      <div class="flex gap-2 mb-3 items-end">
+        <div class="flex-1 min-w-0">
+          <label class="text-[10px] text-slate-500 uppercase tracking-wide mb-1 block">Cliente</label>
+          <input type="text" x-model="filtroClientePedidos" placeholder="Buscar cliente o grupo..."
+            class="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50">
+        </div>
+        <div class="flex-shrink-0">
+          <label class="text-[10px] text-slate-500 uppercase tracking-wide mb-1 block">Fecha</label>
+          <input type="date" x-model="filtroFechaPedidos"
+            class="bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50">
+        </div>
+        <button x-show="filtroFechaPedidos || filtroClientePedidos" @click="limpiarFiltrosPedidos()"
+          class="flex-shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700/50 transition-colors mb-0.5"
+          title="Limpiar filtros">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
         </button>
       </div>
 
@@ -1201,7 +1222,7 @@
         </div>
 
         <!-- Empty -->
-        <div x-show="!cargandoOrdenes && ordenes.length === 0"
+        <div x-show="!cargandoOrdenes && ordenesFiltradas().length === 0"
           class="py-14 flex flex-col items-center gap-4">
           <div class="w-14 h-14 rounded-2xl flex items-center justify-center" style="background:rgba(59,130,246,.1)">
             <svg class="w-7 h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -1210,11 +1231,16 @@
           </div>
           <div class="text-center">
             <p class="text-white text-sm font-medium"
-              x-text="pedidosTab === 'activos' ? 'Sin pedidos activos' : pedidosTab === 'revisadas' ? 'Sin pedidos revisados' : 'Sin pedidos registrados'"></p>
-            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'activos'">Crea un pedido para empezar</p>
-            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'revisadas'">Los pedidos revisados sin pendientes aparecen aquí</p>
+              x-text="(filtroFechaPedidos || filtroClientePedidos) ? 'Sin resultados para el filtro' : (pedidosTab === 'activos' ? 'Sin pedidos activos' : pedidosTab === 'revisadas' ? 'Sin pedidos revisados' : 'Sin pedidos registrados')"></p>
+            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'activos' && !filtroFechaPedidos && !filtroClientePedidos">Crea un pedido para empezar</p>
+            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'revisadas' && !filtroFechaPedidos && !filtroClientePedidos">Los pedidos revisados sin pendientes aparecen aquí</p>
+            <p class="text-slate-500 text-xs mt-1" x-show="filtroFechaPedidos || filtroClientePedidos">Intenta con otros criterios o limpia los filtros</p>
           </div>
-          <button x-show="pedidosTab === 'activos'" @click="abrirNuevaOrden()"
+          <button x-show="filtroFechaPedidos || filtroClientePedidos" @click="limpiarFiltrosPedidos()"
+            class="btn-primary flex items-center gap-2 py-2.5 px-5 text-sm">
+            Limpiar filtros
+          </button>
+          <button x-show="pedidosTab === 'activos' && !filtroFechaPedidos && !filtroClientePedidos" @click="abrirNuevaOrden()"
             class="btn-primary flex items-center gap-2 py-2.5 px-5 text-sm">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
@@ -1224,7 +1250,7 @@
         </div>
 
         <!-- Rows -->
-        <template x-for="o in ordenes.filter(o => {
+        <template x-for="o in ordenesFiltradas().filter(o => {
           const rev = isOrdenRevisada(o)
           if (pedidosTab === 'activos')    return !rev?.reviewed
           if (pedidosTab === 'revisadas')  return !!rev?.reviewed
@@ -3302,7 +3328,7 @@
                   :class="revisionCantidadModificada()
                     ? 'text-amber-300 border-2 border-amber-500/70 focus:border-amber-400'
                     : 'text-white border-2 border-white/10 focus:border-emerald-500/60'"
-                  style="appearance:textfield; -moz-appearance:textfield; line-height:1.05" />
+                  style="appearance:textfield; -moz-appearance:textfield; -webkit-appearance:none; line-height:1.05; touch-action:manipulation; font-size:80px" />
                 <!-- Badge modificado -->
                 <div x-show="revisionCantidadModificada()"
                   class="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
@@ -3533,37 +3559,35 @@
      z-[75] — encima del modal de revisión (z-50)
 ══════════════════════════════════════════════════════════ -->
 <div x-show="revisionCambiarModal.visible" x-cloak
-  class="fixed inset-0 z-[75] flex items-end justify-center"
-  style="background:rgba(0,0,0,.65); backdrop-filter:blur(4px)"
+  class="fixed inset-0 z-[75] flex items-center justify-center p-4"
+  style="background:rgba(0,0,0,.7); backdrop-filter:blur(6px)"
+  @click="revisionCambiarModal.visible = false"
   @keydown.escape.window="revisionCambiarModal.visible = false">
-  <div class="bg-modal w-full max-w-lg rounded-t-2xl max-h-[82vh] flex flex-col slide-up"
-    style="border-top:1px solid var(--border)" @click.stop>
-
-    <!-- Handle -->
-    <div class="flex justify-center pt-3 pb-1 flex-shrink-0">
-      <div class="w-10 h-1 rounded-full bg-slate-600"></div>
-    </div>
+  <div class="bg-modal w-full max-w-2xl rounded-2xl flex flex-col"
+    style="border:1px solid var(--border); max-height:85vh; box-shadow:0 25px 60px rgba(0,0,0,.5)"
+    @click.stop>
 
     <!-- Cabecera -->
-    <div class="flex items-center justify-between px-4 py-3 flex-shrink-0"
+    <div class="flex items-center justify-between px-6 py-5 flex-shrink-0"
       style="border-bottom:1px solid var(--border)">
       <div class="min-w-0">
-        <p class="font-semibold text-sm text-white">Cambiar producto</p>
-        <p class="text-[11px] text-slate-500 mt-0.5 truncate"
-          x-text="revisionCurrent() ? revisionCurrent().item.nombre_producto : ''"></p>
+        <p class="font-bold text-lg text-white">Cambiar producto</p>
+        <p class="text-sm text-slate-400 mt-1 truncate"
+          x-text="revisionCurrent() ? 'Reemplazar: ' + revisionCurrent().item.nombre_producto : ''"></p>
       </div>
       <button @click="revisionCambiarModal.visible = false"
-        class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0 ml-3">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        class="p-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0 ml-4"
+        style="touch-action:manipulation">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
     </div>
 
     <!-- Buscador -->
-    <div class="px-4 py-3 flex-shrink-0" style="border-bottom:1px solid var(--border)">
+    <div class="px-6 py-4 flex-shrink-0" style="border-bottom:1px solid var(--border)">
       <div class="relative">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
         <input
@@ -3572,12 +3596,12 @@
           x-model="revisionCambiarModal.busqueda"
           @input.debounce.350ms="revisionBuscarProducto()"
           placeholder="Buscar producto..."
-          class="input-dark w-full pl-9 text-sm"
-          style="padding-top:9px; padding-bottom:9px"
+          class="input-dark w-full pl-11 text-base py-3.5 rounded-xl"
+          style="font-size:16px; touch-action:manipulation"
           autocomplete="off" />
       </div>
       <p x-show="revisionCambiarModal.busqueda.length < 2"
-        class="text-[10px] text-slate-500 mt-1.5">Escribe al menos 2 caracteres para buscar</p>
+        class="text-xs text-slate-500 mt-2">Escribe al menos 2 caracteres para buscar</p>
     </div>
 
     <!-- Lista de resultados -->
@@ -3585,64 +3609,63 @@
 
       <!-- Cargando -->
       <div x-show="revisionCambiarModal.buscando"
-        class="flex flex-col items-center py-10 gap-2 text-slate-500">
-        <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+        class="flex flex-col items-center py-14 gap-3 text-slate-500">
+        <svg class="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
         </svg>
         <span class="text-sm">Buscando...</span>
       </div>
 
-      <!-- Error de búsqueda (desconexión) -->
+      <!-- Error de búsqueda -->
       <div x-show="!revisionCambiarModal.buscando && revisionCambiarModal.error"
-        class="flex flex-col items-center py-10 gap-3 px-6 text-center">
-        <div class="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-          <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        class="flex flex-col items-center py-14 gap-3 px-6 text-center">
+        <div class="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+          <svg class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
         </div>
         <p class="text-sm text-red-400 font-medium" x-text="revisionCambiarModal.error"></p>
         <button @click="revisionBuscarProducto()"
-          class="px-4 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition-colors">
+          class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition-colors">
           Reintentar
         </button>
       </div>
 
       <!-- Sin resultados -->
       <div x-show="!revisionCambiarModal.buscando && !revisionCambiarModal.error && revisionCambiarModal.resultados.length === 0 && revisionCambiarModal.busqueda.length >= 2"
-        class="flex flex-col items-center py-12 gap-2 text-slate-500">
-        <svg class="w-10 h-10 opacity-25" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        class="flex flex-col items-center py-16 gap-3 text-slate-500">
+        <svg class="w-12 h-12 opacity-25" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
-        <span class="text-sm">Sin resultados</span>
+        <span class="text-base">Sin resultados</span>
       </div>
 
       <!-- Estado inicial -->
       <div x-show="!revisionCambiarModal.buscando && revisionCambiarModal.busqueda.length < 2"
-        class="flex flex-col items-center py-12 gap-2 text-slate-500">
-        <svg class="w-10 h-10 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        class="flex flex-col items-center py-16 gap-3 text-slate-500">
+        <svg class="w-12 h-12 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
-        <span class="text-sm">Escribe para buscar</span>
+        <span class="text-base">Escribe para buscar</span>
       </div>
 
       <!-- Resultados -->
       <template x-for="prod in revisionCambiarModal.resultados" :key="prod.id_producto">
         <button @click="revisionConfirmarCambio(prod)"
-          class="w-full px-4 py-3.5 flex items-center gap-3 text-left hover:sf-lo active:sf-hi transition-colors"
-          style="border-bottom:1px solid var(--border)">
+          class="w-full px-6 py-4 flex items-center gap-4 text-left hover:sf-lo active:sf-hi transition-colors"
+          style="border-bottom:1px solid var(--border); touch-action:manipulation">
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-white truncate" x-text="prod.nombre_producto.toUpperCase()"></p>
-            <p class="text-[11px] text-slate-500 mt-0.5" x-text="prod.unidad_producto"></p>
+            <p class="text-base font-semibold text-white truncate" x-text="prod.nombre_producto.toUpperCase()"></p>
+            <p class="text-xs text-slate-500 mt-1" x-text="prod.unidad_producto"></p>
           </div>
           <div class="text-right flex-shrink-0">
-            <p class="text-sm font-bold tabular-nums"
+            <p class="text-base font-bold tabular-nums"
               :class="prod.precio_base > 0 ? 'text-emerald-400' : 'text-slate-500'"
               x-text="prod.precio_base > 0 ? '$' + parseFloat(prod.precio_base).toFixed(2) : 'Sin precio'"></p>
-            <p class="text-[10px] text-slate-600 mt-0.5 tabular-nums" x-text="`stock: ${prod.stock ?? '—'}`"></p>
+            <p class="text-[11px] text-slate-600 mt-0.5 tabular-nums" x-text="`stock: ${prod.stock ?? '—'}`"></p>
           </div>
-          <!-- Ícono de swap -->
-          <svg class="w-4 h-4 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <svg class="w-5 h-5 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
           </svg>
         </button>
@@ -4679,10 +4702,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.5a70d11d.js agrupa todos los módulos en 1 request.
+     bodega-bundle.f99e80d1.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.5a70d11d.js"></script>
+<script src="/js/bodega-bundle.f99e80d1.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

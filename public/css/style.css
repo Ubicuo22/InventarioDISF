@@ -1488,6 +1488,10 @@ select option { background: #141418; }
    BOTONES DE ACCIÓN — PANEL REVISIÓN DE PEDIDOS
    (Cambiar / Faltante / Pendiente)
 ══════════════════════════════ */
+.btn-rev-slate, .btn-rev-red, .btn-rev-amber {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
 .btn-rev-slate {
   background: rgba(71,85,105,.18);
   border: 1px solid rgba(100,116,139,.35);
@@ -1543,6 +1547,28 @@ select option { background: #141418; }
   background: rgba(180,83,9,.10) !important;
   border-color: rgba(180,83,9,.40) !important;
 }
+
+/* Steppers +/- para cantidad en revisión (iPad / Apple Pencil) */
+.rev-stepper {
+  background: rgba(255,255,255,.06);
+  border: 2px solid rgba(255,255,255,.10);
+  color: rgba(255,255,255,.7);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.rev-stepper:hover { background: rgba(255,255,255,.12); }
+.rev-stepper:active { background: rgba(255,255,255,.18); }
+.rev-stepper--minus:active { color: #f87171; border-color: rgba(248,113,113,.5); }
+.rev-stepper--plus:active  { color: #34d399; border-color: rgba(52,211,153,.5); }
+[data-theme="light"] .rev-stepper {
+  background: rgba(0,0,0,.04);
+  border-color: rgba(0,0,0,.12);
+  color: rgba(0,0,0,.5);
+}
+[data-theme="light"] .rev-stepper:hover { background: rgba(0,0,0,.08); }
+[data-theme="light"] .rev-stepper:active { background: rgba(0,0,0,.14); }
+[data-theme="light"] .rev-stepper--minus:active { color: #dc2626; border-color: rgba(220,38,38,.4); }
+[data-theme="light"] .rev-stepper--plus:active  { color: #059669; border-color: rgba(5,150,105,.4); }
 
 /* Botón Revisar en lista de pedidos
 /* Botón "+ Entrada" en tabla de inventario

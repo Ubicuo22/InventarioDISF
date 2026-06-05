@@ -3,6 +3,8 @@ function ordersModule() {
     ordenes: [],
     cargandoOrdenes: false,
     ordenesFiltroRevision: 'todas',  // 'todas' | 'pendientes' | 'revisadas'
+    filtroFechaPedidos: '',
+    filtroClientePedidos: '',
     grupos: [],
     clientesGrupo: [],
     modalOrdenAbierto: false,
@@ -21,6 +23,27 @@ function ordersModule() {
     mostrarObservacion: false,
     confirmarGuardadoModal: { visible: false },
     agregarModal: { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true },
+
+    ordenesFiltradas() {
+      return this.ordenes.filter(o => {
+        if (this.filtroClientePedidos) {
+          const txt = this.filtroClientePedidos.toLowerCase()
+          const coincide = (o.nombre_cliente || '').toLowerCase().includes(txt)
+            || (o.nombre_grupo || '').toLowerCase().includes(txt)
+          if (!coincide) return false
+        }
+        if (this.filtroFechaPedidos) {
+          const fecha = o.fecha_creacion ? o.fecha_creacion.slice(0, 10) : ''
+          if (fecha !== this.filtroFechaPedidos) return false
+        }
+        return true
+      })
+    },
+
+    limpiarFiltrosPedidos() {
+      this.filtroFechaPedidos = ''
+      this.filtroClientePedidos = ''
+    },
 
     async cargarOrdenes() {
       this.cargandoOrdenes = true
