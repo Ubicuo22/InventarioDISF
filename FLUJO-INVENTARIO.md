@@ -1,24 +1,24 @@
-
 # Flujo de Inventario — DISFRULEG
-> Versión del sistema: 3.8.4 | Actualizado: 27/05/2026
+> Versión del sistema: 3.11.0 | Actualizado: 05/06/2026
 
 ---
 
 ## Índice
 
 1. [Conceptos clave](#1-conceptos-clave)
-2. [Antes de empezar: configurar conversiones](#2-antes-de-empezar-configurar-conversiones)
-3. [Editar una conversión existente](#3-editar-una-conversión-existente)
-4. [Registrar una compra](#4-registrar-una-compra)
-5. [Cómo se guarda el stock (PEPS)](#5-cómo-se-guarda-el-stock-peps)
+2. [Equivalencias de venta](#2-equivalencias-de-venta)
+3. [Registrar una compra](#3-registrar-una-compra)
+4. [Cómo se guarda el stock (PEPS)](#4-cómo-se-guarda-el-stock-peps)
+5. [Cómo se muestra el stock (con equivalencias)](#5-cómo-se-muestra-el-stock-con-equivalencias)
 6. [Cómo se descuenta el stock al vender](#6-cómo-se-descuenta-el-stock-al-vender)
 7. [Flujo completo: ejemplo real](#7-flujo-completo-ejemplo-real)
-8. [Productos que se venden en kg y en pz](#8-productos-que-se-venden-en-kg-y-en-pz)
-9. [Validación de stock al procesar una venta](#9-validación-de-stock-al-procesar-una-venta)
-10. [Revertir una venta](#10-revertir-una-venta)
-11. [Eliminar una compra](#11-eliminar-una-compra)
-12. [Reglas y limitaciones importantes](#12-reglas-y-limitaciones-importantes)
-13. [Catálogo de productos base vs derivados](#13-catálogo-de-productos-base-vs-derivados)
+8. [Equivalencias bilaterales vs unidireccionales](#8-equivalencias-bilaterales-vs-unidireccionales)
+9. [Análisis de margen por nota](#9-análisis-de-margen-por-nota)
+10. [Inventario PEPS: semáforo y filtros](#10-inventario-peps-semáforo-y-filtros)
+11. [Validación de stock al procesar una venta](#11-validación-de-stock-al-procesar-una-venta)
+12. [Revertir una venta](#12-revertir-una-venta)
+13. [Eliminar una compra](#13-eliminar-una-compra)
+14. [Reglas y limitaciones importantes](#14-reglas-y-limitaciones-importantes)
 
 ---
 
@@ -29,256 +29,171 @@ El sistema registra cada compra como un **lote independiente**. Cuando se vende,
 
 ### Producto Base
 El producto tal como se **compra y cuenta físicamente**. Siempre en la unidad en que llega del proveedor.
-- Ejemplo: `LECHUGA ITALIANA.` en **pz**
+- Ejemplo: `PASTA TORNILLO` en **caja**
 
 ### Producto Derivado
-El mismo producto pero en una **unidad distinta para venta**. Solo existe para ciertos clientes.
-- Ejemplo: `LECHUGA ITALIANA` en **kg** (solo para AEROCOMIDAS)
+El mismo producto pero en una **unidad distinta para venta**. El stock se descuenta del producto base.
+- Ejemplo: `PASTA TORNILLO` en **pz** (cada caja tiene 20 pz)
 
 ### Factor de Conversión
 Cuántas unidades base se consumen por cada unidad derivada vendida.
-- Ejemplo: 1 kg de LECHUGA = 1.667 piezas (si cada pieza pesa 0.6 kg)
-- Se define en el módulo **Conversiones PEPS** y puede refinarse por lote de compra.
+- Ejemplo: 1 caja de PASTA TORNILLO = 20 pz → factor = 20
+- Se define en **Equivalencias de Venta** (Compras → Herramientas) o directo desde el **Editor de Precios**
 
 ### Factor de Lote
 Cada compra puede tener su propio factor (peso por pieza), más preciso que el factor global. Si se registra, el sistema lo usa en lugar del factor global.
 
+### Equivalencia Bilateral
+Cuando dos productos tienen una relación simétrica (caja ↔ pz), el sistema crea **ambas direcciones automáticamente**:
+- caja → pz (factor 20)
+- pz → caja (factor 0.05)
+
+Esto permite que el stock se muestre correctamente en ambos productos.
+
+### Equivalencia Unidireccional
+Cuando varios productos comparten un solo inventario base, solo se crea **una dirección por producto**. Ejemplo: MORRÓN VERDE, ROJO y AMARILLO → todos descargan de MORRÓN COLORES.
+
 ---
 
-## 2. Antes de empezar: configurar conversiones
+## 2. Equivalencias de venta
 
-Para que el inventario funcione con productos que se venden en unidades distintas a como se compran, hay que definir las conversiones en **Registro de Compras → Conversiones PEPS**.
+### ¿Cuándo necesita equivalencia un producto?
 
-### ¿Cuándo necesita conversión un producto?
-
-| Situación | ¿Necesita conversión? |
-|---|---|
-| Se compra en kg y se vende en kg | ❌ No |
-| Se compra en pz y se vende en pz | ❌ No |
-| Se compra en kg y se vende en manojo/pz | ✅ Sí |
-| Se compra en pz y se vende en kg | ✅ Sí |
-| Se compra en pz y se vende en pz Y en kg (distintos clientes) | ✅ Sí (para la versión kg) |
-
-### Cómo crear una conversión
-
-1. Abrir **Registro de Compras**
-2. Clic en **⚙️ Herramientas → Equivalencias de Venta** (o Conversiones PEPS)
-3. Clic en **"+ Agregar equivalencia"** al fondo del modal
-4. Seleccionar:
-   - **Producto que se vende** → el producto derivado (ej: LECHUGA ITALIANA kg)
-   - **Stock que se descuenta** → el producto base (ej: LECHUGA ITALIANA. pz)
-   - **¿Solo para un grupo?** → dejar vacío para que aplique a todos los clientes, o seleccionar uno
-5. Elegir tipo de factor:
-   - **Factor fijo** → ingresar número constante (ej: SETAS = 4 charolas/kg — siempre igual)
-   - **Varía por lote** → activar checkbox — no se pone número; el factor se captura al registrar cada compra ingresando el **peso total del lote**
-6. Vista previa: el sistema muestra exactamente qué pasará antes de guardar
-7. Clic **"Guardar equivalencia"**
-
-### Tipos de factor: fijo vs variable por lote
-
-| Tipo | Cuándo usarlo | Cómo se configura | Indicador visual |
-|---|---|---|---|
-| **Factor fijo** | El peso/cantidad es siempre igual (ej. SETAS: 1 charola = 250g → 4/kg) | Número exacto en campo "Factor" | Texto teal: "Al vender 1 kg → descuenta 4 pz" |
-| **Variable por lote** | El peso cambia de compra en compra (ej. manojos de cilantro de distinto tamaño) | Checkbox "El factor varía por lote" activo | Badge azul "Peso del lote requerido al comprar" |
-| **Factor pendiente** | Se creó con factor=1 sin marcar como variable (hay que configurar) | — | Aviso ámbar "Factor pendiente — edita para configurarlo" |
-
-#### Comportamiento del factor en ventas (`ordenes.handler.ts`)
-```
-loteFactor = lote.factor_conversion ?? conversionGlobal.factor
-```
-- Si el lote tiene `factor_conversion` registrado (se ingresó peso total al comprar) → **usa el factor del lote** (más preciso)
-- Si no tiene `factor_conversion` → **usa el factor global** de `producto_conversion_peps`
-- Por eso en conversiones "variable por lote", es **obligatorio** ingresar el peso total al registrar cada compra.
-
-#### Marcador interno para conversiones variables
-Las conversiones de tipo "varía por lote" se guardan con:
-- `factor = 1` en la base de datos (valor numérico válido como fallback)
-- `notas` prefijadas con `[var]` → ej: `[var]` o `[var] el peso varía según proveedor`
-- El frontend detecta este prefijo para mostrar el badge azul (no el aviso ámbar de "pendiente")
-
-### Conversiones ya configuradas en el sistema
-
-#### Conversiones previas (históricas)
-| Producto que se vende | Stock que se descuenta | Factor |
+| Situación | ¿Necesita equivalencia? | Tipo |
 |---|---|---|
-| CILANTRO (manojo) | CILANTRO FRESCO (kg) | 0.25 |
-| PEREJIL (mj) | PEREJIL LISO (kg) | 1.0 |
+| Se compra en kg y se vende en kg | No | — |
+| Se compra en caja y se vende en pz | **Sí** | Bilateral |
+| Se compra en pz y se vende en kg (otro grupo) | **Sí** | Bilateral |
+| Varios colores de un mismo producto se compran juntos | **Sí** | Unidireccional |
+| Se compra en bulto y se vende en kg | **Sí** | Bilateral |
 
-#### Conversiones creadas el 27/05/2026 — Lechugas y verduras kg→pz
-| Producto derivado (venta) | Unidad | Producto base (stock) | Unidad | Factor global |
-|---|---|---|---|---|
-| LECHUGA ITALIANA (id=871116) | kg | LECHUGA ITALIANA. (id=1411063) | pz | 1* |
-| LECHUGA OREJONA (id=871117) | kg | LECHUGA OREJONA (id=961084) | pz | 1* |
-| LECHUGA ROMANA (id=871118) | kg | LECHUGA ROMANA (id=961085) | pz | 1* |
-| LECHUGA SANGRIA (id=871119) | kg | LECHUGA SANGRIA (id=961086) | pz | 1* |
-| COL BLANCA (id=871092) | kg | COL BLANCA (id=961069) | pz | 1* |
-| PORO (id=871136) | kg | PORO (id=961088) | pz | 1* |
-| HIERBABUENA (id=871106) | kg | HIERBABUENA (id=961076) | manojo | 1* |
-| ESPINACA (id=871097) | kg | ESPINACA GRANDE (id=961072) | manojo | 1* |
-| CEBOLLA CAMBRAY KG (id=1351073) | kg | CEBOLLA CAMBRAY (id=961071) | mj | 1* |
-| SETAS KG (id=1351074) | kg | SETAS (id=931214) | pz | 4 ✅ |
-| EPAZOTE (id=1141066) | kg | EPAZOTE MANOJO (id=1321062) | manojo | 1* |
-| MENTA KG (id=1321076) | kg | MENTA (id=931160) | manojo | 1* |
-| PEREJIL CHINO KG (id=1321074) | kg | PEREJIL CHINO (id=931180) | manojo | 1* |
+### Dónde crear equivalencias
 
-> `*` Factor global = 1 (placeholder). El factor real se establece por lote en cada compra mediante el campo **Peso por pieza**.
-> SETAS confirmado: 1 charola = 250 g = 0.25 kg → 4 charolas/kg ✅
+Hay **dos formas** de crear equivalencias:
 
-#### Conversiones creadas el 27/05/2026 — Hierbas nuevas kg (productos creados también)
-Se crearon 11 productos kg nuevos + sus conversiones. **Factor global = 1 (placeholder)**; capturar peso real en cada compra.
+#### Opción 1: Desde el Editor de Precios (recomendado para equivalencias simples)
 
-| Producto kg creado | id | Unidad base | id base |
-|---|---|---|---|
-| ACELGA KG | 1471069 | manojo | 1201072 |
-| ALBAHACA KG | 1471070 | manojo | 931063 |
-| BERRO KG | 1471071 | manojo | 931077 |
-| ENELDO KG | 1471072 | manojo | 931106 |
-| FLOR DE CALABAZA KG | 1471073 | manojo | 931112 |
-| MEJORANA KG | 1471074 | manojo | 931155 |
-| RABANITOS KG | 1471075 | manojo | 931192 |
-| ROMERO FRESCO KG | 1471076 | manojo | 931194 |
-| TE DE LIMON KG | 1471077 | manojo | 1321070 |
-| TOMILLO KG | 1471078 | manojo | 931202 |
-| VERDOLAGAS KG | 1471079 | manojo | 931207 |
+1. Abrir **Editor de Precios**
+2. En la columna **Equiv.** de cualquier producto:
+   - Si ya tiene equivalencia → badge teal `⚖ 20 pz` — clic para editar
+   - Si no tiene → icono apagado `⚖ +` — clic para crear
+3. Se abre un modal ligero con:
+   - Producto pre-seleccionado
+   - Sugerencias automáticas de productos con nombre similar
+   - Campo de factor
+   - Toggle unidireccional
+4. Clic "Crear equivalencia" → guarda ambas direcciones (o solo una si es unidireccional)
 
-> Estos productos tienen precio=$0 configurado. **Antes de vender, actualizar precios en el módulo Precios.**
+#### Opción 2: Desde Compras → Herramientas → Equivalencias de Venta (para gestión avanzada)
 
----
+Página completa con lista a la izquierda y formulario a la derecha.
 
-## 3. Editar una conversión existente
+1. **A — Productos**: seleccionar "Producto que se vende" y "Stock que se descuenta"
+2. **Toggle Unidireccional**: activar si varios productos comparten el mismo stock base
+3. **B — Factor**: número fijo o "varía por lote"
+4. **C — Grupo**: aplica a todos o solo a un grupo de clientes
+5. **D — Notas**: campo libre opcional
+6. **Guardar**: crea ambas direcciones automáticamente (o solo una si es unidireccional)
 
-A partir de v3.8.4, el panel de edición permite **modificar completamente** una conversión — no solo el factor, sino también los productos y el grupo.
+### Tipos de factor
 
-### Cómo editar
-
-1. Abrir **⚙️ Herramientas → Equivalencias de Venta**
-2. Localizar la conversión en la lista
-3. Clic en botón **"Editar"** (lápiz) de la tarjeta
-4. El panel se expande con 5 secciones:
-
-### Secciones del panel de edición
-
-#### A — Productos
-Dos selectores con búsqueda en tiempo real. Permiten cambiar cualquiera de los dos extremos de la conversión:
-- **Producto que se vende** (derivado): lo que el cliente pide
-- **Stock que se descuenta** (base): lo que existe físicamente en el almacén
-
-#### B — Grupo de clientes
-Select para afinar a qué clientes aplica la conversión:
-- **"No — aplica a todos"**: todos los grupos usarán este factor
-- **Grupo específico**: solo ese grupo usa este factor (útil si AEROCOMIDAS necesita un factor distinto al de GENERAL para el mismo producto)
-
-#### C — Tipo de factor
-Toggle **"El factor varía por lote"**:
-- **Activo** → el input de número desaparece; se captura en cada compra mediante el peso del lote
-- **Inactivo** → input numérico obligatorio con preview de ejemplo: "Pedido de 4 kg → descuenta X unidades"
-
-#### D — Notas
-Campo libre opcional. Si la conversión es variable, las notas se guardan junto con el marcador `[var]` pero se muestran sin él.
-
-#### E — ¿Cómo afecta esta equivalencia? (dinámico)
-Panel azul que se actualiza en tiempo real según los productos y tipo de factor seleccionados:
-
-| Contexto | Mensaje si factor fijo | Mensaje si varía por lote |
+| Tipo | Cuándo usarlo | Cómo se configura |
 |---|---|---|
-| 🛒 Al registrar una compra de [BASE] | No necesitas ingresar peso adicional. El sistema usa factor X | Debes ingresar el peso total del lote para calcular el factor |
-| 📈 Al procesar una venta de [DERIVADO] | Se descuentan X [unidad_base] por cada [unidad_derivada] del lote más antiguo | Se descuenta según el factor registrado en cada lote (FIFO) |
+| **Factor fijo** | El contenido es siempre igual (1 caja = 20 pz) | Número exacto |
+| **Variable por lote** | El peso cambia de compra en compra (hierbas, manojos) | Checkbox "El factor varía por lote" |
+| **Factor pendiente** | Se creó con factor=1 sin marcar como variable | ⚠️ Hay que configurar antes de usar |
 
-### Cuándo usar edición completa vs eliminar y recrear
+### Cómo funciona el guardado bilateral
 
-| Situación | Acción recomendada |
-|---|---|
-| Cambiar el factor (ej: se confirmó el peso real del lote) | Editar — clic Editar → cambiar factor |
-| Mover de "factor fijo" a "varía por lote" | Editar — activar el checkbox |
-| Cambiar a qué grupo aplica | Editar — sección B |
-| El producto base está mal (apunta a producto equivocado) | Editar — sección A, cambiar selector |
-| Eliminar una equivalencia que ya no tiene sentido | Botón 🗑️ en la tarjeta |
+Al guardar una equivalencia normal (sin toggle unidireccional):
+
+```
+El usuario configura:
+  Producto que se vende: PASTA TORNILLO (caja)
+  Stock que se descuenta: PASTA TORNILLO (pz)
+  Factor: 20
+
+El sistema guarda automáticamente 2 filas en producto_conversion_peps:
+  1. caja → pz, factor 20    (al vender 1 caja, descuenta 20 pz)
+  2. pz → caja, factor 0.05  (al vender 1 pz, descuenta 1/20 de caja)
+```
+
+Si ya existía la inversa, la **actualiza** en vez de duplicar.
+
+### Cómo funciona el guardado unidireccional
+
+Al guardar con toggle unidireccional activado:
+
+```
+El usuario configura:
+  Producto que se vende: PIMIENTO MORRÓN VERDE (kg)
+  Stock que se descuenta: PIMIENTO COLORES (kg)
+  Factor: 1
+  ☑ Unidireccional
+
+El sistema guarda SOLO 1 fila:
+  1. MORRÓN VERDE → PIMIENTO COLORES, factor 1
+
+Repite para cada color:
+  2. MORRÓN ROJO → PIMIENTO COLORES, factor 1
+  3. MORRÓN AMARILLO → PIMIENTO COLORES, factor 1
+  4. MORRÓN NARANJA → PIMIENTO COLORES, factor 1
+```
+
+Al vender cualquier color, se descuenta del stock de PIMIENTO COLORES.
 
 ---
 
-## 4. Registrar una compra
-
-### Módulo
-**Registro de Compras** — acceder desde el menú principal
+## 3. Registrar una compra
 
 ### Campos requeridos
 
 | Campo | Descripción |
 |---|---|
 | **Producto** | El producto BASE (en la unidad en que llega del proveedor) |
-| **Cantidad** | Cuántas unidades llegaron (piezas, kg, manojos, etc.) |
+| **Cantidad** | Cuántas unidades llegaron (piezas, kg, manojos, cajas, bultos, etc.) |
 | **Precio unitario** | Precio por unidad tal como lo cobra el proveedor |
 | **Fecha de compra** | Fecha en que llegó la mercancía |
 
-### Cuándo ingresar el peso del lote
+### Todos los productos aparecen en el buscador de compras
 
-La sección **"Peso del lote"** (opcional) aparece en el formulario de compra. Es **obligatorio llenarla** si el producto tiene una conversión de tipo "varía por lote":
+A partir de v3.11.0, **cualquier producto activo** aparece en el buscador de compras, incluyendo productos con equivalencias configuradas. La equivalencia es solo para controlar cómo se descuenta en ventas — no restringe qué puedes comprar.
+
+### Peso del lote (para conversiones variables)
 
 | Campo | Quién lo llena | Descripción |
 |---|---|---|
-| **Peso total del lote (kg)** | El usuario | Se pesa el bulto completo en báscula y se escribe ese número |
-| **kg / unidad** | Solo lectura, calculado | `peso total ÷ cantidad` — se muestra en ámbar |
-| **Factor lote** | Solo lectura, calculado | `1 / (kg por unidad)` — se guarda en `inventario_peps.factor_conversion` |
+| **Peso total del lote (kg)** | El usuario | Se pesa el bulto completo en báscula |
+| **kg / unidad** | Calculado | `peso total ÷ cantidad` |
+| **Factor lote** | Calculado | `1 / (kg por unidad)` — se guarda en `inventario_peps.factor_conversion` |
 
-Si se cambia la **cantidad**, el kg/unidad y el factor se recalculan automáticamente con el mismo peso total.
-
-> Si la conversión es de **factor fijo** (ej. SETAS = 4 charolas/kg), no es necesario llenar el peso — el sistema usará el factor configurado en la equivalencia.
-
-**Ejemplo (lechugas):**
+**Ejemplo:**
 ```
-Producto:          LECHUGA ITALIANA. (pz)
-Cantidad:          20 pz
-Peso total lote:   13.0 kg  ← usuario escribe
+Producto:          LIMÓN ARPILLA (bulto)
+Cantidad:          5 bultos
+Equivalencia:      1 bulto = 30 kg de LIMÓN
 ─────────────────────────────────────────
-Calculado:  0.6500 kg/pz  ·  Factor: 1.538 pz/kg
+→ Lote PEPS: 5 bultos, factor 30
+→ Al vender 10 kg de LIMÓN, el sistema descuenta 10/30 = 0.333 bultos
 ```
-
-**Ejemplo (cilantro por manojo):**
-```
-Producto:          CILANTRO (manojo)
-Cantidad:          10 manojos
-Peso total lote:   2.0 kg  ← usuario escribe
-─────────────────────────────────────────
-Calculado:  0.2000 kg/manojo  ·  Factor: 5.000 manojos/kg
-```
-
-El factor se guarda en `inventario_peps.factor_conversion = 1 / (pesoTotal / cantidad)`. Cuando un cliente pida 1 kg de CILANTRO KG, el sistema consume exactamente 5 manojos de ese lote.
-
-### Información fiscal (opcional)
-- Folio de factura del proveedor
-- RFC
-- IVA, IEPS
-- Método y forma de pago
-
-### ¿A qué producto registrar la compra?
-
-Siempre al **producto base** — el que se compra físicamente.
-
-| ✅ Correcto | ❌ Incorrecto |
-|---|---|
-| Comprar LECHUGA ITALIANA. (pz) | Comprar LECHUGA ITALIANA (kg) |
-| Comprar CILANTRO FRESCO (kg) | Comprar CILANTRO (manojo) |
-| Comprar PEREJIL LISO (kg) | Comprar PEREJIL (mj) |
-
-> Registrar la compra en el producto derivado hace que el inventario nunca se cruce con las ventas y el stock quede mal.
 
 ---
 
-## 5. Cómo se guarda el stock (PEPS)
+## 4. Cómo se guarda el stock (PEPS)
 
 Al registrar una compra, el sistema crea:
 
-### 1. Registro en `compra`
+### 1. Registro en tabla `compra`
 Guarda todos los datos fiscales y el peso por pieza si se proporcionó.
 
-### 2. Lote en `inventario_peps`
+### 2. Lote en tabla `inventario_peps`
 ```
-id_producto:      el producto base
-cantidad_inicial: las unidades compradas
+id_producto:       el producto base
+cantidad_inicial:  las unidades compradas
 cantidad_restante: igual a cantidad_inicial (aún sin consumir)
-costo_unitario:   precio sin IVA por unidad
-factor_conversion: piezas/kg de este lote (si se capturó peso)
-fecha_movimiento: fecha de la compra (determina orden FIFO)
+costo_unitario:    precio sin IVA por unidad
+factor_conversion: unidades derivadas por unidad base (si se capturó peso)
+fecha_movimiento:  fecha de la compra (determina orden FIFO)
 ```
 
 ### 3. Actualización de `producto.stock`
@@ -286,19 +201,71 @@ fecha_movimiento: fecha de la compra (determina orden FIFO)
 stock = SUM(cantidad_restante) de todos los lotes activos del producto
 ```
 
-El campo `stock` siempre refleja la suma de todos los lotes PEPS del producto. Es la **fuente de verdad**.
+El campo `stock` siempre refleja la suma de todos los lotes PEPS del producto.
 
-### Ejemplo con múltiples compras
+### Ejemplo con múltiples lotes
 
 ```
-Compra 1 — 15/05/2026:  20 piezas × $18, peso 0.60 kg/pz
-  → Lote 1: 20 piezas, factor 1.667 pz/kg
+Compra 1 — 02/06/2026:  71 cajas × $138, cada caja = 20 pz
+  → Lote 1: 71 cajas, costo $138, factor_conversion = 20
 
-Compra 2 — 22/05/2026:  15 piezas × $19, peso 0.70 kg/pz
-  → Lote 2: 15 piezas, factor 1.429 pz/kg
+Compra 2 — 03/06/2026:  2 pz sueltas × $6.90
+  → Lote 2: 2 pz, costo $6.90
 
-Stock total: 35 piezas
+Stock de PASTA TORNILLO caja: 71
+Stock de PASTA TORNILLO pz: 2
 ```
+
+---
+
+## 5. Cómo se muestra el stock (con equivalencias)
+
+### Cálculo del stock enriquecido
+
+Cuando un producto tiene una equivalencia configurada, el stock visible incluye lo que representan las unidades del otro producto:
+
+```
+PASTA TORNILLO (pz):
+  Stock propio:     2 pz
+  Stock de caja:    71 cajas × 20 = 1420 pz
+  ─────────────────────────────────────────
+  Stock visible:    1422 pz
+  (se muestra "↔ 71 caja" debajo)
+
+PASTA TORNILLO (caja):
+  Stock propio:     71 cajas
+  Stock de pz:      2 pz ÷ 20 = 0.1 caja
+  ─────────────────────────────────────────
+  Stock visible:    71 cajas
+  (se muestra "↔ 1422 pz" debajo)
+```
+
+### Dónde se muestra
+
+| Módulo | Qué muestra |
+|---|---|
+| **Editor de Precios** | Columna "Stock" con badge de color + columna "Equiv." con badge del par |
+| **Vista Global de Precios** | Columna "Stock" con badge de color |
+| **PEPS Inventario** | Stock + equivalencia debajo en texto pequeño (ej. `↔ 71 caja`) |
+
+### Protección anti-circular
+
+Con equivalencias bilaterales (A→B y B→A), la query de stock solo usa **un nivel** de conversión por producto. Si detecta que el segundo nivel vuelve al producto original, lo ignora para no contar doble:
+
+```sql
+CASE
+  WHEN cp2.id_conversion IS NOT NULL AND pb2.stock IS NOT NULL
+    AND pb2.id_producto != p.id_producto  -- ← protección anti-circular
+  THEN ROUND(pb2.stock / (cp.factor * cp2.factor) + pb.stock / cp.factor + p.stock, 4)
+  WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+  THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+  ELSE p.stock
+END AS stock
+```
+
+### Unidades discretas
+
+Para pz, caja, bolsa, bote, botella, lata, sobre y paquete, el stock se redondea con `FLOOR` (no puede haber 0.4 piezas). Para kg, g, ml, lt se muestran los decimales.
 
 ---
 
@@ -309,13 +276,29 @@ El stock **solo se descuenta cuando se procesa una venta** (no al guardar una no
 ### Flujo al procesar
 
 1. El sistema identifica los productos del carrito
-2. Busca si cada producto tiene una **conversión PEPS** (derivado → base)
-3. Carga los lotes del producto base ordenados por fecha (FIFO)
-4. Para cada producto vendido, consume de los lotes más antiguos primero
-5. Guarda exactamente qué lote se consumió y cuánto (trazabilidad de costo)
-6. Actualiza `cantidad_restante` en cada lote y recalcula `producto.stock`
+2. Busca si cada producto tiene una **equivalencia PEPS** (derivado → base)
+3. Resuelve cadenas de equivalencias (A→B→C), con protección contra loops circulares bilaterales
+4. Carga los lotes del producto base ordenados por fecha (FIFO)
+5. Para cada producto vendido, consume de los lotes más antiguos primero
+6. Guarda exactamente qué lote se consumió y cuánto (trazabilidad de costo)
+7. Actualiza `cantidad_restante` en cada lote y recalcula `producto.stock`
 
-### Sin conversión (producto se compra y vende en la misma unidad)
+### Protección contra loops en cadenas de equivalencias
+
+Con equivalencias bilaterales, la resolución de cadenas puede crear un loop:
+```
+caja → pz → caja → pz → ... (infinito)
+```
+
+El sistema detecta esto: si al resolver la cadena el resultado vuelve al producto original, usa solo el primer nivel:
+
+```javascript
+// Si la cadena es circular (bilateral: A→B→A),
+// usar el primer nivel directamente
+convMap[pidNum] = current.id_base === pidNum ? firstLevel : current
+```
+
+### Sin conversión
 
 ```
 Vendes: 5 kg de JITOMATE
@@ -324,298 +307,289 @@ Stock:  Lote A: 8 kg (más antiguo)
 → Lote A queda en 3 kg
 ```
 
-### Con conversión (pz comprado, kg vendido)
+### Con conversión bilateral
 
 ```
-Vendes: 3 kg de LECHUGA ITALIANA (para AEROCOMIDAS)
-Conversión: LECHUGA ITALIANA kg → LECHUGA ITALIANA. pz
+Vendes: 3 cajas de PASTA TORNILLO
+Equivalencia: caja → pz, factor 20
 
-Lotes disponibles:
-  Lote 1 (15/05): 20 pz, factor 1.667 pz/kg (0.60 kg/pz)
-  Lote 2 (22/05): 15 pz, factor 1.429 pz/kg (0.70 kg/pz)
+Lotes de pz:
+  Lote 1 (02/06): 1420 pz restantes (fue 1420, se vendieron 2)
+  Lote 2 (03/06): 2 pz
 
-Consumo FIFO desde Lote 1:
-  Capacidad del Lote 1 en kg: 20 pz ÷ 1.667 = 12.0 kg disponibles
-  Necesitamos 3 kg → tomar de Lote 1 solamente
-  Piezas consumidas: 3 × 1.667 = 5.0 piezas
-
-Resultado:
-  Lote 1: 20 − 5.0 = 15.0 piezas restantes
-  Lote 2: sin cambios
-  Stock total: 30 piezas
+Consumo: 3 cajas × 20 = 60 pz
+→ Consume 60 pz de Lote 1
+→ Lote 1: 1420 − 60 = 1360 pz
 ```
 
-### Al mismo tiempo, otra venta al mismo producto en pz
+### Con equivalencia unidireccional (N→1)
 
 ```
-Vendes: 4 piezas de LECHUGA ITALIANA. (para GENERAL)
-→ Sin conversión (mismo producto, misma unidad)
-→ Consumes 4 piezas de Lote 1
+Vendes: 2 kg de PIMIENTO MORRÓN VERDE
+Equivalencia: VERDE → COLORES, factor 1 (unidireccional)
 
-Lote 1: 15.0 − 4 = 11.0 piezas restantes
-Stock total: 26 piezas
+Lotes de PIMIENTO COLORES:
+  Lote 1: 10 kg
+
+Consumo: 2 kg × 1 = 2 kg
+→ Lote 1: 10 − 2 = 8 kg
+
+Vendes: 1 kg de PIMIENTO MORRÓN ROJO
+→ Lote 1: 8 − 1 = 7 kg
+
+Ambos colores drenan del mismo inventario de COLORES.
 ```
-
-Ambas ventas (kg y pz) drenan del **mismo inventario físico**.
 
 ---
 
 ## 7. Flujo completo: ejemplo real
 
-### Escenario: LECHUGA ITALIANA, semana del 27/05/2026
+### Escenario: ACEITE 800 ML, semana del 02/06/2026
 
-**Lunes — Compra:**
-- Llegan 25 piezas a $17/pz
-- Se pesan todas en báscula: 16.25 kg → se escribe ese número en "Peso total del lote"
-- El sistema calcula automáticamente: `16.25 ÷ 25 = 0.65 kg/pz` · Factor: `1.538 pz/kg`
-- Se registra: Producto=`LECHUGA ITALIANA. pz`, Cantidad=25, Precio=17, PesoPorPieza=0.65
-- Stock: 25 piezas | Lote con factor 1.538 pz/kg
+**Lunes — Configurar equivalencia (una sola vez):**
+- Desde el Editor de Precios, clic en `⚖ +` de ACEITE 800 ML (pz)
+- Seleccionar ACEITE 800 ML CAJA como stock base
+- Factor: 0.083333 (1 pz = 1/12 de caja, porque 1 caja = 12 pz)
+- Guardar → se crean ambas direcciones automáticamente
 
-**Martes — Venta a GENERAL (notas guardadas, no procesadas):**
-- GENERAL pide 6 piezas de LECHUGA ITALIANA.
-- La nota se guarda — el stock **no cambia** todavía: 25 piezas
+**Martes — Compra:**
+- Llegan 10 cajas a $470/caja
+- Registrar compra en ACEITE 800 ML CAJA
+- Stock: 10 cajas | Equivale a: 120 pz
 
-**Miércoles — Se procesa la venta de GENERAL:**
-- Sistema consume 6 piezas del lote
-- Stock: 19 piezas
+**Miércoles — Venta de 24 pz a GENERAL:**
+- La nota se guarda con 24 pz de ACEITE 800 ML
+- Al procesar: 24 pz × 0.083333 = 2 cajas consumidas del Lote 1
+- Stock: 8 cajas | Equivale a: 96 pz
 
-**Jueves — Venta a AEROCOMIDAS:**
-- AEROCOMIDAS pide 4 kg de LECHUGA ITALIANA
-- Sistema usa conversión: 4 kg × 1.538 pz/kg = 6.15 piezas
-- Consume 6.15 piezas del lote
-- Stock: 12.85 piezas
-
-**Viernes — Segunda compra:**
-- Llegan 20 piezas más a $18/pz, pesan 0.55 kg c/u
-- Nuevo lote con factor 1.818 pz/kg
-- Stock: 12.85 + 20 = 32.85 piezas (2 lotes activos)
+**Jueves — Venta de 3 cajas a MRL:**
+- La nota tiene 3 cajas de ACEITE 800 ML CAJA
+- Al procesar: 3 cajas directas del Lote 1
+- Stock: 5 cajas | Equivale a: 60 pz
 
 ---
 
-## 8. Productos que se venden en kg y en pz
+## 8. Equivalencias bilaterales vs unidireccionales
 
-Algunos productos tienen dos presentaciones de venta:
-- En **pz** para la mayoría de grupos (GENERAL, ULTRA, MRL, etc.)
-- En **kg** para AEROCOMIDAS
+### Cuándo usar cada tipo
 
-### Estructura en el catálogo
+| Tipo | Usar cuando | Ejemplo | Toggle |
+|---|---|---|---|
+| **Bilateral** (default) | Par 1:1 — un producto tiene exactamente un par en otra unidad | ACEITE 800 ML (pz) ↔ ACEITE 800 ML CAJA | Desactivado |
+| **Unidireccional** | N→1 — varios productos comparten un mismo inventario base | MORRÓN VERDE/ROJO/AMARILLO → MORRÓN COLORES | ☑ Activado |
 
-| Producto | Unidad | Uso |
+### Qué pasa si se usa el tipo incorrecto
+
+| Error | Consecuencia | Solución |
 |---|---|---|
-| LECHUGA ITALIANA. (id=1411063) | pz | Stock base + venta a grupos regulares |
-| LECHUGA ITALIANA (id=871116) | kg | Solo para venta a AEROCOMIDAS |
+| Bilateral cuando debería ser unidireccional | El producto base (COLORES) termina con N inversas; la query solo usa una y el stock se muestra incorrecto | Eliminar inversas sobrantes, recrear como unidireccionales |
+| Unidireccional cuando debería ser bilateral | El stock del producto base no refleja el stock del derivado | Desmarcar toggle, guardar de nuevo |
 
-### Cómo conectarlos
+### Cómo se ve en el sistema
 
-Crear conversión en **Conversiones PEPS**:
-- Producto que se vende: `LECHUGA ITALIANA` (kg)
-- Stock que se descuenta: `LECHUGA ITALIANA.` (pz)
-- Factor global: estimado inicial (ej. 1.6 pz/kg si se estima 0.625 kg/pz)
+**En la lista de equivalencias:**
+```
+[venta] → [stock]  Pasta Tornillo → descuenta Pasta Tornillo
+                    1 caja → descuenta 20 pz · todos los grupos
 
-El factor global es solo un punto de partida. Cada compra puede refinarlo con el **peso por pieza** específico de ese lote.
+[venta] → [stock]  Pasta Tornillo → descuenta Pasta Tornillo
+                    1 pz → descuenta 0.05 caja · todos los grupos
+```
+Las dos filas aparecen automáticamente para equivalencias bilaterales.
 
-### Lechugas que necesitan conversión configurada
-
-| Producto kg (venta AEROCOMIDAS) | Producto pz (stock) |
-|---|---|
-| LECHUGA ITALIANA (id=871116) | LECHUGA ITALIANA. (id=1411063) |
-| LECHUGA OREJONA (id=871117) | LECHUGA OREJONA pz (verificar id) |
-| LECHUGA ROMANA (id=871118) | LECHUGA ROMANA pz (verificar id) |
-| LECHUGA SANGRIA (id=871119) | LECHUGA SANGRIA pz (verificar id) |
+**En el Editor de Precios:**
+```
+PASTA TORNILLO  pz   ⚖ 20 pz    $8.50   $8.50
+PASTA TORNILLO  caja ⚖ 0.05 caja $154.00 $154.00
+```
 
 ---
 
-## 9. Validación de stock al procesar una venta
+## 9. Análisis de margen por nota
+
+A partir de v3.11.0, los administradores pueden ver la **ganancia estimada** de cada nota directamente en la vista previa.
+
+### Cómo acceder
+
+1. Gestión de Órdenes → clic en cualquier nota
+2. En la vista previa, panel **"Análisis de margen"** (violeta, colapsado por defecto)
+3. Clic para expandir → carga los costos PEPS de cada producto
+
+### Qué muestra
+
+| Columna | Fuente |
+|---|---|
+| **Venta** | precio_unitario × cantidad de la nota |
+| **Costo PEPS** | Promedio ponderado de lotes activos en inventario_peps |
+| **Ganancia** | Venta − Costo |
+| **Margen %** | (Ganancia / Venta) × 100 |
+
+### Códigos de color
+
+| Color | Margen |
+|---|---|
+| 🟢 Verde | ≥ 30% |
+| 🟡 Amarillo | 15% – 29% |
+| 🔴 Rojo | < 15% |
+
+### Limitaciones
+
+- **Solo visible para admins** (`user.rol === 'admin'`)
+- **Solo para notas del 2 de junio 2026 en adelante** (fecha inicio de inventario PEPS). Notas anteriores muestran "No disponible — nota anterior al inventario"
+- Si un producto no tiene lotes activos, usa el **promedio histórico de compras** como fallback y lo marca con `~` (aproximado)
+- Si un producto no tiene ningún historial de compra, muestra `—`
+
+---
+
+## 10. Inventario PEPS: semáforo y filtros
+
+### Días estimados de stock
+
+El sistema calcula cuántos días le quedan a cada producto antes de agotarse, basado en la velocidad de ventas de los últimos 30 días:
+
+```
+Días estimados = stock_actual / (ventas_30_días / 30)
+```
+
+### Semáforo visual
+
+| Color | Significado | Acción sugerida |
+|---|---|---|
+| 🔴 Rojo | ≤ 3 días de stock | Compra urgente |
+| 🟡 Amarillo | 4 – 7 días | Planificar compra |
+| 🟢 Verde | > 7 días | Sin urgencia |
+| ⚫ Gris | Sin ventas en 30 días | Revisar si el producto sigue activo |
+
+### Filtros rápidos
+
+6 chips encima de la tabla, cada uno con conteo:
+
+| Filtro | Qué muestra |
+|---|---|
+| **Todos** | Todos los productos con stock |
+| **🔴 Crítico** | ≤ 3 días estimados |
+| **🟡 Stock bajo** | ≤ 7 días estimados |
+| **⚫ Sin movimiento** | Con stock pero sin ventas en 30 días |
+| **🟠 Lotes viejos** | Lotes con más de 60 días en almacén |
+| **↔ Equivalencias** | Productos con equivalencia configurada |
+
+### Tabla completa del inventario
+
+A partir de v3.11.0, la tabla muestra **todos los productos** (antes era solo Top 10):
+
+| Columna | Descripción | Ordenable |
+|---|---|---|
+| # | Ranking (top 3 resaltado cuando se ordena por valor) | — |
+| Producto | Nombre del producto | ✅ |
+| Unidad | pz, kg, caja, etc. | — |
+| Stock | Cantidad + punto de semáforo + equivalencia debajo | ✅ |
+| Días est. | Badge con color y días restantes | — |
+| Lotes | Número de lotes PEPS activos | ✅ |
+| Costo Prom. | Promedio ponderado + rango min–max | ✅ |
+| Valor Total | Stock × costo promedio (en pesos) | ✅ |
+| Ver | Botón para abrir modal con detalle de cada lote | — |
+
+Búsqueda por nombre + paginación de 50 en 50.
+
+---
+
+## 11. Validación de stock al procesar una venta
 
 Antes de procesar, el sistema verifica si hay stock suficiente.
 
-### Comportamiento
-
 - Si hay stock suficiente → procesa normalmente
-- Si **no** hay stock suficiente → muestra lista de productos faltantes con la cantidad que falta
-- El operador puede **forzar el procesamiento** aunque no haya stock (queda en negativo)
+- Si **no** hay stock suficiente → muestra lista de productos faltantes
+- El operador puede **forzar el procesamiento** (stock queda negativo)
 
 ### Stock negativo
 
 Cuando se fuerza una venta sin stock:
-- El lote PEPS queda en 0 (no puede ser negativo en `inventario_peps`)
-- `producto.stock` queda negativo (vía resta aritmética)
-- La venta queda registrada normalmente
-- La deuda o el cobro se generan igual
-
-El stock negativo se corrige al registrar la siguiente compra.
-
-### Nota sobre la validación con conversiones
-
-La validación usa el **factor global** de `producto_conversion_peps`, no el factor específico de cada lote. Puede haber una pequeña diferencia si los lotes tienen factores distintos al global. Esto es intencional — la validación es una estimación, el consumo real usa los factores precisos de cada lote.
+- El lote PEPS queda en 0
+- `producto.stock` queda negativo
+- La venta se registra normalmente
+- El stock se corrige al registrar la siguiente compra
 
 ---
 
-## 10. Revertir una venta
+## 12. Revertir una venta
 
-Si se revierte un procesamiento (`Revertir` en gestión de órdenes):
+Si se revierte un procesamiento:
 
-1. El sistema lee los registros de `detalle_venta_lote` (qué lote se consumió y cuánto)
+1. El sistema lee `detalle_venta_lote` (qué lote se consumió y cuánto)
 2. Restaura `cantidad_restante` en cada lote PEPS
 3. Elimina los registros de factura y detalle
 4. La orden vuelve a estado `guardada`
 5. `producto.stock` se recalcula automáticamente
 
-Las piezas consumidas vuelven exactamente al mismo lote del que salieron, manteniendo la trazabilidad FIFO intacta.
+Las piezas consumidas vuelven exactamente al mismo lote del que salieron.
 
 ---
 
-## 11. Eliminar una compra
+## 13. Eliminar una compra
 
 Una compra **solo puede eliminarse si el lote no ha sido consumido** (cantidad_inicial = cantidad_restante).
 
-Si ya se vendió algo de ese lote:
-- El sistema bloquea la eliminación
-- Muestra cuántas unidades ya se consumieron
-- Razón: eliminarla rompería la trazabilidad de costos de ventas ya procesadas
-
-Para "corregir" una compra mal registrada cuyo lote ya tiene consumos, la opción es registrar una compra de ajuste con cantidad negativa o contactar al administrador del sistema.
+Si ya se vendió algo de ese lote, el sistema bloquea la eliminación y muestra cuántas unidades ya se consumieron.
 
 ---
 
-## 12. Reglas y limitaciones importantes
-
-### 🔒 Reglas de integridad automáticas
-
-| Regla | Implementación |
-|---|---|
-| Los productos derivados no aparecen en búsqueda de compras | `productos:buscarParaCompra` excluye `id_producto_derivado` de conversiones activas |
-| Al registrar una compra, siempre es en el producto base | El usuario no puede seleccionar accidentalmente CILANTRO KG para comprar |
+## 14. Reglas y limitaciones importantes
 
 ### ✅ Lo que funciona bien
 
+- Equivalencias bilaterales automáticas (stock correcto en ambas unidades)
+- Equivalencias unidireccionales (N productos → 1 base central)
 - Múltiples lotes del mismo producto (FIFO automático)
-- Productos sin conversión (kg comprado, kg vendido)
-- Productos con conversión global (manojo → kg, con factor fijo)
-- Productos con conversión por lote (pz comprado, kg vendido, con peso por pieza variable)
+- Protección anti-circular en cálculo de stock y en cadenas de conversión de ventas
+- Días estimados de stock basados en velocidad de ventas real
+- Análisis de margen por nota con costos PEPS reales
+- Todos los productos aparecen en búsqueda de compras (sin restricción por equivalencias)
 - Revertir ventas con restauración exacta de lotes
-- Stock negativo forzado con seguimiento
 
 ### ⚠️ Limitaciones conocidas
 
 | Limitación | Descripción |
 |---|---|
-| **Validación usa factor global** | Al validar stock antes de procesar, usa el factor global, no el del lote. Puede haber diferencia de 5-15% si el peso varía mucho. |
-| **Un solo producto base por derivado** | Un producto derivado (kg) solo puede apuntar a un producto base (pz). No puede distribuir entre varios bases. |
-| **Sin conversión en cadena** | No se soporta A → B → C. Solo un nivel de conversión. |
-| **El stock del derivado siempre muestra 0** | El stock visible de LECHUGA ITALIANA (kg) es 0 — el inventario real vive en LECHUGA ITALIANA. (pz). Esto es correcto pero puede confundir. |
-| **Ajustes manuales** | No hay módulo de ajuste de inventario por conteo físico. Si el conteo difiere del sistema, hay que registrar una compra de ajuste o hablar con el admin. |
+| **Inventario empezó el 02/06/2026** | Notas anteriores a esa fecha no tienen costos PEPS reales. El análisis de margen no está disponible para notas previas. |
+| **Validación usa factor global** | Al validar stock antes de procesar, usa el factor global, no el del lote. Puede haber diferencia si el peso varía mucho. |
+| **Un solo nivel efectivo de cadena** | A→B→C funciona, pero si B tiene una equivalencia bilateral, la cadena se limita a un nivel para evitar loops. |
+| **Ajustes manuales** | No hay módulo de ajuste de inventario por conteo físico. Usar compra de ajuste o módulo de mermas. |
 
 ### 📌 Buenas prácticas
 
-1. **Siempre registrar compras en el producto base** — el que llega físicamente del proveedor
-2. **Marcar como "varía por lote"** todas las conversiones donde el peso del manojo/pieza no es constante (hierbas, lechugas, verduras de hoja)
-3. **Ingresar el peso total del lote** cada vez que se registre una compra de un producto con conversión variable — sin ese dato, el sistema usa el factor placeholder y el descuento de ventas será impreciso
-4. **Configurar la conversión antes de la primera compra** — crearla después no afecta lotes pasados
-5. **Actualizar el factor fijo** en Conversiones PEPS cuando cambie el peso promedio de la temporada (solo aplica a conversiones con factor fijo)
-6. **Usar "Editar" para corregir** conversiones mal configuradas — no es necesario eliminar y recrear; el panel de edición permite cambiar todo
-
----
-
-## 13. Catálogo de productos base vs derivados
-
-> **Estado al 27/05/2026:** Todas las conversiones conocidas están configuradas en la tabla `producto_conversion_peps`. Total: 26 registros activos.
-
-### Productos con conversión configurada ✅
-
-#### Hierbas y verduras de hoja — kg vendido, manojo/pz comprado
-| Producto derivado (se vende) | id | Producto base (stock) | id | Factor | Notas |
-|---|---|---|---|---|---|
-| ACELGA KG | 1471069 | ACELGA (manojo) | 1201072 | 1* | peso varía por compra |
-| ALBAHACA KG | 1471070 | ALBAHACA (manojo) | 931063 | 1* | |
-| BERRO KG | 1471071 | BERRO (manojo) | 931077 | 1* | |
-| ENELDO KG | 1471072 | ENELDO (manojo) | 931106 | 1* | |
-| EPAZOTE | 1141066 | EPAZOTE MANOJO | 1321062 | 1* | |
-| ESPINACA | 871097 | ESPINACA GRANDE | 961072 | 1* | |
-| FLOR DE CALABAZA KG | 1471073 | FLOR DE CALABAZA (manojo) | 931112 | 1* | |
-| HIERBABUENA | 871106 | HIERBABUENA (manojo) | 961076 | 1* | |
-| MEJORANA KG | 1471074 | MEJORANA (manojo) | 931155 | 1* | |
-| MENTA KG | 1321076 | MENTA (manojo) | 931160 | 1* | |
-| PEREJIL CHINO KG | 1321074 | PEREJIL CHINO (manojo) | 931180 | 1* | |
-| RABANITOS KG | 1471075 | RABANITOS (manojo) | 931192 | 1* | |
-| ROMERO FRESCO KG | 1471076 | ROMERO FRESCO (manojo) | 931194 | 1* | |
-| TE DE LIMON KG | 1471077 | TE DE LIMON (manojo) | 1321070 | 1* | |
-| TOMILLO KG | 1471078 | TOMILLO (manojo) | 931202 | 1* | |
-| VERDOLAGAS KG | 1471079 | VERDOLAGAS (manojo) | 931207 | 1* | |
-
-#### Lechugas, col, poro — kg vendido, pz comprado
-| Producto derivado | id | Producto base | id | Factor |
-|---|---|---|---|---|
-| LECHUGA ITALIANA | 871116 | LECHUGA ITALIANA. | 1411063 | 1* |
-| LECHUGA OREJONA | 871117 | LECHUGA OREJONA | 961084 | 1* |
-| LECHUGA ROMANA | 871118 | LECHUGA ROMANA | 961085 | 1* |
-| LECHUGA SANGRIA | 871119 | LECHUGA SANGRIA | 961086 | 1* |
-| COL BLANCA | 871092 | COL BLANCA | 961069 | 1* |
-| PORO | 871136 | PORO | 961088 | 1* |
-
-#### Otros
-| Producto derivado | id | Producto base | id | Factor | Notas |
-|---|---|---|---|---|---|
-| CEBOLLA CAMBRAY KG | 1351073 | CEBOLLA CAMBRAY | 961071 | 1* | mj→kg |
-| SETAS KG | 1351074 | SETAS | 931214 | **4** | 1 charola = 250g ✅ |
-| CILANTRO (manojo) | 961067 | CILANTRO FRESCO | 871091 | 0.25 | histórico |
-| PEREJIL (mj) | — | PEREJIL LISO | — | 1.0 | histórico |
-
-> `*` Factor = 1 con marcador `[var]` en notas. El factor real se calcula en cada compra cuando el usuario ingresa el **Peso total del lote**. Si no se ingresa peso, se usa factor=1 como fallback (descuento impreciso).
-> `†` Factor = 1 sin marcador `[var]` — conversión histórica pendiente de configurar correctamente.
-
-### Productos sin conversión (compra y venta en la misma unidad)
-
-El stock se descuenta directamente sin transformación. Incluye la mayoría de productos kg:
-- Jitomate, Papa, Zanahoria, Limón, Naranja, Aguacate, Cebolla, etc.
-
-### Regla para nuevos productos
-
-Al crear un producto que se vende en unidad diferente a la de compra:
-1. Crear el **producto base** (unidad de compra — ej. RÚCULA mj)
-2. Crear el **producto derivado** (unidad de venta — ej. RÚCULA KG) — activar la sección **"Conversión PEPS"** en el formulario de alta
-3. En esa sección:
-   - Buscar y seleccionar el producto base
-   - Elegir "Factor fijo" (con número) o "Varía por lote" (sin número)
-4. Al guardar, se inserta automáticamente en `producto_conversion_peps`
-
-Si el producto ya existe y falta la conversión, crearla desde **⚙️ Herramientas → Equivalencias de Venta → + Agregar equivalencia**.
-
-#### Sección "Conversión PEPS" en CreateProductModal
-Implementada en `src/renderer/components/CreateProductModal.tsx`.
-- Toggle que activa/desactiva la sección (desactivado por defecto)
-- Búsqueda de producto base con debounce (usa `buscarProductosParaCompra`)
-- Campo de factor numérico (solo si no es variable)
-- Checkbox "varía por lote" — mismo comportamiento que en ConversionesPepsModal
-- Al guardar llama `crearConversionPeps({ idProductoDerivado, idProductoBase, factor, notas })`
+1. **Usar equivalencias bilaterales** para pares simples (caja ↔ pz)
+2. **Usar equivalencias unidireccionales** cuando N colores/variantes comparten un inventario
+3. **Siempre registrar compras en el producto base** — el que llega físicamente
+4. **Revisar el semáforo** diariamente para anticipar compras urgentes
+5. **Ingresar el peso total del lote** en cada compra de productos con conversión variable
+6. **Crear equivalencias desde el Editor de Precios** para agilizar — tiene sugerencias automáticas
 
 ---
 
 ## Resumen del flujo en 5 pasos
 
 ```
-1. CONFIGURAR
-   ⚙️ Herramientas → Equivalencias de Venta
-   → Definir qué producto base corresponde a cada derivado
-   → Elegir: factor fijo (número) o varía por lote (checkbox)
+1. CONFIGURAR EQUIVALENCIA (una sola vez)
+   Editor de Precios → clic en ⚖ + → seleccionar par → factor → guardar
+   O bien: Compras → Herramientas → Equivalencias de Venta
 
 2. COMPRAR
    Registro de Compras → producto BASE, cantidad, precio
    → Si la conversión es variable: ingresar Peso total del lote
-   → Se crea lote PEPS con factor_conversion específico del lote
 
-3. VENDER (guardar nota)
+3. GUARDAR NOTA
    El stock NO cambia — la nota queda en estado "guardada"
 
 4. PROCESAR VENTA
-   El stock se descuenta usando FIFO + factor del lote (o global si no hay)
-   → Se registra exactamente qué lote cubrió qué venta (trazabilidad de costos)
+   El stock se descuenta usando FIFO + factor del lote (o global)
+   → Trazabilidad: se registra qué lote cubrió qué venta
 
-5. (OPCIONAL) REVERTIR
-   El stock se restaura exactamente en los lotes originales
+5. REVISAR MARGEN (admin)
+   Gestión de Órdenes → vista previa → "Análisis de margen"
+   → Ganancia real basada en costos PEPS
 ```
 
 ---
 
 *Documento generado para el equipo de operaciones de DISFRULEG.*
-*Para cambios en la lógica de inventario, consultar con Ubicuo Studio.*
+*v3.11.0 — Ubicuo Studio — 05/06/2026*
