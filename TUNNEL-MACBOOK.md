@@ -5,7 +5,7 @@
 La Mac Mini no estaba accesible, así que se levantó la app desde el MacBook
 usando un **nuevo tunnel de Cloudflare** para mantener `disfruleg.ubicuo.icu` funcionando.
 
-### Pasos realizados en el MacBook
+### Pasos realizadåos en el MacBook
 
 1. Se autenticó `cloudflared` con el cert de la cuenta (`~/.cloudflared/cert.pem`).
 2. Se creó un tunnel nuevo llamado **disfruleg-macbook** (ID: `4eaf2756-c4fc-4f56-ba1f-03438a33c0c0`).
