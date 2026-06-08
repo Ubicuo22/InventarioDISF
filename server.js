@@ -105,7 +105,23 @@ app.use((err, req, res, next) => {
 app.listen(PORT, async () => {
   try {
     const { q } = require('./db/pool')
-    await q('SELECT 1')
+
+    // Retry de conexión inicial — si TiDB no responde al arrancar (DNS lento,
+    // cold-start de Serverless, red momentánea), reintenta hasta 5 veces con
+    // backoff para no morir al primer intento.
+    let dbOk = false
+    for (let i = 1; i <= 5; i++) {
+      try {
+        await q('SELECT 1')
+        dbOk = true
+        break
+      } catch (e) {
+        console.warn(`[startup] Intento ${i}/5 DB falló: ${e.message}`)
+        if (i < 5) await new Promise(r => setTimeout(r, i * 2000))
+      }
+    }
+    if (!dbOk) throw new Error('No se pudo conectar a la BD después de 5 intentos')
+
     console.log(`✅ Disfruleg Bodega — http://localhost:${PORT}`)
     console.log(`   DB: ${process.env.TIDB_HOST}`)
 
