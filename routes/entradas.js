@@ -3,6 +3,7 @@
  * POST /api/entradas               — Crear entrada (compra + lote PEPS + stock)
  * GET  /api/entradas/recientes     — Últimas 50 entradas
  * GET  /api/entradas/lotes/:id     — Lotes PEPS activos de un producto (orden PEPS)
+ * GET  /api/entradas/peps-info/:id — Conversiones PEPS (derivados / alerta de derivado)
  */
 
 const router = require('express').Router()
@@ -10,40 +11,6 @@ const { pool, q } = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
 const { enviarATodos } = require('../utils/push')
 const { registrar } = require('../utils/actividad')
-
-// Productos equivalentes (familia) de un producto
-router.get('/equivalentes/:idProducto', requireAuth, async (req, res) => {
-  try {
-    const { idProducto } = req.params
-    // Familias a las que pertenece el producto
-    const familias = await q(`
-      SELECT f.id_familia
-      FROM producto_familia_miembro m
-      JOIN producto_familia f ON f.id_familia = m.id_familia
-      WHERE m.id_producto = ? AND f.activo = 1
-    `, [idProducto])
-
-    if (!familias.length) return res.json({ ok: true, data: [] })
-
-    const ids = familias.map(f => f.id_familia)
-    const placeholders = ids.map(() => '?').join(',')
-
-    const miembros = await q(`
-      SELECT p.id_producto, p.nombre_producto, p.unidad_producto, p.stock
-      FROM producto_familia_miembro m
-      JOIN producto p ON p.id_producto = m.id_producto
-      WHERE m.id_familia IN (${placeholders})
-        AND m.id_producto != ?
-        AND p.activo = 1
-      GROUP BY p.id_producto
-      ORDER BY p.nombre_producto
-    `, [...ids, idProducto])
-
-    res.json({ ok: true, data: miembros })
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
-  }
-})
 
 // Conversiones PEPS activas cuyo BASE es este producto
 // Retorna los derivados que usan este producto como fuente de stock
@@ -63,6 +30,7 @@ router.get('/peps-info/:idProducto', requireAuth, async (req, res) => {
         FROM producto_conversion_peps c
         JOIN producto pd ON pd.id_producto = c.id_producto_derivado
         WHERE c.id_producto_base = ? AND c.activo = 1
+          AND c.id_producto_derivado != c.id_producto_base
         ORDER BY pd.nombre_producto
       `, [idProducto]),
 
@@ -76,6 +44,7 @@ router.get('/peps-info/:idProducto', requireAuth, async (req, res) => {
         FROM producto_conversion_peps c
         JOIN producto pb ON pb.id_producto = c.id_producto_base
         WHERE c.id_producto_derivado = ? AND c.activo = 1
+          AND c.id_producto_derivado != c.id_producto_base
         LIMIT 1
       `, [idProducto])
     ])
@@ -139,6 +108,10 @@ router.get('/recientes', requireAuth, async (req, res) => {
       FROM compra c
       INNER JOIN producto p ON c.id_producto = p.id_producto
       LEFT  JOIN proveedor prov ON c.id_proveedor = prov.id_proveedor
+      WHERE (c.notas IS NULL OR (
+              c.notas NOT LIKE 'PHANTOM:%'
+          AND NOT (c.notas LIKE 'BOOTSTRAP:%' AND c.precio_unitario_compra <= 0.01)
+      ))
       ORDER BY c.fecha_registro DESC
       LIMIT 50
     `)
@@ -161,7 +134,6 @@ router.post('/', requireAuth, async (req, res) => {
       folio          = null,
       incluirIva     = true,
       notas          = null,
-      idsEquivalentes = [],
       pesoLote       = null   // kg totales del lote — opcional, para factor PEPS
     } = req.body
 
@@ -235,16 +207,9 @@ router.post('/', requireAuth, async (req, res) => {
       [idProducto, idProducto]
     )
 
-    // 4. Actualizar stock de equivalentes seleccionados (solo stock, sin PEPS)
-    const equivalentesValidos = Array.isArray(idsEquivalentes)
-      ? idsEquivalentes.map(Number).filter(n => n > 0 && n !== Number(idProducto))
-      : []
-    for (const idEq of equivalentesValidos) {
-      await conn.execute(
-        `UPDATE producto SET stock = stock + ? WHERE id_producto = ?`,
-        [cantidadNum, idEq]
-      )
-    }
+    // NOTA (Electron 4.1.0): las familias son solo agrupación visual/clave SAT.
+    // El stock compartido se resuelve vía producto_conversion_peps al VENDER,
+    // nunca al comprar — no se actualiza stock de equivalentes aquí.
 
     await conn.commit()
     conn.release()

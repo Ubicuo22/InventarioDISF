@@ -26,14 +26,37 @@ router.post('/', async (req, res) => {
   try {
     await conn.beginTransaction()
 
-    // Verificar stock actual
+    // Verificar stock VIRTUAL (propio + cobertura del base vía equivalencia PEPS).
+    // Mismo patrón que el catálogo de Electron (4.2.x): un nivel de conversión,
+    // id_grupo global y filtro anti auto-conversión. Sin esto se bloquearían
+    // mermas legítimas de productos derivados con stock propio 0 pero cobertura
+    // en el producto base.
     const [[prod]] = await conn.execute(
-      'SELECT stock, nombre_producto, unidad_producto FROM producto WHERE id_producto = ? AND activo = 1',
+      `SELECT
+         p.stock, p.nombre_producto, p.unidad_producto,
+         CASE
+           WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+           THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+           ELSE p.stock
+         END AS stock_virtual
+       FROM producto p
+       LEFT JOIN (
+         SELECT id_producto_derivado, MIN(id_conversion) AS min_id
+         FROM producto_conversion_peps
+         WHERE activo = 1 AND id_grupo IS NULL
+           AND id_producto_derivado != id_producto_base
+         GROUP BY id_producto_derivado
+       ) cp_min ON p.id_producto = cp_min.id_producto_derivado
+       LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
+       LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
+       WHERE p.id_producto = ? AND p.activo = 1`,
       [id_producto]
     )
     if (!prod) { await conn.rollback(); return res.status(404).json({ ok: false, error: 'Producto no encontrado' }) }
-    if (prod.stock < cantidad_merma)
-      return res.status(400).json({ ok: false, error: `Stock insuficiente. Disponible: ${prod.stock} ${prod.unidad_producto}` })
+    if (parseFloat(prod.stock_virtual) < cantidad_merma) {
+      await conn.rollback()
+      return res.status(400).json({ ok: false, error: `Stock insuficiente. Disponible: ${prod.stock_virtual} ${prod.unidad_producto}` })
+    }
 
     // Insertar merma (sin costo — simplificado para web)
     const [ins] = await conn.execute(`
@@ -68,14 +91,27 @@ router.post('/', async (req, res) => {
           'UPDATE inventario_peps SET cantidad_restante = cantidad_restante - ? WHERE id_inventario_peps = ?',
           [consumir, lote.id_inventario_peps]
         )
+        // Registrar cada lote consumido — Electron usa merma_lote para
+        // revertir/eliminar la merma devolviendo cantidades al lote exacto
+        await conn.execute(
+          'INSERT INTO merma_lote (id_merma, id_inventario_peps, cantidad_consumida) VALUES (?, ?, ?)',
+          [ins.insertId, lote.id_inventario_peps, consumir]
+        )
         pendiente -= consumir
       }
     }
 
-    // Actualizar stock del producto (aritmético, igual que el electron en mermas)
+    // Reconciliar stock desde lotes PEPS (igual que mermas:registrar de Electron,
+    // FIX I-5: reemplaza la resta aritmética para no acumular drift)
     await conn.execute(
-      'UPDATE producto SET stock = stock - ? WHERE id_producto = ?',
-      [cantidad_merma, id_producto]
+      `UPDATE producto
+       SET stock = (
+         SELECT COALESCE(SUM(ip.cantidad_restante), 0)
+         FROM inventario_peps ip
+         WHERE ip.id_producto = ? AND ip.activo = 1
+       )
+       WHERE id_producto = ?`,
+      [id_producto, id_producto]
     )
 
     await conn.commit()

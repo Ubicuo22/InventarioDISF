@@ -37,6 +37,13 @@ router.get('/resumen', requireAuth, async (req, res) => {
       INNER JOIN producto p   ON c.id_producto  = p.id_producto
       LEFT  JOIN proveedor prov ON c.id_proveedor = prov.id_proveedor
       WHERE DATE(c.fecha_compra) BETWEEN ? AND ?
+        -- Excluir compras sintéticas (4.2.2): phantom, ajustes y bootstrap a $0.01
+        -- no cuentan en totales de gasto ni promedios
+        AND (c.notas IS NULL OR (
+              c.notas NOT LIKE 'PHANTOM:%'
+          AND c.notas NOT LIKE '%AJUSTE INVENTARIO%'
+          AND NOT (c.notas LIKE 'BOOTSTRAP:%' AND c.precio_unitario_compra <= 0.01)
+        ))
       ORDER BY c.fecha_compra DESC, c.id_compra DESC
     `, [desde, hasta])
 

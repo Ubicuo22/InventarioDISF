@@ -38,7 +38,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.f99e80d1.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.e69dfa1d.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css" as="style">
@@ -1179,7 +1179,18 @@
           :class="pedidosTab === 'registrados' ? 'bg-slate-700 text-slate-300' : 'text-slate-500 hover:text-slate-300'">
           Registrados
         </button>
+        <button @click="pedidosTab = 'pendientes'; cargarPendientesHoy()"
+          class="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap"
+          :class="pedidosTab === 'pendientes' ? 'bg-rose-500/20 text-rose-400' : 'text-slate-500 hover:text-slate-300'">
+          Pendientes
+          <span x-show="pendientesTotalCount() > 0"
+            class="ml-1 text-[10px] tabular-nums opacity-70"
+            x-text="pendientesTotalCount()"></span>
+        </button>
       </div>
+
+      <!-- Filtros + lista — ocultos en sub-tab Pendientes -->
+      <div x-show="pedidosTab !== 'pendientes'">
 
       <!-- Filtros -->
       <div class="flex gap-2 mb-3 items-end">
@@ -1322,6 +1333,120 @@
         </template>
 
       </div>
+
+      </div><!-- /filtros+lista wrapper -->
+
+      <!-- Pendientes del día -->
+      <div x-show="pedidosTab === 'pendientes'" x-cloak>
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs text-slate-500">Productos pendientes de los pedidos de hoy</p>
+          <button @click="cargarPendientesHoy()"
+            class="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700/50 transition-colors"
+            title="Actualizar">
+            <svg class="w-4 h-4" :class="cargandoPendientes ? 'animate-spin' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Skeleton -->
+        <div x-show="cargandoPendientes" class="space-y-3">
+          <template x-for="i in 2" :key="i">
+            <div class="card p-4 space-y-2">
+              <div class="h-3.5 rounded-full bg-slate-700/60 animate-pulse" style="width:55%"></div>
+              <div class="h-2.5 rounded-full bg-slate-800 animate-pulse" style="width:35%"></div>
+              <div class="flex gap-2 mt-3">
+                <div class="h-6 w-20 rounded-full bg-slate-700/40 animate-pulse"></div>
+                <div class="h-6 w-28 rounded-full bg-slate-700/40 animate-pulse"></div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Empty -->
+        <div x-show="!cargandoPendientes && pendientesHoy.length === 0"
+          class="py-14 flex flex-col items-center gap-4">
+          <div class="w-14 h-14 rounded-2xl flex items-center justify-center" style="background:rgba(34,197,94,.1)">
+            <svg class="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="text-center">
+            <p class="text-white text-sm font-medium">Todo al día</p>
+            <p class="text-slate-500 text-xs mt-1">No hay pendientes ni faltantes en los pedidos de hoy</p>
+          </div>
+        </div>
+
+        <!-- Tarjetas por pedido -->
+        <div x-show="!cargandoPendientes && pendientesHoy.length > 0" class="space-y-3">
+          <template x-for="orden in pendientesHoy" :key="orden.folio_numero">
+            <div class="card p-4">
+
+              <!-- Header de la orden -->
+              <div class="flex items-start justify-between gap-2 mb-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-[11px] text-slate-500 font-mono">#<span x-text="orden.folio_numero"></span></span>
+                    <span x-show="orden.observacion"
+                      class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 truncate max-w-[140px]"
+                      x-text="orden.observacion"></span>
+                  </div>
+                  <p class="font-semibold text-white text-sm mt-0.5 truncate" x-text="orden.nombre_cliente"></p>
+                  <p class="text-[11px] text-slate-500 truncate" x-text="orden.nombre_grupo"></p>
+                </div>
+                <button @click="resolverTodosOrden(orden.folio_numero)"
+                  class="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 active:scale-95 transition-all whitespace-nowrap">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  Todo listo
+                </button>
+              </div>
+
+              <!-- Pendientes (amber) -->
+              <div x-show="orden.pendientes.length > 0" class="mb-2.5">
+                <p class="text-[10px] text-amber-400/70 uppercase tracking-wide font-semibold mb-1.5">Pendientes</p>
+                <div class="flex flex-wrap gap-1.5">
+                  <template x-for="nombre in orden.pendientes" :key="nombre">
+                    <button @click="resolverPendiente(orden.folio_numero, 'pendiente', nombre)"
+                      class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 transition-all">
+                      <svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                      </svg>
+                      <span x-text="nombre"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Faltantes (rojo) -->
+              <div x-show="orden.faltantes.length > 0">
+                <p class="text-[10px] text-red-400/70 uppercase tracking-wide font-semibold mb-1.5">Faltantes</p>
+                <div class="flex flex-wrap gap-1.5">
+                  <template x-for="nombre in orden.faltantes" :key="nombre">
+                    <button @click="resolverPendiente(orden.folio_numero, 'faltante', nombre)"
+                      class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20 hover:bg-red-500/20 active:scale-95 transition-all">
+                      <svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                      <span x-text="nombre"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Pie: usuario + fecha revisión -->
+              <p class="text-[10px] text-slate-600 mt-3"
+                x-text="'Revisado por ' + orden.usuario_revision + ' · ' + fmtFecha(orden.fecha_revision)"></p>
+
+            </div>
+          </template>
+        </div>
+
+      </div><!-- /pendientes del día -->
+
     </div>
 
     <!-- TAB: Historial -->
@@ -2389,30 +2514,6 @@
           <p class="w-full text-[10px] text-emerald-700 mt-1">
             Stock automático vía conversión PEPS — no requiere acción
           </p>
-        </div>
-      </div>
-
-      <!-- ✅ Equivalentes de familia — misma unidad, actualización manual -->
-      <div x-show="equivalentes.length > 0">
-        <label class="block text-[11px] font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
-          Actualizar también
-        </label>
-        <div class="panel-dark rounded-xl overflow-hidden divide-y divide-slate-700/60">
-          <template x-for="eq in equivalentes" :key="eq.id_producto">
-            <label class="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-700/30 transition-colors">
-              <input
-                type="checkbox"
-                :value="eq.id_producto"
-                x-model="equivalentesChecked"
-                class="w-4 h-4 rounded accent-emerald-500 flex-shrink-0"
-              />
-              <div class="flex-1 min-w-0">
-                <p class="text-sm text-slate-200 truncate" x-text="eq.nombre_producto"></p>
-                <p class="text-[10px] text-slate-500"
-                  x-text="`${eq.unidad_producto} · stock: ${eq.stock}`"></p>
-              </div>
-            </label>
-          </template>
         </div>
       </div>
 
@@ -4702,10 +4803,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.f99e80d1.js agrupa todos los módulos en 1 request.
+     bodega-bundle.e69dfa1d.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.f99e80d1.js"></script>
+<script src="/js/bodega-bundle.e69dfa1d.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

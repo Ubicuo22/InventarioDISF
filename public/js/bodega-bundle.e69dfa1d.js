@@ -1,4 +1,4 @@
-/* bodega-bundle.f99e80d1.js — 2026-06-08T17:35:22.661Z */
+/* bodega-bundle.e69dfa1d.js — 2026-06-10T20:35:56.079Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -87,6 +87,15 @@ const API = {
       method: 'PUT',
       headers: this._headers(),
       body: JSON.stringify(body)
+    })
+    return this._handle(res)
+  },
+
+  async patch(path, body) {
+    const res = await this._fetch(this._base + path, {
+      method: 'PATCH',
+      headers: this._headers(),
+      body: JSON.stringify(body || {})
     })
     return this._handle(res)
   },
@@ -720,8 +729,6 @@ function entriesModule() {
     dropdownVisible: false,
     dropResults: [],
     form: {},
-    equivalentes: [],           // sinónimos (familia) — misma unidad, stock manual
-    equivalentesChecked: [],    // ids seleccionados para actualizar stock
     pepsDerivados: [],          // productos de venta que usan este como base (solo informativo)
     pepsEsDerivado: null,       // si el producto seleccionado ES un derivado (alerta)
 
@@ -734,7 +741,7 @@ function entriesModule() {
         this.form.stockActual    = prod.stock
         this.form.unidad         = prod.unidad_producto || ''
         this.form.busqueda       = prod.nombre_producto
-        this.cargarEquivalentes(prod.id_producto)
+        this.cargarPepsInfo(prod.id_producto)
       }
       this.modalAbierto = true
     },
@@ -757,8 +764,8 @@ function entriesModule() {
       }
       this.dropResults          = []
       this.dropdownVisible      = false
-      this.equivalentes         = []
-      this.equivalentesChecked  = []
+      this.pepsDerivados        = []
+      this.pepsEsDerivado       = null
     },
 
     buscarProducto() {
@@ -773,20 +780,11 @@ function entriesModule() {
       }
     },
 
-    async cargarEquivalentes(idProducto) {
-      this.equivalentes        = []
-      this.equivalentesChecked = []
+    async cargarPepsInfo(idProducto) {
       this.pepsDerivados       = []
       this.pepsEsDerivado      = null
       try {
-        const [re, rp] = await Promise.all([
-          API.get(`/api/entradas/equivalentes/${idProducto}`),
-          API.get(`/api/entradas/peps-info/${idProducto}`)
-        ])
-        if (re.ok && re.data.length > 0) {
-          this.equivalentes        = re.data
-          this.equivalentesChecked = re.data.map(e => e.id_producto)
-        }
+        const rp = await API.get(`/api/entradas/peps-info/${idProducto}`)
         if (rp.ok) {
           this.pepsDerivados  = rp.derivados  || []
           this.pepsEsDerivado = rp.esDerivado || null
@@ -802,15 +800,13 @@ function entriesModule() {
       this.form.busqueda       = p.nombre_producto
       this.dropdownVisible     = false
       this.dropResults         = []
-      this.cargarEquivalentes(p.id_producto)
+      this.cargarPepsInfo(p.id_producto)
     },
 
     limpiarSeleccion() {
       this.form.idProducto     = null; this.form.nombreProducto = ''
       this.form.stockActual    = 0;    this.form.busqueda = ''
       this.form.unidad         = ''
-      this.equivalentes        = []
-      this.equivalentesChecked = []
       this.pepsDerivados       = []
       this.pepsEsDerivado      = null
     },
@@ -865,7 +861,6 @@ function entriesModule() {
           folio:           this.form.folio || null,
           incluirIva:      this.form.incluirIva,
           notas:           this.form.notas || null,
-          idsEquivalentes: this.equivalentesChecked,
           pesoLote:        this.form.pesoLote ? parseFloat(this.form.pesoLote) : null
         })
         if (!r.ok) { this.errorModal = r.error || 'Error al guardar'; return }
@@ -875,13 +870,6 @@ function entriesModule() {
         const idx = this.productos.findIndex(p => p.id_producto === this.form.idProducto)
         if (idx !== -1) {
           this.productos[idx] = { ...this.productos[idx], stock: parseFloat(this.productos[idx].stock) + cantAgregada }
-        }
-        // Actualizar stock local de equivalentes seleccionados
-        for (const idEq of this.equivalentesChecked) {
-          const idxEq = this.productos.findIndex(p => p.id_producto === idEq)
-          if (idxEq !== -1) {
-            this.productos[idxEq] = { ...this.productos[idxEq], stock: parseFloat(this.productos[idxEq].stock) + cantAgregada }
-          }
         }
         this.filtrar()
         await this.cargarResumen()
@@ -2139,8 +2127,9 @@ function mermasModule() {
       if (!this.mermaForm.tipo)          { this.errorMerma = 'Selecciona el tipo de merma'; return }
       const cant = parseFloat(this.mermaForm.cantidad)
       if (!cant || cant <= 0)            { this.errorMerma = 'Ingresa una cantidad válida'; return }
-      if (cant > this.mermaForm.stock_actual)
-        { this.errorMerma = `Cantidad mayor al stock disponible (${this.mermaForm.stock_actual} ${this.mermaForm.unidad_producto})`; return }
+      // No bloquear aquí contra stock propio: el servidor valida contra stock
+      // VIRTUAL (propio + cobertura del base vía equivalencia PEPS) — un derivado
+      // con stock propio 0 puede tener merma legítima cubierta por el base.
       if (!this.mermaForm.motivo.trim()) { this.errorMerma = 'El motivo es obligatorio'; return }
 
       this.guardandoMerma = true
@@ -3354,9 +3343,69 @@ function dashboardModule() {
 }
 
 
+;/* ── public/js/modules/pendientes.js ── */
+function pendientesModule() {
+  return {
+    pendientesHoy:      [],
+    cargandoPendientes: false,
+
+    async cargarPendientesHoy() {
+      this.cargandoPendientes = true
+      try {
+        const r = await API.get('/api/ordenes/pendientes-hoy')
+        this.pendientesHoy = r.data || []
+      } catch {
+        this.pendientesHoy = []
+      } finally {
+        this.cargandoPendientes = false
+      }
+    },
+
+    pendientesTotalCount() {
+      return this.pendientesHoy.reduce(
+        (acc, o) => acc + o.pendientes.length + o.faltantes.length, 0
+      )
+    },
+
+    async resolverPendiente(folio, tipo, nombre_producto) {
+      const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
+      if (!orden) return
+
+      // Optimistic update
+      const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
+      orden[campo] = orden[campo].filter(n => n !== nombre_producto)
+      if (orden.pendientes.length === 0 && orden.faltantes.length === 0) {
+        this.pendientesHoy = this.pendientesHoy.filter(o => o.folio_numero !== folio)
+      }
+
+      try {
+        const r = await API.patch(`/api/ordenes/${folio}/pendiente`, { tipo, nombre_producto })
+        if (!r.ok) throw new Error(r.error || 'Error')
+      } catch (e) {
+        await this.cargarPendientesHoy()
+        this.mostrarToast(e.message || 'Error al resolver', true)
+      }
+    },
+
+    async resolverTodosOrden(folio) {
+      // Optimistic: remove order from list immediately
+      this.pendientesHoy = this.pendientesHoy.filter(o => o.folio_numero !== folio)
+      try {
+        const r = await API.patch(`/api/ordenes/${folio}/resolver-todos`)
+        if (!r.ok) throw new Error(r.error || 'Error')
+        this.mostrarToast('Todos los pendientes resueltos')
+      } catch (e) {
+        await this.cargarPendientesHoy()
+        this.mostrarToast(e.message || 'Error al resolver', true)
+      }
+    }
+  }
+}
+
+
 ;/* ── public/js/bodega.js ── */
 // Composición del store Alpine.js.
-// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard
+// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard → pendientes
 function bodega() {
   return {
     ...uiModule(),
@@ -3373,5 +3422,6 @@ function bodega() {
     ...cobranzaModule(),
     ...comprasModule(),
     ...dashboardModule(),
+    ...pendientesModule(),
   }
 }

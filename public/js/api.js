@@ -88,6 +88,15 @@ const API = {
     return this._handle(res)
   },
 
+  async patch(path, body) {
+    const res = await this._fetch(this._base + path, {
+      method: 'PATCH',
+      headers: this._headers(),
+      body: JSON.stringify(body || {})
+    })
+    return this._handle(res)
+  },
+
   async delete(path) {
     const res = await this._fetch(this._base + path, {
       method: 'DELETE',

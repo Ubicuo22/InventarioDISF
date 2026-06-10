@@ -94,8 +94,9 @@ function mermasModule() {
       if (!this.mermaForm.tipo)          { this.errorMerma = 'Selecciona el tipo de merma'; return }
       const cant = parseFloat(this.mermaForm.cantidad)
       if (!cant || cant <= 0)            { this.errorMerma = 'Ingresa una cantidad válida'; return }
-      if (cant > this.mermaForm.stock_actual)
-        { this.errorMerma = `Cantidad mayor al stock disponible (${this.mermaForm.stock_actual} ${this.mermaForm.unidad_producto})`; return }
+      // No bloquear aquí contra stock propio: el servidor valida contra stock
+      // VIRTUAL (propio + cobertura del base vía equivalencia PEPS) — un derivado
+      // con stock propio 0 puede tener merma legítima cubierta por el base.
       if (!this.mermaForm.motivo.trim()) { this.errorMerma = 'El motivo es obligatorio'; return }
 
       this.guardandoMerma = true

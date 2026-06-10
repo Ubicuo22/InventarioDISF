@@ -37,10 +37,10 @@
   --r-xl: 28px;
   --r-2xl: 36px;
 
-  /* Blurs */
-  --blur-1: 14px;
-  --blur-2: 24px;
-  --blur-3: 40px;
+  /* Blurs — refinados para liquid glass iOS 18 */
+  --blur-1: 18px;
+  --blur-2: 30px;
+  --blur-3: 48px;
 
   /* Easings */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -92,13 +92,15 @@
   --bg-1: #0a0a0c;
   --bg-2: #101014;
 
-  /* Glass layers (tintes claros sobre fondo oscuro) */
-  --glass-1: rgba(255,255,255,0.035);
-  --glass-2: rgba(255,255,255,0.055);
-  --glass-3: rgba(255,255,255,0.085);
-  --glass-4: rgba(255,255,255,0.12);
-  --glass-border:    rgba(255,255,255,0.07);
-  --glass-border-hi: rgba(255,255,255,0.14);
+  /* Glass layers — opacidad subida para legibilidad sin perder translucidez */
+  --glass-1: rgba(255,255,255,0.05);
+  --glass-2: rgba(255,255,255,0.085);
+  --glass-3: rgba(255,255,255,0.13);
+  --glass-4: rgba(255,255,255,0.18);
+  --glass-border:    rgba(255,255,255,0.10);
+  --glass-border-hi: rgba(255,255,255,0.22);
+  /* Highlight superior tipo iOS 18 — borde brillante sutil en la parte alta */
+  --glass-highlight: rgba(255,255,255,0.12);
 
   /* Texto */
   --text:       #f5f5f7;
@@ -106,18 +108,18 @@
   --text-dim:   #71717a;
   --text-faint: #52525b;
 
-  /* Sombras */
-  --shadow-glass: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
-  --shadow-pop:   0 20px 60px -15px rgba(0,0,0,0.75);
+  /* Sombras — dual layer + highlight superior tipo Apple liquid glass */
+  --shadow-glass: 0 1px 0 rgba(255,255,255,0.10) inset, 0 -1px 0 rgba(0,0,0,0.20) inset, 0 4px 16px rgba(0,0,0,0.35), 0 16px 40px -12px rgba(0,0,0,0.55);
+  --shadow-pop:   0 1px 0 rgba(255,255,255,0.12) inset, 0 20px 60px -15px rgba(0,0,0,0.75), 0 8px 24px -8px rgba(0,0,0,0.5);
   --shadow-fab:   0 14px 40px -6px rgba(22,163,74,.55), 0 4px 14px rgba(22,163,74,.28), inset 0 1px 0 rgba(255,255,255,0.15);
   --shadow-nav:   0 -4px 24px rgba(0,0,0,0.45), 0 10px 32px -8px rgba(0,0,0,0.5);
 
-  /* Backdrops específicos */
-  --modal-bg:        rgba(18,18,22,0.88);
-  --modal-backdrop:  rgba(0,0,0,0.55);
-  --dropdown-bg:     rgba(20,20,24,0.92);
-  --nav-bg:          rgba(18,18,22,0.70);
-  --header-bg:       rgba(10,10,12,0.72);
+  /* Backdrops específicos — más opacos para asegurar legibilidad de modales/nav */
+  --modal-bg:        rgba(18,18,22,0.92);
+  --modal-backdrop:  rgba(0,0,0,0.65);
+  --dropdown-bg:     rgba(20,20,24,0.95);
+  --nav-bg:          rgba(14,14,18,0.78);
+  --header-bg:       rgba(10,10,12,0.80);
 
   /* Compat */
   --bg:         var(--bg-1);
@@ -138,13 +140,15 @@
   --bg-1: #ffffff;
   --bg-2: #f7f7fa;
 
-  /* Glass layers — tintes oscuros sobre fondo claro */
-  --glass-1: rgba(0,0,0,0.025);
-  --glass-2: rgba(0,0,0,0.04);
-  --glass-3: rgba(0,0,0,0.065);
-  --glass-4: rgba(0,0,0,0.09);
-  --glass-border:    rgba(0,0,0,0.08);
-  --glass-border-hi: rgba(0,0,0,0.14);
+  /* Glass layers — opacidad subida para legibilidad sin perder translucidez */
+  --glass-1: rgba(0,0,0,0.04);
+  --glass-2: rgba(0,0,0,0.065);
+  --glass-3: rgba(0,0,0,0.10);
+  --glass-4: rgba(0,0,0,0.14);
+  --glass-border:    rgba(0,0,0,0.10);
+  --glass-border-hi: rgba(0,0,0,0.20);
+  /* Highlight blanco para iOS liquid feel en light mode */
+  --glass-highlight: rgba(255,255,255,0.70);
 
   /* Texto — gradiente de oscuros */
   --text:       #0a0a0c;
@@ -152,9 +156,9 @@
   --text-dim:   #52525b;
   --text-faint: #71717a;
 
-  /* Sombras — más sutiles para fondo claro */
-  --shadow-glass: 0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6);
-  --shadow-pop:   0 20px 50px -12px rgba(0,0,0,0.18);
+  /* Sombras — dual layer + highlight superior tipo iOS liquid glass */
+  --shadow-glass: 0 1px 0 rgba(255,255,255,0.70) inset, 0 -1px 0 rgba(0,0,0,0.06) inset, 0 2px 8px rgba(0,0,0,0.04), 0 12px 32px -8px rgba(0,0,0,0.10);
+  --shadow-pop:   0 1px 0 rgba(255,255,255,0.80) inset, 0 20px 50px -12px rgba(0,0,0,0.18), 0 8px 20px -6px rgba(0,0,0,0.10);
   --shadow-fab:   0 14px 40px -6px rgba(22,163,74,.45), 0 4px 14px rgba(22,163,74,.22), inset 0 1px 0 rgba(255,255,255,0.4);
   --shadow-nav:   0 -4px 24px rgba(0,0,0,0.06), 0 10px 32px -8px rgba(0,0,0,0.10);
 
@@ -513,22 +517,24 @@ body::after {
 .glass {
   background: var(--glass-1);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--blur-1)) saturate(160%);
-  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(160%);
+  backdrop-filter: blur(var(--blur-1)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(180%);
   border-radius: var(--r-lg);
+  box-shadow: 0 1px 0 var(--glass-highlight) inset, 0 2px 8px rgba(0,0,0,0.12);
 }
 .glass-2 {
   background: var(--glass-2);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--blur-2)) saturate(170%);
-  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(170%);
+  backdrop-filter: blur(var(--blur-2)) saturate(190%);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(190%);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-glass);
 }
 .glass-strong {
   background: var(--glass-3);
   border: 1px solid var(--glass-border-hi);
-  backdrop-filter: blur(var(--blur-3)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(180%);
+  backdrop-filter: blur(var(--blur-3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(200%);
   box-shadow: var(--shadow-glass);
   border-radius: var(--r-xl);
 }
@@ -549,11 +555,29 @@ body::after {
   background: var(--glass-2);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
-  backdrop-filter: blur(var(--blur-1)) saturate(160%);
-  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(160%);
-  transition: border-color .2s var(--ease-smooth), transform .15s var(--ease-spring), background .2s;
+  backdrop-filter: blur(var(--blur-1)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(180%);
+  box-shadow: var(--shadow-glass);
+  position: relative;
+  transition: border-color .2s var(--ease-smooth), transform .15s var(--ease-spring), background .2s, box-shadow .2s;
 }
-.card:hover { background: var(--glass-3); }
+/* Sheen diagonal sutil — el rasgo definitorio del liquid glass de Apple */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--glass-highlight), transparent 45%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.card:hover { background: var(--glass-3); border-color: var(--glass-border-hi); }
+.card:hover::before { opacity: 1; }
 
 .input-dark {
   background: rgba(255,255,255,0.035);
@@ -640,9 +664,10 @@ body::after {
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 16px;
-  backdrop-filter: blur(var(--blur-1)) saturate(160%);
-  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(160%);
-  transition: background .2s, border-color .2s, transform .15s var(--ease-spring);
+  backdrop-filter: blur(var(--blur-1)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(180%);
+  box-shadow: var(--shadow-glass);
+  transition: background .2s, border-color .2s, transform .15s var(--ease-spring), box-shadow .2s;
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -656,13 +681,15 @@ body::after {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent 40%);
+  background: linear-gradient(135deg, var(--glass-highlight), transparent 45%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
           mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
   pointer-events: none;
+  opacity: 0.8;
 }
+.bento-tile:hover::before { opacity: 1; }
 
 /* Spans (sobre grid 4-col, en móvil ajustamos a 2-col) */
 .bento-col-2 { grid-column: span 2; }
@@ -827,17 +854,18 @@ body::after {
 ══════════════════════════════ */
 .modal-backdrop {
   background: var(--modal-backdrop);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
 .sheet {
   background: var(--modal-bg);
   border: 1px solid var(--glass-border-hi);
   border-bottom: none;
-  backdrop-filter: blur(var(--blur-3)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(180%);
-  box-shadow: var(--shadow-pop);
+  backdrop-filter: blur(var(--blur-3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(200%);
+  /* Highlight superior tipo iOS sheet */
+  box-shadow: 0 1px 0 var(--glass-highlight) inset, var(--shadow-pop);
   border-top-left-radius: var(--r-xl);
   border-top-right-radius: var(--r-xl);
 }
@@ -853,10 +881,10 @@ body::after {
 [class*="bg-modal"],
 .bg-modal {
   background: var(--modal-bg) !important;
-  backdrop-filter: blur(var(--blur-3)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(180%);
+  backdrop-filter: blur(var(--blur-3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(200%);
   border: 1px solid var(--glass-border-hi);
-  box-shadow: var(--shadow-pop);
+  box-shadow: 0 1px 0 var(--glass-highlight) inset, var(--shadow-pop);
 }
 
 /* ══════════════════════════════
@@ -872,9 +900,10 @@ nav.bottom-nav-glass {
   background: var(--nav-bg);
   border: 1px solid var(--glass-border-hi);
   border-radius: 999px;
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
-  box-shadow: var(--shadow-nav);
+  backdrop-filter: blur(36px) saturate(220%);
+  -webkit-backdrop-filter: blur(36px) saturate(220%);
+  /* Highlight superior + sombras de elevación */
+  box-shadow: 0 1px 0 var(--glass-highlight) inset, var(--shadow-nav);
   padding: 6px;
   z-index: 30;
   display: flex;

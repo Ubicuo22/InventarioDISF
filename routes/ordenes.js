@@ -96,6 +96,137 @@ router.get('/', async (req, res) => {
   }
 })
 
+/* ─── GET /api/ordenes/pendientes-hoy ─── */
+router.get('/pendientes-hoy', async (req, res) => {
+  try {
+    const rows = await q(`
+      SELECT o.folio_numero, o.id_cliente, c.nombre_cliente,
+             g.id_grupo, g.nombre_grupo,
+             o.datos_carrito, o.fecha_modificacion
+      FROM   ordenes_guardadas o
+      INNER JOIN cliente c ON o.id_cliente = c.id_cliente
+      INNER JOIN grupo   g ON c.id_grupo   = g.id_grupo
+      WHERE  o.estado = 'guardada' AND o.activo = 1
+        AND  DATE(o.fecha_creacion) = CURDATE()
+      ORDER  BY o.folio_numero ASC
+    `)
+
+    const result = []
+    for (const row of rows) {
+      const carrito = typeof row.datos_carrito === 'string'
+        ? JSON.parse(row.datos_carrito)
+        : (row.datos_carrito || {})
+
+      const historial   = carrito.__historial__ || []
+      const observacion = carrito.__observacion__ || null
+
+      let lastRevision = null
+      for (let i = historial.length - 1; i >= 0; i--) {
+        if (historial[i].tipoEvento === 'revision') { lastRevision = historial[i]; break }
+      }
+      if (!lastRevision) continue
+
+      const pendientes = Array.isArray(lastRevision.pendientes) ? lastRevision.pendientes : []
+      const faltantes  = Array.isArray(lastRevision.faltantes)  ? lastRevision.faltantes  : []
+      if (pendientes.length === 0 && faltantes.length === 0) continue
+
+      result.push({
+        folio_numero:     row.folio_numero,
+        nombre_cliente:   row.nombre_cliente,
+        nombre_grupo:     row.nombre_grupo,
+        observacion,
+        pendientes,
+        faltantes,
+        fecha_revision:   lastRevision.fecha,
+        usuario_revision: lastRevision.usuario
+      })
+    }
+
+    res.json({ ok: true, data: result })
+  } catch (e) {
+    console.error('[ordenes] GET /pendientes-hoy', e.message)
+    res.status(500).json({ ok: false, error: 'Error al obtener pendientes' })
+  }
+})
+
+/* ─── PATCH /api/ordenes/:folio/pendiente — resolver un item ─── */
+router.patch('/:folio/pendiente', requireModulo('pedidos'), async (req, res) => {
+  try {
+    const folio = parseInt(req.params.folio, 10)
+    if (!folio || isNaN(folio)) return res.status(400).json({ ok: false, error: 'folio inválido' })
+    const { tipo, nombre_producto } = req.body
+    if (!tipo || !nombre_producto) return res.status(400).json({ ok: false, error: 'tipo y nombre_producto requeridos' })
+    if (tipo !== 'pendiente' && tipo !== 'faltante') return res.status(400).json({ ok: false, error: 'tipo inválido' })
+
+    const [row] = await q(
+      'SELECT datos_carrito, estado FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      [folio]
+    )
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+    if (row.estado === 'registrada') return res.status(400).json({ ok: false, error: 'Orden ya registrada' })
+
+    const carrito   = typeof row.datos_carrito === 'string' ? JSON.parse(row.datos_carrito) : (row.datos_carrito || {})
+    const historial = carrito.__historial__ || []
+
+    let lastRevIdx = -1
+    for (let i = historial.length - 1; i >= 0; i--) {
+      if (historial[i].tipoEvento === 'revision') { lastRevIdx = i; break }
+    }
+    if (lastRevIdx === -1) return res.status(400).json({ ok: false, error: 'No hay revisión registrada' })
+
+    const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
+    const arr   = Array.isArray(historial[lastRevIdx][campo]) ? historial[lastRevIdx][campo] : []
+    historial[lastRevIdx][campo] = arr.filter(n => n !== nombre_producto)
+    carrito.__historial__ = historial
+
+    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), folio])
+
+    registrar(req, 'pedidos', 'pendiente_resuelto', { folio, tipo, producto: nombre_producto })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[ordenes] PATCH /:folio/pendiente', e.message)
+    res.status(500).json({ ok: false, error: 'Error al resolver pendiente' })
+  }
+})
+
+/* ─── PATCH /api/ordenes/:folio/resolver-todos — vaciar pendientes y faltantes ─── */
+router.patch('/:folio/resolver-todos', requireModulo('pedidos'), async (req, res) => {
+  try {
+    const folio = parseInt(req.params.folio, 10)
+    if (!folio || isNaN(folio)) return res.status(400).json({ ok: false, error: 'folio inválido' })
+
+    const [row] = await q(
+      'SELECT datos_carrito, estado FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      [folio]
+    )
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+    if (row.estado === 'registrada') return res.status(400).json({ ok: false, error: 'Orden ya registrada' })
+
+    const carrito   = typeof row.datos_carrito === 'string' ? JSON.parse(row.datos_carrito) : (row.datos_carrito || {})
+    const historial = carrito.__historial__ || []
+
+    let lastRevIdx = -1
+    for (let i = historial.length - 1; i >= 0; i--) {
+      if (historial[i].tipoEvento === 'revision') { lastRevIdx = i; break }
+    }
+    if (lastRevIdx === -1) return res.status(400).json({ ok: false, error: 'No hay revisión registrada' })
+
+    historial[lastRevIdx].pendientes = []
+    historial[lastRevIdx].faltantes  = []
+    carrito.__historial__ = historial
+
+    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), folio])
+
+    registrar(req, 'pedidos', 'pendientes_resueltos', { folio })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[ordenes] PATCH /:folio/resolver-todos', e.message)
+    res.status(500).json({ ok: false, error: 'Error al resolver pendientes' })
+  }
+})
+
 /* ─── GET /api/ordenes/:folio ───────────────────────── */
 router.get('/:folio', async (req, res) => {
   try {

@@ -7,8 +7,6 @@ function entriesModule() {
     dropdownVisible: false,
     dropResults: [],
     form: {},
-    equivalentes: [],           // sinónimos (familia) — misma unidad, stock manual
-    equivalentesChecked: [],    // ids seleccionados para actualizar stock
     pepsDerivados: [],          // productos de venta que usan este como base (solo informativo)
     pepsEsDerivado: null,       // si el producto seleccionado ES un derivado (alerta)
 
@@ -21,7 +19,7 @@ function entriesModule() {
         this.form.stockActual    = prod.stock
         this.form.unidad         = prod.unidad_producto || ''
         this.form.busqueda       = prod.nombre_producto
-        this.cargarEquivalentes(prod.id_producto)
+        this.cargarPepsInfo(prod.id_producto)
       }
       this.modalAbierto = true
     },
@@ -44,8 +42,8 @@ function entriesModule() {
       }
       this.dropResults          = []
       this.dropdownVisible      = false
-      this.equivalentes         = []
-      this.equivalentesChecked  = []
+      this.pepsDerivados        = []
+      this.pepsEsDerivado       = null
     },
 
     buscarProducto() {
@@ -60,20 +58,11 @@ function entriesModule() {
       }
     },
 
-    async cargarEquivalentes(idProducto) {
-      this.equivalentes        = []
-      this.equivalentesChecked = []
+    async cargarPepsInfo(idProducto) {
       this.pepsDerivados       = []
       this.pepsEsDerivado      = null
       try {
-        const [re, rp] = await Promise.all([
-          API.get(`/api/entradas/equivalentes/${idProducto}`),
-          API.get(`/api/entradas/peps-info/${idProducto}`)
-        ])
-        if (re.ok && re.data.length > 0) {
-          this.equivalentes        = re.data
-          this.equivalentesChecked = re.data.map(e => e.id_producto)
-        }
+        const rp = await API.get(`/api/entradas/peps-info/${idProducto}`)
         if (rp.ok) {
           this.pepsDerivados  = rp.derivados  || []
           this.pepsEsDerivado = rp.esDerivado || null
@@ -89,15 +78,13 @@ function entriesModule() {
       this.form.busqueda       = p.nombre_producto
       this.dropdownVisible     = false
       this.dropResults         = []
-      this.cargarEquivalentes(p.id_producto)
+      this.cargarPepsInfo(p.id_producto)
     },
 
     limpiarSeleccion() {
       this.form.idProducto     = null; this.form.nombreProducto = ''
       this.form.stockActual    = 0;    this.form.busqueda = ''
       this.form.unidad         = ''
-      this.equivalentes        = []
-      this.equivalentesChecked = []
       this.pepsDerivados       = []
       this.pepsEsDerivado      = null
     },
@@ -152,7 +139,6 @@ function entriesModule() {
           folio:           this.form.folio || null,
           incluirIva:      this.form.incluirIva,
           notas:           this.form.notas || null,
-          idsEquivalentes: this.equivalentesChecked,
           pesoLote:        this.form.pesoLote ? parseFloat(this.form.pesoLote) : null
         })
         if (!r.ok) { this.errorModal = r.error || 'Error al guardar'; return }
@@ -162,13 +148,6 @@ function entriesModule() {
         const idx = this.productos.findIndex(p => p.id_producto === this.form.idProducto)
         if (idx !== -1) {
           this.productos[idx] = { ...this.productos[idx], stock: parseFloat(this.productos[idx].stock) + cantAgregada }
-        }
-        // Actualizar stock local de equivalentes seleccionados
-        for (const idEq of this.equivalentesChecked) {
-          const idxEq = this.productos.findIndex(p => p.id_producto === idEq)
-          if (idxEq !== -1) {
-            this.productos[idxEq] = { ...this.productos[idxEq], stock: parseFloat(this.productos[idxEq].stock) + cantAgregada }
-          }
         }
         this.filtrar()
         await this.cargarResumen()
