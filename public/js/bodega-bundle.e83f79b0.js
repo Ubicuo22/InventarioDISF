@@ -1,4 +1,4 @@
-/* bodega-bundle.e69dfa1d.js — 2026-06-10T20:35:56.079Z */
+/* bodega-bundle.e83f79b0.js — 2026-06-11T14:49:19.900Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1287,6 +1287,21 @@ function reviewModule () {
     revisionCambiarModal: { visible: false, busqueda: '', resultados: [], buscando: false, error: null },
     _revisionSearchId: null,            // anti-race: solo procesa el resultado de la última búsqueda
 
+    // Modal agregar producto a la orden desde revisión
+    revisionAgregarModal: {
+      visible:       false,
+      busqueda:      '',
+      resultados:    [],
+      buscando:      false,
+      modo:          'buscar',   // 'buscar' | 'crear'
+      nuevaUnidad:   '',
+      nuevoPrecio:   '',
+      cantidades:    {},         // { id_producto: cantidad } para productos encontrados
+      guardandoNuevo: false,
+      error:         null
+    },
+    _revisionAgregarSearchId: null,
+
     // ── Helpers ────────────────────────────────────────────────
     _revisionFilteredKeys () {
       return Object.keys(this.revisionCart).filter(k => !k.startsWith('__'))
@@ -1871,6 +1886,109 @@ function reviewModule () {
 
       this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
       this.mostrarToast(`Cambiado a ${prod.nombre_producto}`)
+    },
+
+    // ── Agregar producto al carrito desde revisión ─────────────
+    revisionAbrirAgregar () {
+      this.revisionAgregarModal = {
+        visible: true, busqueda: '', resultados: [], buscando: false,
+        modo: 'buscar', nuevaUnidad: '', nuevoPrecio: '',
+        cantidades: {}, guardandoNuevo: false, error: null
+      }
+      this.$nextTick(() => document.getElementById('rev-agregar-input')?.focus())
+    },
+
+    revisionCerrarAgregar () {
+      this.revisionAgregarModal.visible = false
+    },
+
+    async revisionBuscarParaAgregar () {
+      const busq = this.revisionAgregarModal.busqueda.trim()
+      if (busq.length < 2) { this.revisionAgregarModal.resultados = []; return }
+      const searchId = Date.now()
+      this._revisionAgregarSearchId = searchId
+      this.revisionAgregarModal.buscando = true
+      this.revisionAgregarModal.error = null
+      try {
+        const gid = this.revisionIdGrupo ? `&groupId=${this.revisionIdGrupo}` : ''
+        const r = await API.get(`/api/productos/buscar?q=${encodeURIComponent(busq)}${gid}`)
+        if (this._revisionAgregarSearchId !== searchId) return
+        this.revisionAgregarModal.resultados = r.ok ? (r.data || []) : []
+        if (!r.ok) this.revisionAgregarModal.error = r.error || 'Error al buscar'
+      } catch {
+        if (this._revisionAgregarSearchId !== searchId) return
+        this.revisionAgregarModal.resultados = []
+        this.revisionAgregarModal.error = !navigator.onLine ? 'Sin conexión' : 'Error al buscar'
+      } finally {
+        if (this._revisionAgregarSearchId === searchId) this.revisionAgregarModal.buscando = false
+      }
+    },
+
+    revisionAgregarProductoAlCarrito (prod, cantidad) {
+      const cant = parseFloat(cantidad) || 1
+      // Buscar la sección donde insertar (General primero, si no la primera)
+      const keys = this._revisionFilteredKeys()
+      const section = keys.includes('General') ? 'General' : (keys[0] || 'General')
+      if (!this.revisionCart[section]) this.revisionCart[section] = []
+
+      // Evitar duplicados — si ya está en el carrito, solo actualizar cantidad
+      const existing = this.revisionCart[section].find(i => i.id_producto === prod.id_producto)
+      if (existing) {
+        existing.cantidad = cant
+        this.mostrarToast(`${prod.nombre_producto} actualizado`)
+      } else {
+        this.revisionCart[section].push({
+          id_producto:     prod.id_producto,
+          nombre_producto: prod.nombre_producto,
+          unidad:          prod.unidad_producto,
+          precio_unitario: parseFloat(prod.precio_base) || 0,
+          cantidad:        cant
+        })
+        this.mostrarToast(`${prod.nombre_producto} agregado`)
+      }
+
+      // Marcar como revisado automáticamente
+      const key = this.revisionItemKey(section, prod.id_producto)
+      if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
+
+      this.revisionCerrarAgregar()
+    },
+
+    revisionIrAModoCrear () {
+      this.revisionAgregarModal.modo = 'crear'
+      this.revisionAgregarModal.error = null
+      this.$nextTick(() => document.getElementById('rev-nuevo-unidad')?.focus())
+    },
+
+    async revisionCrearYAgregar () {
+      const nombre = this.revisionAgregarModal.busqueda.trim()
+      const unidad = this.revisionAgregarModal.nuevaUnidad.trim()
+      if (!nombre) { this.revisionAgregarModal.error = 'Escribe el nombre del producto'; return }
+      if (!unidad) { this.revisionAgregarModal.error = 'La unidad es requerida (ej: kg, pz, caja)'; return }
+
+      this.revisionAgregarModal.guardandoNuevo = true
+      this.revisionAgregarModal.error = null
+      try {
+        const precio = parseFloat(this.revisionAgregarModal.nuevoPrecio) || 0
+        const r = await API.post('/api/productos', {
+          nombre_producto: nombre,
+          unidad_producto: unidad,
+          precio: precio > 0 ? precio : undefined,
+          id_grupo: this.revisionIdGrupo || undefined
+        })
+        if (!r.ok) { this.revisionAgregarModal.error = r.error || 'Error al crear producto'; return }
+        // Agregar al carrito con el producto recién creado
+        this.revisionAgregarProductoAlCarrito({
+          id_producto:     r.data.id_producto,
+          nombre_producto: r.data.nombre_producto,
+          unidad_producto: unidad,
+          precio_base:     precio
+        }, 1)
+      } catch (e) {
+        this.revisionAgregarModal.error = e.message || 'Error al crear'
+      } finally {
+        this.revisionAgregarModal.guardandoNuevo = false
+      }
     },
 
     // ── Detección de revisada (para badge en lista) ────────────

@@ -24,6 +24,9 @@
  */
 
 const path = require('path')
+// TZ debe fijarse ANTES de dotenv y de cualquier new Date() para que Node
+// interprete todas las fechas locales en zona de Morelia / CDMX
+process.env.TZ = 'America/Mexico_City'
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
 // ─── Prevenir caídas por errores no capturados ────────────────

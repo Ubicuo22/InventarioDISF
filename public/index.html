@@ -38,7 +38,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.e69dfa1d.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.e83f79b0.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css" as="style">
@@ -1976,18 +1976,18 @@
 
       <!-- Resumen del período -->
       <div x-show="comprasResumen.total_compras >= 0 && !comprasCargando"
-        class="grid grid-cols-3 gap-3 mb-5">
-        <div class="card p-4 text-center rounded-2xl">
-          <p class="text-cyan-400 font-bold text-lg" x-text="fmtMoney(comprasResumen.total_periodo || 0)"></p>
-          <p class="text-slate-500 text-[11px] mt-0.5">Total gastado</p>
+        class="grid grid-cols-3 gap-2 mb-5">
+        <div class="card p-3 text-center rounded-2xl min-w-0 overflow-hidden">
+          <p class="text-cyan-400 font-bold text-sm sm:text-lg truncate" x-text="fmtMoney(comprasResumen.total_periodo || 0)"></p>
+          <p class="text-slate-500 text-[10px] mt-0.5 leading-tight">Total gastado</p>
         </div>
-        <div class="card p-4 text-center rounded-2xl">
-          <p class="text-white font-bold text-lg" x-text="comprasResumen.total_compras || 0"></p>
-          <p class="text-slate-500 text-[11px] mt-0.5">Compras</p>
+        <div class="card p-3 text-center rounded-2xl min-w-0 overflow-hidden">
+          <p class="text-white font-bold text-sm sm:text-lg truncate" x-text="comprasResumen.total_compras || 0"></p>
+          <p class="text-slate-500 text-[10px] mt-0.5 leading-tight">Compras</p>
         </div>
-        <div class="card p-4 text-center rounded-2xl">
-          <p class="text-slate-300 font-bold text-lg" x-text="comprasResumen.dias_con_gasto || 0"></p>
-          <p class="text-slate-500 text-[11px] mt-0.5">Días con compras</p>
+        <div class="card p-3 text-center rounded-2xl min-w-0 overflow-hidden">
+          <p class="text-slate-300 font-bold text-sm sm:text-lg truncate" x-text="comprasResumen.dias_con_gasto || 0"></p>
+          <p class="text-slate-500 text-[10px] mt-0.5 leading-tight">Días con compras</p>
         </div>
       </div>
 
@@ -3467,29 +3467,36 @@
             </div>
 
             <!-- Acciones: Cambiar · Faltante · Pendiente -->
-            <div class="grid grid-cols-3 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
+            <div class="grid grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-5">
               <button @click="revisionAbrirCambiar()"
-                class="btn-rev-slate flex flex-col items-center gap-2 py-4 sm:py-5 rounded-2xl">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                class="btn-rev-slate flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl">
+                <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                 </svg>
-                <span class="text-[11px] sm:text-xs font-semibold uppercase tracking-wide">Cambiar</span>
+                <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide">Cambiar</span>
               </button>
               <button @click="revisionMarcarFaltante()"
-                class="btn-rev-red flex flex-col items-center gap-2 py-4 sm:py-5 rounded-2xl">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                class="btn-rev-red flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl">
+                <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
-                <span class="text-[11px] sm:text-xs font-semibold uppercase tracking-wide">Faltante</span>
+                <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide">Faltante</span>
               </button>
               <button @click="revisionMarcarPendiente()"
-                class="btn-rev-amber flex flex-col items-center gap-2 py-4 sm:py-5 rounded-2xl"
+                class="btn-rev-amber flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl"
                 :class="revisionIsCurrentPending() ? 'btn-rev-amber--active' : ''">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <span class="text-[11px] sm:text-xs font-semibold uppercase tracking-wide"
+                <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide"
                   x-text="revisionIsCurrentPending() ? 'Quitar' : 'Pendiente'"></span>
+              </button>
+              <button @click="revisionAbrirAgregar()"
+                class="btn-rev-green flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl">
+                <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide">Agregar</span>
               </button>
             </div>
 
@@ -3771,6 +3778,192 @@
           </svg>
         </button>
       </template>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: AGREGAR PRODUCTO AL CARRITO DESDE REVISIÓN
+══════════════════════════════════════════════════════════ -->
+<div x-show="revisionAgregarModal.visible" x-cloak
+  class="fixed inset-0 z-[70] flex items-end justify-center"
+  @click="revisionCerrarAgregar()"
+  @keydown.escape.window="revisionCerrarAgregar()">
+  <div class="modal-backdrop absolute inset-0"></div>
+
+  <div class="relative w-full max-w-lg slide-up bg-modal"
+    style="border-top-left-radius:24px; border-top-right-radius:24px; max-height:82vh; display:flex; flex-direction:column"
+    @click.stop>
+
+    <!-- Handle -->
+    <div class="flex justify-center pt-3 pb-1 flex-shrink-0">
+      <div class="w-10 h-1 rounded-full bg-slate-600"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 pt-2 pb-3 border-b border-slate-700/60 flex-shrink-0">
+      <div>
+        <h3 class="font-semibold text-white text-base"
+          x-text="revisionAgregarModal.modo === 'crear' ? 'Nuevo producto' : 'Agregar al pedido'"></h3>
+        <p class="text-[11px] text-slate-500 mt-0.5"
+          x-text="revisionAgregarModal.modo === 'crear' ? 'Se guardará en el catálogo y se agregará al pedido' : 'Busca un producto existente o créalo nuevo'"></p>
+      </div>
+      <button @click="revisionCerrarAgregar()" class="p-1.5 text-slate-500 hover:text-white transition-colors">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Buscador (modo buscar) -->
+    <div x-show="revisionAgregarModal.modo === 'buscar'" class="flex flex-col flex-1 overflow-hidden">
+
+      <div class="px-4 pt-3 pb-2 flex-shrink-0">
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input id="rev-agregar-input" type="text"
+            x-model="revisionAgregarModal.busqueda"
+            @input.debounce.300ms="revisionBuscarParaAgregar()"
+            @keydown.escape="revisionCerrarAgregar()"
+            placeholder="Nombre del producto..."
+            autocomplete="off"
+            class="w-full bg-slate-800/70 border border-slate-700/60 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50">
+        </div>
+      </div>
+
+      <!-- Spinner -->
+      <div x-show="revisionAgregarModal.buscando" class="flex justify-center py-6 flex-shrink-0">
+        <svg class="w-5 h-5 text-slate-500 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+      </div>
+
+      <!-- Error -->
+      <div x-show="revisionAgregarModal.error && !revisionAgregarModal.buscando"
+        class="mx-4 my-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex-shrink-0">
+        <p class="text-sm text-red-400" x-text="revisionAgregarModal.error"></p>
+      </div>
+
+      <!-- Resultados -->
+      <div class="flex-1 overflow-y-auto">
+
+        <!-- Sin resultados → opción crear -->
+        <div x-show="!revisionAgregarModal.buscando && revisionAgregarModal.busqueda.length >= 2 && revisionAgregarModal.resultados.length === 0 && !revisionAgregarModal.error"
+          class="px-4 py-4">
+          <p class="text-sm text-slate-400 text-center mb-3">
+            Sin resultados para "<span class="text-white font-medium" x-text="revisionAgregarModal.busqueda"></span>"
+          </p>
+          <button @click="revisionIrAModoCrear()"
+            class="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-emerald-400 border border-emerald-500/30 bg-emerald-500/8 hover:bg-emerald-500/15 active:scale-[0.98] transition-all">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Crear "<span class="font-bold" x-text="revisionAgregarModal.busqueda"></span>"
+          </button>
+        </div>
+
+        <!-- Placeholder vacío -->
+        <div x-show="revisionAgregarModal.busqueda.length < 2 && !revisionAgregarModal.buscando"
+          class="flex flex-col items-center gap-3 py-8 text-slate-600">
+          <svg class="w-10 h-10 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <span class="text-sm">Escribe para buscar</span>
+        </div>
+
+        <!-- Lista de resultados -->
+        <template x-for="prod in revisionAgregarModal.resultados" :key="prod.id_producto">
+          <div class="px-4 py-3 flex items-center gap-3 hover:sf-lo transition-colors"
+            style="border-bottom:1px solid var(--border)">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-white truncate" x-text="prod.nombre_producto.toUpperCase()"></p>
+              <p class="text-[11px] text-slate-500 mt-0.5"
+                x-text="(prod.precio_base > 0 ? '$' + parseFloat(prod.precio_base).toFixed(2) + ' · ' : '') + prod.unidad_producto + (prod.stock != null ? ' · stock: ' + prod.stock : '')"></p>
+            </div>
+            <!-- Input cantidad + botón añadir -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <input type="number" min="0.01" step="0.01"
+                :id="`rev-cant-${prod.id_producto}`"
+                x-model="revisionAgregarModal.cantidades[prod.id_producto]"
+                :placeholder="prod.unidad_producto === 'kg' ? '0.00' : '1'"
+                class="w-16 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-emerald-500/60"
+                @keydown.enter="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1)">
+              <button @click="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1)"
+                class="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Modo CREAR nuevo producto -->
+    <div x-show="revisionAgregarModal.modo === 'crear'" class="flex flex-col flex-1 overflow-y-auto px-4 pt-3 pb-6 gap-4">
+
+      <!-- Nombre (read-only del buscador) -->
+      <div>
+        <label class="text-[11px] text-slate-500 uppercase tracking-wide mb-1.5 block">Nombre</label>
+        <div class="bg-slate-800/60 border border-emerald-500/40 rounded-xl px-4 py-2.5 text-white font-medium text-sm"
+          x-text="revisionAgregarModal.busqueda"></div>
+      </div>
+
+      <!-- Unidad -->
+      <div>
+        <label class="text-[11px] text-slate-500 uppercase tracking-wide mb-1.5 block">Unidad <span class="text-red-400">*</span></label>
+        <input id="rev-nuevo-unidad" type="text"
+          x-model="revisionAgregarModal.nuevaUnidad"
+          placeholder="kg, pz, caja, bolsa..."
+          class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+          @keydown.enter="$el.nextElementSibling && $el.nextElementSibling.focus()">
+      </div>
+
+      <!-- Precio (opcional) -->
+      <div>
+        <label class="text-[11px] text-slate-500 uppercase tracking-wide mb-1.5 block">Precio unitario <span class="text-slate-600">(opcional)</span></label>
+        <div class="relative">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
+          <input type="number" min="0" step="0.01"
+            x-model="revisionAgregarModal.nuevoPrecio"
+            placeholder="0.00"
+            class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl pl-7 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50">
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div x-show="revisionAgregarModal.error"
+        class="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+        <p class="text-sm text-red-400" x-text="revisionAgregarModal.error"></p>
+      </div>
+
+      <!-- Botones -->
+      <div class="flex gap-3 mt-2">
+        <button @click="revisionAgregarModal.modo = 'buscar'; revisionAgregarModal.error = null"
+          class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-slate-700/60 hover:text-white transition-colors">
+          Volver
+        </button>
+        <button @click="revisionCrearYAgregar()"
+          :disabled="revisionAgregarModal.guardandoNuevo"
+          class="flex-1 py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+          style="background:linear-gradient(135deg,#16a34a,#15803d); box-shadow:0 4px 16px rgba(22,163,74,.35)">
+          <svg x-show="!revisionAgregarModal.guardandoNuevo" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          <svg x-show="revisionAgregarModal.guardandoNuevo" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <span x-text="revisionAgregarModal.guardandoNuevo ? 'Creando...' : 'Crear y agregar'"></span>
+        </button>
+      </div>
+
     </div>
 
   </div>
@@ -4803,10 +4996,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.e69dfa1d.js agrupa todos los módulos en 1 request.
+     bodega-bundle.e83f79b0.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.e69dfa1d.js"></script>
+<script src="/js/bodega-bundle.e83f79b0.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>
