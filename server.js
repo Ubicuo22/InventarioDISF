@@ -52,9 +52,9 @@ const { requireAuth, requireModulo } = require('./middleware/auth')
 app.use(require('cors')())
 app.use(express.json())
 
-// Assets con versión (JS/CSS) → 7 días de cache; HTML → sin cache (SPA siempre fresco)
+// JS usa nombres con hash → immutable 7d; CSS no tiene hash → sin cache para detectar cambios
 app.use('/js',  express.static(path.join(__dirname, 'public/js'),  { maxAge: '7d', immutable: true }))
-app.use('/css', express.static(path.join(__dirname, 'public/css'), { maxAge: '7d', immutable: true }))
+app.use('/css', express.static(path.join(__dirname, 'public/css'), { maxAge: 0 }))
 app.use('/assets', express.static(path.join(__dirname, 'public/assets'), { maxAge: '30d', immutable: true }))
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }))
 
