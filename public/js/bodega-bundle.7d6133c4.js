@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:public/js/bodega-bundle.031ae3c2.js
 /* bodega-bundle.031ae3c2.js — 2026-06-25T19:37:42.961Z */
+========
+/* bodega-bundle.7d6133c4.js — 2026-06-16T21:01:18.138Z */
+>>>>>>>> d5d77e9 (feat: asignacion de repartidor al finalizar revision de pedido):public/js/bodega-bundle.7d6133c4.js
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1800,8 +1804,10 @@ function reviewModule () {
         if (this.revisionMissingNames.length) partes.push(`${this.revisionMissingNames.length} faltante${this.revisionMissingNames.length !== 1 ? 's' : ''}`)
         if (this.revisionPendingNames.length)  partes.push(`${this.revisionPendingNames.length} pendiente${this.revisionPendingNames.length !== 1 ? 's' : ''}`)
         this.mostrarToast(`Revisión guardada${partes.length ? ' · ' + partes.join(' · ') : ''}`)
+        const folioParaAsignar = this.revisionFolio
         this.cerrarRevision()
         await this.cargarOrdenes()
+        await this.abrirAsignacionRepartidor(folioParaAsignar)
       } catch (e) {
         // Mostrar error en el modal con botón de reintentar (no cerrar el modal)
         const msg = !navigator.onLine
@@ -2079,6 +2085,42 @@ function reviewModule () {
       } catch { return null }
     }
   }
+
+    // ── Modal asignación de repartidor ─────────────────────────
+    asignacionModal: { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null },
+
+    async abrirAsignacionRepartidor (folio) {
+      this.asignacionModal = { visible: true, repartidores: [], cargando: true, error: null, folioAsignar: folio }
+      try {
+        const r = await API.get('/api/repartidores')
+        this.asignacionModal.repartidores = r.ok ? (r.data || []) : []
+        if (!r.ok) this.asignacionModal.error = 'No se pudieron cargar los repartidores'
+      } catch (e) {
+        this.asignacionModal.error = 'Error de conexión'
+      } finally {
+        this.asignacionModal.cargando = false
+      }
+    },
+
+    async asignarRepartidor (unidad_id, conductor) {
+      const folio = this.asignacionModal.folioAsignar
+      if (!folio || !unidad_id) return
+      this.asignacionModal.cargando = true
+      try {
+        const r = await API.post('/api/rutas/asignar-pedido', { folio_numero: folio, unidad_id })
+        if (!r.ok) throw new Error(r.error || 'Error al asignar')
+        this.asignacionModal = { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null }
+        this.mostrarToast(`Pedido #${folio} asignado a ${conductor}`)
+      } catch (e) {
+        this.asignacionModal.error = e.message
+        this.asignacionModal.cargando = false
+      }
+    },
+
+    cerrarAsignacion () {
+      this.asignacionModal = { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null }
+    },
+
 }
 
 

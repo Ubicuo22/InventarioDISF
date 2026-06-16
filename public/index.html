@@ -42,7 +42,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.031ae3c2.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.7d6133c4.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -5623,11 +5623,65 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.031ae3c2.js agrupa todos los módulos en 1 request.
+     bodega-bundle.7d6133c4.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.031ae3c2.js"></script>
+<script src="/js/bodega-bundle.7d6133c4.js"></script>
 <script defer src="/js/alpine.min.js"></script>
+
+<!-- ── Modal asignación de repartidor ──────────────────────────────── -->
+<div x-show="asignacionModal.visible" x-cloak
+  class="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4"
+  style="background:rgba(0,0,0,0.7);backdrop-filter:blur(6px)">
+  <div class="w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4"
+    style="background:#16161d;border:1px solid rgba(255,255,255,.08)">
+
+    <div class="text-center">
+      <p class="text-2xl mb-1">🚛</p>
+      <h3 class="text-lg font-bold text-white">¿Quién entrega este pedido?</h3>
+      <p class="text-xs text-slate-500 mt-1" x-text="'Pedido #' + String(asignacionModal.folioAsignar || 0).padStart(4,'0')"></p>
+    </div>
+
+    <template x-if="asignacionModal.cargando">
+      <div class="flex items-center justify-center py-6 gap-3 text-slate-400">
+        <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+        <span class="text-sm">Cargando repartidores...</span>
+      </div>
+    </template>
+
+    <template x-if="!asignacionModal.cargando && asignacionModal.repartidores.length > 0">
+      <div class="flex flex-col gap-2">
+        <template x-for="rep in asignacionModal.repartidores" :key="rep.id">
+          <button
+            @click="asignarRepartidor(rep.id, rep.conductor || rep.nombre)"
+            class="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-left transition-all active:scale-[0.98]"
+            style="background:#1f2937;border:1px solid rgba(255,255,255,.06)">
+            <span class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+              style="background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff"
+              x-text="(rep.conductor || rep.nombre).charAt(0).toUpperCase()"></span>
+            <div>
+              <p class="text-sm font-semibold text-white" x-text="rep.conductor || rep.nombre"></p>
+              <p class="text-xs text-slate-500" x-text="rep.nombre"></p>
+            </div>
+          </button>
+        </template>
+      </div>
+    </template>
+
+    <template x-if="asignacionModal.error">
+      <p class="text-sm text-red-400 text-center" x-text="asignacionModal.error"></p>
+    </template>
+
+    <button @click="cerrarAsignacion()"
+      class="w-full py-2.5 rounded-xl text-sm text-slate-400 transition-all active:scale-[0.98]"
+      style="background:#0f0f16;border:1px solid rgba(255,255,255,.05)">
+      Asignar después
+    </button>
+  </div>
+</div>
 
 </body>
 </html>
