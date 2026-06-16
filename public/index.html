@@ -42,7 +42,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.7d6133c4.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.b79e2b12.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -5623,10 +5623,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.7d6133c4.js agrupa todos los módulos en 1 request.
+     bodega-bundle.b79e2b12.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.7d6133c4.js"></script>
+<script src="/js/bodega-bundle.b79e2b12.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 <!-- ── Modal asignación de repartidor ──────────────────────────────── -->
@@ -5648,25 +5648,32 @@
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
         </svg>
-        <span class="text-sm">Cargando repartidores...</span>
+        <span class="text-sm">Cargando unidades...</span>
       </div>
     </template>
 
-    <template x-if="!asignacionModal.cargando && asignacionModal.repartidores.length > 0">
-      <div class="flex flex-col gap-2">
+    <template x-if="!asignacionModal.cargando">
+      <div class="flex flex-col gap-3">
         <template x-for="rep in asignacionModal.repartidores" :key="rep.id">
-          <button
-            @click="asignarRepartidor(rep.id, rep.conductor || rep.nombre)"
-            class="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-left transition-all active:scale-[0.98]"
-            style="background:#1f2937;border:1px solid rgba(255,255,255,.06)">
-            <span class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-              style="background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff"
-              x-text="(rep.conductor || rep.nombre).charAt(0).toUpperCase()"></span>
-            <div>
-              <p class="text-sm font-semibold text-white" x-text="rep.conductor || rep.nombre"></p>
-              <p class="text-xs text-slate-500" x-text="rep.nombre"></p>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs text-slate-400 font-medium" x-text="rep.nombre"></label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                :placeholder="'Nombre del conductor hoy'"
+                x-model="rep._conductor"
+                class="flex-1 px-3 py-2.5 rounded-xl text-sm text-white placeholder-slate-600 outline-none focus:ring-1 focus:ring-sky-500"
+                style="background:#0f0f16;border:1px solid rgba(255,255,255,.08)"
+                @keydown.enter.prevent="rep._conductor && asignarRepartidor(rep.id, rep._conductor)">
+              <button
+                @click="rep._conductor && asignarRepartidor(rep.id, rep._conductor)"
+                :disabled="!rep._conductor || asignacionModal.cargando"
+                class="px-4 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-[0.97] disabled:opacity-30"
+                style="background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff">
+                Asignar
+              </button>
             </div>
-          </button>
+          </div>
         </template>
       </div>
     </template>

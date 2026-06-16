@@ -830,8 +830,7 @@ function reviewModule () {
           pendientes
         }
       } catch { return null }
-    }
-  }
+    },
 
     // ── Modal asignación de repartidor ─────────────────────────
     asignacionModal: { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null },
@@ -854,7 +853,7 @@ function reviewModule () {
       if (!folio || !unidad_id) return
       this.asignacionModal.cargando = true
       try {
-        const r = await API.post('/api/rutas/asignar-pedido', { folio_numero: folio, unidad_id })
+        const r = await API.post('/api/rutas/asignar-pedido', { folio_numero: folio, unidad_id, conductor })
         if (!r.ok) throw new Error(r.error || 'Error al asignar')
         this.asignacionModal = { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null }
         this.mostrarToast(`Pedido #${folio} asignado a ${conductor}`)
@@ -866,6 +865,6 @@ function reviewModule () {
 
     cerrarAsignacion () {
       this.asignacionModal = { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null }
-    },
-
+    }
+  }
 }

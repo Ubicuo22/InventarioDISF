@@ -14,7 +14,7 @@ router.get('/repartidores', async (req, res) => {
 })
 
 router.post('/rutas/asignar-pedido', async (req, res) => {
-  const { folio_numero, unidad_id } = req.body
+  const { folio_numero, unidad_id, conductor } = req.body
   if (!folio_numero || !unidad_id) return res.status(400).json({ ok: false, error: 'Faltan datos' })
   try {
     const hoy = new Date().toISOString().slice(0, 10)
@@ -49,6 +49,9 @@ router.post('/rutas/asignar-pedido', async (req, res) => {
       'INSERT INTO ruta_pedidos (ruta_id, pedido_id, geocerca_id, orden_planeado, estado) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE ruta_id = VALUES(ruta_id)',
       [ruta.id, folio_numero, geocerca_id, orden_planeado, 'pendiente']
     )
+
+    // Actualizar nombre del conductor del día en la unidad
+    if (conductor) await q('UPDATE unidades SET conductor = ? WHERE id = ?', [conductor, unidad_id])
 
     res.json({ ok: true, ruta_id: ruta.id })
   } catch (e) {
