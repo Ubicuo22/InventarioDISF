@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Tracker — DISFRULEG</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d0d14;color:#e2e8f0;min-height:100dvh;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .screen{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;padding:24px;gap:20px}
+  .screen.active{display:flex}
+  h1{font-size:22px;font-weight:700;text-align:center}
+  p.sub{font-size:13px;color:#6b7280;text-align:center;line-height:1.5}
+  .card{background:#16161d;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;width:100%;max-width:380px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+  .row:last-child{border-bottom:none}
+  .row .lbl{font-size:12px;color:#6b7280}
+  .row .val{font-size:13px;font-weight:600;text-align:right;max-width:60%;word-break:break-all}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
+  .dot.ok{background:#34d399;box-shadow:0 0 6px #34d399}
+  .dot.warn{background:#fbbf24}
+  .dot.err{background:#f87171}
+  .dot.idle{background:#6b7280}
+  .ping-bar{height:4px;border-radius:2px;background:#1f2937;overflow:hidden;margin-top:12px}
+  .ping-fill{height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#34d399);transition:width .3s,background .3s;border-radius:2px}
+  button{width:100%;max-width:380px;padding:16px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .2s}
+  .btn-primary{background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff}
+  .btn-danger{background:linear-gradient(135deg,#f87171,#ef4444);color:#fff}
+  .btn-secondary{background:#1f2937;color:#9ca3af}
+  button:active{opacity:.8}
+  input{width:100%;padding:12px 14px;background:#1f2937;border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#fff;font-size:14px;outline:none;margin-top:8px}
+  input:focus{border-color:#38bdf8}
+  label{font-size:12px;color:#6b7280;display:block;margin-top:12px}
+  .queue-badge{display:inline-block;background:#f9741622;color:#fb923c;border:1px solid #f9741633;border-radius:6px;font-size:11px;padding:2px 8px;margin-left:6px}
+  .status-text{font-size:13px;color:#9ca3af;text-align:center}
+  .coords{font-size:11px;color:#4b5563;font-family:monospace;text-align:center;margin-top:4px}
+  .logo{font-size:32px;margin-bottom:4px}
+  .version{font-size:10px;color:#374151;margin-top:auto;padding-top:16px}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setup" class="screen active">
+  <div class="logo">🚛</div>
+  <h1>Tracker GPS</h1>
+  <p class="sub">Rastreo de rutas — DISFRULEG<br>Mantén la pantalla encendida mientras manejas</p>
+  <div class="card" style="width:100%;max-width:380px">
+    <label>Nombre / Unidad</label>
+    <input id="cfg-nombre" type="text" placeholder="Ej. Antonio prueba" autocomplete="off">
+    <label>URL del backend</label>
+    <input id="cfg-url" type="url" value="https://telemetria.ubicuo.icu">
+  </div>
+  <button class="btn-primary" onclick="iniciarSetup()">Registrar y comenzar</button>
+  <p class="sub" style="font-size:11px">Se genera un ID de dispositivo automáticamente.<br>Solo necesitas hacerlo una vez.</p>
+  <p class="version">DISFRULEG Tracker v1.0</p>
+</div>
+
+<!-- TRACKING -->
+<div id="tracking" class="screen">
+  <div class="logo">📡</div>
+  <h1>Rastreando</h1>
+
+  <div class="card">
+    <div class="row">
+      <span class="lbl">Estado</span>
+      <span class="val" id="t-estado"><span class="dot idle"></span>Iniciando...</span>
+    </div>
+    <div class="row">
+      <span class="lbl">Último ping</span>
+      <span class="val" id="t-ping">—</span>
+    </div>
+    <div class="row">
+      <span class="lbl">Precisión GPS</span>
+      <span class="val" id="t-precision">—</span>
+    </div>
+    <div class="row">
+      <span class="lbl">Velocidad</span>
+      <span class="val" id="t-velocidad">—</span>
+    </div>
+    <div class="row">
+      <span class="lbl">Pings enviados</span>
+      <span class="val" id="t-total">0</span>
+    </div>
+    <div class="row">
+      <span class="lbl">En cola (offline)</span>
+      <span class="val" id="t-cola">0 <span class="queue-badge" id="t-cola-badge" style="display:none">pendiente</span></span>
+    </div>
+    <div class="ping-bar"><div class="ping-fill" id="t-bar"></div></div>
+  </div>
+
+  <p class="coords" id="t-coords">Esperando GPS...</p>
+  <p class="status-text" id="t-msg">Obteniendo ubicación...</p>
+
+  <button class="btn-danger" onclick="detener()" style="max-width:380px">Detener rastreo</button>
+  <p class="version" id="t-uuid" style="word-break:break-all;text-align:center;padding:8px;font-size:9px;color:#1f2937"></p>
+</div>
+
+<script>
+const INTERVALO_MS   = 5000
+const BATCH_MAX      = 50
+const STORAGE_KEY    = 'disfruleg_tracker_v1'
+
+let cfg = {}
+let queue = []
+let totalPings = 0
+let watchId = null
+let intervalId = null
+let lastPos = null
+let enviando = false
+
+function guardarCfg(data){ cfg = data; localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) }
+function cargarCfg(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null') }catch{ return null } }
+
+// ── Boot ──────────────────────────────────────────────────────
+window.onload = () => {
+  const saved = cargarCfg()
+  if(saved?.device_uuid && saved?.api_token){
+    cfg = saved
+    arrancarTracking()
+  } else {
+    document.getElementById('cfg-url').value = saved?.url || 'https://telemetria.ubicuo.icu'
+    document.getElementById('cfg-nombre').value = saved?.nombre || ''
+    mostrar('setup')
+  }
+}
+
+// ── Setup ─────────────────────────────────────────────────────
+async function iniciarSetup(){
+  const nombre = document.getElementById('cfg-nombre').value.trim() || 'Tracker'
+  const url    = document.getElementById('cfg-url').value.trim().replace(/\/$/, '')
+
+  const uuid = cargarCfg()?.device_uuid || crypto.randomUUID()
+
+  setStatus('ok', 'Registrando dispositivo...')
+  mostrar('tracking')
+
+  try {
+    const res = await fetch(`${url}/api/dispositivos`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ device_uuid: uuid, unidad_id: 0, modelo: nombre, android_version: 'iOS-PWA' })
+    })
+    const data = await res.json()
+    if(!data.ok) throw new Error('Error al registrar')
+    guardarCfg({ device_uuid: uuid, api_token: data.api_token, url, nombre })
+    document.getElementById('t-uuid').textContent = `ID: ${uuid.slice(0,8)}... · ${nombre}`
+    arrancarTracking()
+  } catch(e) {
+    setStatus('err', `Error: ${e.message}`)
+  }
+}
+
+// ── Tracking ──────────────────────────────────────────────────
+function arrancarTracking(){
+  mostrar('tracking')
+  document.getElementById('t-uuid').textContent = `ID: ${cfg.device_uuid?.slice(0,8)}... · ${cfg.nombre||''}`
+
+  if(!navigator.geolocation){ setStatus('err', 'GPS no disponible'); return }
+
+  watchId = navigator.geolocation.watchPosition(
+    pos => { lastPos = pos; actualizarUI(pos) },
+    err => setStatus('err', `GPS: ${err.message}`),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 }
+  )
+
+  intervalId = setInterval(enviarPing, INTERVALO_MS)
+  setStatus('ok', 'Rastreando...')
+}
+
+function actualizarUI(pos){
+  const { latitude: lat, longitude: lng, accuracy, speed } = pos.coords
+  document.getElementById('t-coords').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+  document.getElementById('t-precision').textContent = `${Math.round(accuracy)} m`
+  document.getElementById('t-velocidad').textContent = speed != null ? `${(speed * 3.6).toFixed(1)} km/h` : '0 km/h'
+  animarBarra()
+}
+
+async function enviarPing(){
+  if(!lastPos) return
+
+  const { latitude: lat, longitude: lng, accuracy, speed } = lastPos.coords
+  const ping = {
+    device_uuid: cfg.device_uuid,
+    token: cfg.api_token,
+    lat, lng,
+    velocidad_kmh: speed != null ? parseFloat((speed * 3.6).toFixed(1)) : 0,
+    precision_m: parseFloat(accuracy.toFixed(1)),
+    timestamp: new Date().toISOString()
+  }
+
+  queue.push(ping)
+  actualizarCola()
+
+  if(enviando || !navigator.onLine) return
+  await flushQueue()
+}
+
+async function flushQueue(){
+  if(!queue.length || enviando) return
+  enviando = true
+
+  const lote = queue.splice(0, BATCH_MAX)
+  try {
+    const endpoint = lote.length === 1
+      ? `${cfg.url}/api/telemetry`
+      : `${cfg.url}/api/telemetry/batch`
+
+    const body = lote.length === 1
+      ? JSON.stringify(lote[0])
+      : JSON.stringify({ device_uuid: cfg.device_uuid, token: cfg.api_token, pings: lote.map(p => {
+          const {device_uuid, token, ...rest} = p; return rest
+        })})
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body
+    })
+
+    if(res.ok){
+      totalPings += lote.length
+      document.getElementById('t-total').textContent = totalPings
+      document.getElementById('t-ping').textContent = new Date().toLocaleTimeString('es-MX')
+      setStatus('ok', navigator.onLine ? 'Rastreando...' : 'Offline — en cola')
+    } else {
+      queue.unshift(...lote)
+      setStatus('warn', `Error HTTP ${res.status}`)
+    }
+  } catch(e) {
+    queue.unshift(...lote)
+    setStatus('warn', 'Sin red — guardando en cola')
+  }
+  enviando = false
+  actualizarCola()
+  if(queue.length) setTimeout(flushQueue, 3000)
+}
+
+window.addEventListener('online',  () => { setStatus('ok','Reconectado'); flushQueue() })
+window.addEventListener('offline', () => setStatus('warn','Sin internet — cola activa'))
+
+function actualizarCola(){
+  const n = queue.length
+  document.getElementById('t-cola').firstChild.textContent = n + ' '
+  const badge = document.getElementById('t-cola-badge')
+  badge.style.display = n > 0 ? 'inline-block' : 'none'
+}
+
+function animarBarra(){
+  const bar = document.getElementById('t-bar')
+  bar.style.width = '100%'
+  setTimeout(() => bar.style.width = '0%', INTERVALO_MS - 500)
+}
+
+function setStatus(tipo, msg){
+  const dots = {ok:'ok', warn:'warn', err:'err', idle:'idle'}
+  document.getElementById('t-estado').innerHTML = `<span class="dot ${dots[tipo]||'idle'}"></span>${tipo === 'ok' ? 'Activo' : tipo === 'warn' ? 'Advertencia' : tipo === 'err' ? 'Error' : 'Inactivo'}`
+  document.getElementById('t-msg').textContent = msg
+}
+
+function detener(){
+  if(watchId) navigator.geolocation.clearWatch(watchId)
+  if(intervalId) clearInterval(intervalId)
+  setStatus('idle','Rastreo detenido')
+  if(confirm('¿Borrar configuración y volver al inicio?')){
+    localStorage.removeItem(STORAGE_KEY)
+    location.reload()
+  }
+}
+
+function mostrar(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'))
+  document.getElementById(id).classList.add('active')
+}
+</script>
+</body>
+</html>

@@ -82,7 +82,8 @@ router.get('/', async (req, res) => {
              g.id_grupo, g.nombre_grupo,
              o.total_estimado, o.estado,
              o.fecha_creacion, o.fecha_modificacion, o.usuario_creador,
-             o.datos_carrito
+             o.datos_carrito, o.fecha_envio,
+             o.editing_by, o.editing_at, o.editing_source
       FROM   ordenes_guardadas o
       INNER JOIN cliente c ON o.id_cliente = c.id_cliente
       INNER JOIN grupo   g ON c.id_grupo   = g.id_grupo
@@ -363,6 +364,104 @@ router.post('/:folio/revision', requireModulo('pedidos'), async (req, res) => {
   } catch (e) {
     console.error('[ordenes] POST /:folio/revision', e.message)
     res.status(500).json({ ok: false, error: 'Error al registrar la revisión' })
+  }
+})
+
+/* ─── PATCH /api/ordenes/:folio/enviar — marcar fecha de envío real ─── */
+router.patch('/:folio/enviar', requireAuth, async (req, res) => {
+  try {
+    const { folio } = req.params
+    const [row] = await q(
+      'SELECT estado FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      [folio]
+    )
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+
+    await q(
+      'UPDATE ordenes_guardadas SET fecha_envio = CURDATE() WHERE folio_numero = ?',
+      [folio]
+    )
+    registrar(req, 'pedidos', 'orden_enviada', { folio })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[ordenes] PATCH /:folio/enviar', e.message)
+    res.status(500).json({ ok: false, error: 'Error al marcar envío' })
+  }
+})
+
+/* ─── GET /api/ordenes/:folio/lock — consultar si la nota está bloqueada ─── */
+router.get('/:folio/lock', async (req, res) => {
+  try {
+    const [row] = await q(
+      'SELECT editing_by, editing_at, editing_source FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      [req.params.folio]
+    )
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+
+    const LOCK_TIMEOUT_MS = 5 * 60 * 1000
+    if (row.editing_by && row.editing_at) {
+      const elapsed = Date.now() - new Date(row.editing_at).getTime()
+      if (elapsed < LOCK_TIMEOUT_MS) {
+        return res.json({ ok: true, locked: true, editing_by: row.editing_by, editing_source: row.editing_source })
+      }
+    }
+    res.json({ ok: true, locked: false })
+  } catch (e) {
+    console.error('[ordenes] GET /:folio/lock', e.message)
+    res.status(500).json({ ok: false, error: 'Error al consultar bloqueo' })
+  }
+})
+
+/* ─── PATCH /api/ordenes/:folio/lock — adquirir o renovar bloqueo ─── */
+router.patch('/:folio/lock', requireAuth, async (req, res) => {
+  try {
+    const folio = req.params.folio
+    const usuario = req.user.nombre_completo || req.user.username
+    const source = 'bodega-web'
+
+    const [row] = await q(
+      'SELECT editing_by, editing_at, editing_source FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      [folio]
+    )
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+
+    const LOCK_TIMEOUT_MS = 5 * 60 * 1000
+    if (row.editing_by && row.editing_at) {
+      const elapsed = Date.now() - new Date(row.editing_at).getTime()
+      if (elapsed < LOCK_TIMEOUT_MS && row.editing_by !== usuario) {
+        const desde = row.editing_source === 'electron' ? 'la aplicación de escritorio' : 'la app web'
+        return res.json({
+          ok: false,
+          locked: true,
+          message: `${row.editing_by} está editando esta nota desde ${desde}`,
+          editing_by: row.editing_by,
+          editing_source: row.editing_source
+        })
+      }
+    }
+
+    await q(
+      'UPDATE ordenes_guardadas SET editing_by = ?, editing_at = NOW(), editing_source = ? WHERE folio_numero = ?',
+      [usuario, source, folio]
+    )
+    res.json({ ok: true, locked: false })
+  } catch (e) {
+    console.error('[ordenes] PATCH /:folio/lock', e.message)
+    res.status(500).json({ ok: false, error: 'Error al adquirir bloqueo' })
+  }
+})
+
+/* ─── DELETE /api/ordenes/:folio/lock — liberar bloqueo ─── */
+router.delete('/:folio/lock', requireAuth, async (req, res) => {
+  try {
+    await q(
+      'UPDATE ordenes_guardadas SET editing_by = NULL, editing_at = NULL, editing_source = NULL WHERE folio_numero = ?',
+      [req.params.folio]
+    )
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[ordenes] DELETE /:folio/lock', e.message)
+    res.status(500).json({ ok: false, error: 'Error al liberar bloqueo' })
   }
 })
 

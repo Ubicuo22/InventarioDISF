@@ -112,9 +112,10 @@ function historyModule() {
     // ── Formato de fecha ──────────────────────────────────────
     fmtFecha(f) {
       if (!f) return '—'
-      const d = new Date(f)
-      const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000)
-      return utc.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+      return new Date(f).toLocaleDateString('es-MX', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        timeZone: 'America/Mexico_City'
+      })
     }
   }
 }

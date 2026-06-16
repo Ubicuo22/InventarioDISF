@@ -150,6 +150,24 @@ app.listen(PORT, async () => {
     `)
     console.log('   ✓ Tabla bodega_sesiones verificada')
 
+    // Auto-crear tabla verificaciones_inventario (audit trail del corte físico)
+    await q(`
+      CREATE TABLE IF NOT EXISTS verificaciones_inventario (
+        id                INT AUTO_INCREMENT PRIMARY KEY,
+        id_producto       INT          NOT NULL,
+        cantidad_sistema  DECIMAL(12,4) NOT NULL,
+        cantidad_fisica   DECIMAL(12,4) NOT NULL,
+        delta             DECIMAL(12,4) NOT NULL,
+        usuario           VARCHAR(50)  NOT NULL,
+        fecha             DATETIME     DEFAULT NOW(),
+        id_compra_ajuste  INT          DEFAULT NULL,
+        notas             VARCHAR(255) DEFAULT NULL,
+        INDEX idx_producto (id_producto),
+        INDEX idx_fecha    (fecha)
+      )
+    `)
+    console.log('   ✓ Tabla verificaciones_inventario verificada')
+
     // Auto-crear tabla logs_actividad si no existe
     await q(`
       CREATE TABLE IF NOT EXISTS logs_actividad (
@@ -167,6 +185,16 @@ app.listen(PORT, async () => {
       )
     `)
     console.log('   ✓ Tabla logs_actividad verificada')
+
+    // Migración: fecha_envio en ordenes_guardadas (grupo Defensa)
+    await q(`ALTER TABLE ordenes_guardadas ADD COLUMN IF NOT EXISTS fecha_envio DATE NULL DEFAULT NULL`)
+    console.log('   ✓ Columna fecha_envio verificada en ordenes_guardadas')
+
+    // Migración: bloqueo de edición concurrente
+    await q(`ALTER TABLE ordenes_guardadas ADD COLUMN IF NOT EXISTS editing_by VARCHAR(100) NULL DEFAULT NULL`)
+    await q(`ALTER TABLE ordenes_guardadas ADD COLUMN IF NOT EXISTS editing_at TIMESTAMP NULL DEFAULT NULL`)
+    await q(`ALTER TABLE ordenes_guardadas ADD COLUMN IF NOT EXISTS editing_source VARCHAR(20) NULL DEFAULT NULL`)
+    console.log('   ✓ Columnas de bloqueo de edición verificadas')
 
     // Programar resumen diario automático a las 20:00
     agendarResumenDiario()

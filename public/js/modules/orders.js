@@ -334,6 +334,17 @@ function ordersModule() {
         this.guardandoOrden  = false
         this.ordenGuardadaOk = false
       }
+    },
+
+    async marcarEnviado(folio) {
+      try {
+        const r = await API.patch(`/api/ordenes/${folio}/enviar`)
+        if (!r.ok) { this.mostrarToast(r.error || 'Error al marcar envío', true); return }
+        this.mostrarToast(`Pedido #${String(folio).padStart(4,'0')} marcado como enviado`)
+        await this.cargarOrdenes()
+      } catch (e) {
+        this.mostrarToast(e.message || 'Error de conexión', true)
+      }
     }
   }
 }

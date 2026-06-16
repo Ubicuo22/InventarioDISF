@@ -38,7 +38,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.e83f79b0.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.bd6275fd.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -206,6 +206,14 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
         </svg>
         <span>Inventario</span>
+      </button>
+
+      <button x-show="tienePermiso('inventario')" @click="tab = 'conteo'; cargarConteoLista()"
+        class="sidebar-item" :class="tab === 'conteo' ? 'active' : ''">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        <span>Corte físico</span>
       </button>
 
       <button x-show="tienePermiso('pedidos')" @click="tab = 'pedidos'; cargarOrdenes()"
@@ -1293,8 +1301,22 @@
                     </svg>
                   </span>
                 </div>
-                <p class="text-xs text-slate-500 mt-0.5"
-                  x-text="`${o.nombre_grupo} · ${fmtFecha(o.fecha_creacion)}`"></p>
+                <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <p class="text-xs text-slate-500"
+                    x-text="`${o.nombre_grupo} · ${fmtFecha(o.fecha_creacion)}`"></p>
+                  <!-- Chips de envío solo para grupo Defensa -->
+                  <span x-show="o.nombre_grupo?.toLowerCase().includes('defensa') && o.fecha_envio"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[10px] font-medium">
+                    <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span x-text="`Enviado ${fmtFecha(o.fecha_envio)}`"></span>
+                  </span>
+                  <span x-show="o.nombre_grupo?.toLowerCase().includes('defensa') && !o.fecha_envio"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-400 text-[10px] font-medium">
+                    Pendiente envío
+                  </span>
+                </div>
                 <!-- Observación del pedido -->
                 <p x-show="getOrdenObservacion(o)"
                   class="flex items-center gap-1 text-[11px] text-amber-400 mt-1 truncate">
@@ -1312,6 +1334,17 @@
                   :class="o.estado === 'guardada' ? 'text-yellow-400' : 'text-slate-600'"
                   x-text="o.estado === 'guardada' ? 'activo' : 'registrado'"></p>
               </div>
+
+              <!-- Botón "Marcar enviado" — solo grupo Defensa sin fecha_envio -->
+              <button
+                x-show="(pedidosTab === 'activos' || pedidosTab === 'revisadas') && o.nombre_grupo?.toLowerCase().includes('defensa') && !o.fecha_envio"
+                @click.stop="marcarEnviado(o.folio_numero)"
+                class="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-sky-500/15 text-sky-400 active:scale-95 transition-all"
+                title="Marcar como enviado">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+              </button>
 
               <!-- Botón Revisar (activos y revisadas) -->
               <button x-show="pedidosTab === 'activos' || pedidosTab === 'revisadas'"
@@ -1447,6 +1480,169 @@
 
       </div><!-- /pendientes del día -->
 
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         TAB: Corte físico (conteo de inventario)
+    ═══════════════════════════════════════════════════ -->
+    <div x-show="tab === 'conteo'" x-cloak>
+      <div class="mb-4">
+        <h2 class="text-lg sm:text-xl font-bold text-white">Corte físico</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Captura el stock real producto por producto. El sistema crea el ajuste automáticamente.</p>
+      </div>
+
+      <!-- Stats + filtros -->
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <div class="card p-3">
+          <p class="text-[10px] uppercase text-slate-500 tracking-wide">Total</p>
+          <p class="text-xl font-bold text-white tabular-nums" x-text="conteoStats().total"></p>
+        </div>
+        <div class="card p-3">
+          <p class="text-[10px] uppercase text-slate-500 tracking-wide">Contados hoy</p>
+          <p class="text-xl font-bold text-emerald-400 tabular-nums" x-text="conteoStats().contados"></p>
+        </div>
+        <div class="card p-3">
+          <p class="text-[10px] uppercase text-slate-500 tracking-wide">Pendientes</p>
+          <p class="text-xl font-bold text-amber-400 tabular-nums" x-text="conteoStats().pendientes"></p>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2 mb-3">
+        <div class="relative flex-1">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input type="text" x-model.debounce.300ms="conteoQuery" @input="cargarConteoLista()"
+            placeholder="Buscar producto..."
+            class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50">
+        </div>
+        <label class="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/60 cursor-pointer">
+          <input type="checkbox" x-model="conteoSoloPendientes" @change="cargarConteoLista()" class="rounded">
+          <span class="text-xs text-slate-300">Solo pendientes</span>
+        </label>
+      </div>
+
+      <div class="grid lg:grid-cols-3 gap-4">
+
+        <!-- Lista lateral -->
+        <div class="lg:col-span-1 card p-0 overflow-hidden" style="max-height:70vh; display:flex; flex-direction:column">
+          <div class="p-3 border-b" style="border-color:var(--glass-border)">
+            <p class="text-xs font-semibold text-slate-300">Productos (<span x-text="conteoListaProductos.length"></span>)</p>
+          </div>
+          <div class="overflow-y-auto flex-1">
+            <template x-if="conteoCargando">
+              <div class="p-6 text-center text-slate-500 text-xs">Cargando…</div>
+            </template>
+            <template x-if="!conteoCargando && conteoListaProductos.length === 0">
+              <div class="p-6 text-center text-slate-500 text-xs">Sin resultados</div>
+            </template>
+            <template x-for="p in conteoListaProductos" :key="p.id_producto">
+              <button @click="conteoSeleccionar(p)"
+                class="w-full px-3 py-2.5 flex items-center gap-2 text-left transition-colors border-l-[3px] border-b"
+                style="border-bottom-color:var(--glass-border)"
+                :class="conteoSeleccionado && conteoSeleccionado.id_producto === p.id_producto
+                  ? 'bg-emerald-500/10 border-l-emerald-400'
+                  : p.ultima_fecha
+                    ? 'border-l-transparent opacity-60 hover:opacity-100 hover:bg-white/5'
+                    : 'border-l-transparent hover:bg-white/5'">
+                <div class="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                  :class="p.ultima_fecha ? 'bg-emerald-500/80' : 'border border-slate-600'">
+                  <svg x-show="p.ultima_fecha" class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-semibold text-white truncate" x-text="p.nombre_producto"></p>
+                  <p class="text-[10px] text-slate-500 tabular-nums"
+                    x-text="`stock: ${parseFloat(p.stock).toFixed(2)} ${p.unidad_producto||''}`"></p>
+                </div>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Panel ajuste -->
+        <div class="lg:col-span-2 card p-4 sm:p-6">
+          <template x-if="!conteoSeleccionado">
+            <div class="flex flex-col items-center justify-center text-center py-16 gap-3 text-slate-500">
+              <svg class="w-12 h-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+              <p class="text-sm">Selecciona un producto de la lista para ajustar</p>
+            </div>
+          </template>
+
+          <template x-if="conteoSeleccionado">
+            <div>
+              <div class="mb-4">
+                <p class="text-[11px] uppercase text-slate-500 tracking-widest" x-text="conteoSeleccionado.unidad_producto"></p>
+                <h3 class="text-2xl sm:text-3xl font-extrabold text-white" x-text="conteoSeleccionado.nombre_producto"></h3>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 mb-5">
+                <div class="rounded-2xl p-4 bg-slate-800/40 border border-slate-700/60">
+                  <p class="text-[10px] uppercase text-slate-500 tracking-wide">Stock sistema</p>
+                  <p class="text-2xl font-bold text-slate-200 tabular-nums mt-1"
+                    x-text="parseFloat(conteoSeleccionado.stock).toFixed(2)"></p>
+                </div>
+                <div class="rounded-2xl p-4 border"
+                  :class="conteoDelta() === null ? 'bg-slate-800/40 border-slate-700/60' :
+                           conteoDelta() > 0 ? 'bg-emerald-500/10 border-emerald-500/40' :
+                           conteoDelta() < 0 ? 'bg-red-500/10 border-red-500/40' :
+                                               'bg-slate-800/40 border-slate-700/60'">
+                  <p class="text-[10px] uppercase text-slate-500 tracking-wide">Diferencia</p>
+                  <p class="text-2xl font-bold tabular-nums mt-1"
+                    :class="conteoDelta() === null ? 'text-slate-500' :
+                             conteoDelta() > 0 ? 'text-emerald-400' :
+                             conteoDelta() < 0 ? 'text-red-400' : 'text-slate-300'"
+                    x-text="conteoDelta() === null ? '—' : (conteoDelta() > 0 ? '+' : '') + conteoDelta()"></p>
+                </div>
+              </div>
+
+              <label class="block">
+                <span class="text-xs font-semibold text-slate-300">Cantidad física (real en bodega)</span>
+                <input id="conteo-input-fisica" type="number" step="0.01" min="0"
+                  x-model="conteoCantidadFisica"
+                  @keydown.enter="conteoAplicarAjuste()"
+                  placeholder="0.00"
+                  class="mt-2 w-full bg-slate-800/60 border border-slate-700/60 rounded-2xl px-4 py-4 text-3xl font-bold text-white text-center tabular-nums focus:outline-none focus:border-emerald-500/60">
+              </label>
+
+              <div x-show="conteoErrorAjuste" class="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+                <p class="text-sm text-red-400" x-text="conteoErrorAjuste"></p>
+              </div>
+
+              <div x-show="conteoSeleccionado.ultima_fecha" class="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                <p>⚠️ Este producto ya fue contado hoy</p>
+                <p class="mt-1 text-amber-400/80">
+                  Último: <span class="font-semibold tabular-nums" x-text="parseFloat(conteoSeleccionado.ultima_fisica||0).toFixed(2)"></span>
+                  (delta <span class="tabular-nums" x-text="(conteoSeleccionado.ultima_delta > 0 ? '+' : '') + parseFloat(conteoSeleccionado.ultima_delta||0).toFixed(2)"></span>)
+                  por <span x-text="conteoSeleccionado.ultima_usuario"></span>
+                </p>
+              </div>
+
+              <div class="flex gap-2 mt-5">
+                <button @click="conteoLimpiarSeleccion()"
+                  class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-slate-700/60 hover:text-white transition-colors">
+                  Cancelar
+                </button>
+                <button @click="conteoAplicarAjuste()"
+                  :disabled="conteoGuardando || conteoCantidadFisica === ''"
+                  class="flex-1 btn-marcar-sig flex items-center justify-center gap-2 text-white text-sm font-bold disabled:opacity-40">
+                  <svg x-show="!conteoGuardando" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  <svg x-show="conteoGuardando" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  <span x-text="conteoGuardando ? 'Aplicando…' : 'Aplicar ajuste'"></span>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
 
     <!-- TAB: Historial -->
@@ -2719,6 +2915,27 @@
   </div>
 </div>
 
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: NOTA EN USO (BLOQUEO)
+══════════════════════════════════════════════════════════ -->
+<div x-show="lockMessage" x-cloak
+  class="fixed inset-0 z-[60] flex items-center justify-center">
+  <div class="modal-backdrop absolute inset-0" @click="lockMessage = null"></div>
+  <div class="relative bg-modal rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+        <span class="text-lg">🔒</span>
+      </div>
+      <h3 class="font-semibold text-lg">Nota en uso</h3>
+    </div>
+    <p class="text-sm text-secondary mb-5" x-text="lockMessage"></p>
+    <button @click="lockMessage = null"
+      class="w-full py-2 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 transition-colors">
+      Entendido
+    </button>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════════════════════════
      MODAL: ORDEN / PEDIDO
@@ -4997,10 +5214,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.e83f79b0.js agrupa todos los módulos en 1 request.
+     bodega-bundle.bd6275fd.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.e83f79b0.js"></script>
+<script src="/js/bodega-bundle.bd6275fd.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

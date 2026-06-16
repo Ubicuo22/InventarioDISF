@@ -29,6 +29,7 @@ const FILES = [
   'public/js/modules/compras.js',
   'public/js/modules/dashboard.js',
   'public/js/modules/pendientes.js',
+  'public/js/modules/conteo.js',
   'public/js/bodega.js',
 ]
 

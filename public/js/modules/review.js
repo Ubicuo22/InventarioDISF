@@ -11,6 +11,10 @@
  */
 function reviewModule () {
   return {
+    // ── Bloqueo de edición concurrente ─────────────────────────
+    lockMessage: null,
+    _lockRenewInterval: null,
+
     // ── Estado del modo Revisión ───────────────────────────────
     revisionModalOpen: false,
     revisionCart: { General: [] },      // copia mutable del carrito durante revisión
@@ -149,6 +153,17 @@ function reviewModule () {
 
     // ── Abrir / cerrar ─────────────────────────────────────────
     async abrirRevision (orden) {
+      // Intentar adquirir bloqueo de edición
+      try {
+        const lockRes = await API.patch(`/api/ordenes/${orden.folio_numero}/lock`)
+        if (lockRes.locked) {
+          this.lockMessage = lockRes.message || 'Esta nota está siendo editada por otro usuario'
+          return
+        }
+      } catch (e) {
+        console.warn('Error al verificar bloqueo:', e)
+      }
+
       // Si viene desde la lista, cargar carrito completo
       try {
         const r = await API.get(`/api/ordenes/${orden.folio_numero}`)
@@ -188,12 +203,23 @@ function reviewModule () {
         }
         window.addEventListener('keydown', this._revisionKeyHandler)
         this.revisionModalOpen = true
+
+        this._lockRenewInterval = setInterval(() => {
+          API.patch(`/api/ordenes/${orden.folio_numero}/lock`).catch(() => {})
+        }, 120000)
       } catch (e) {
         this.mostrarToast(e.message || 'Error al cargar pedido', true)
       }
     },
 
     cerrarRevision () {
+      if (this.revisionFolio) {
+        API.delete(`/api/ordenes/${this.revisionFolio}/lock`).catch(() => {})
+      }
+      if (this._lockRenewInterval) {
+        clearInterval(this._lockRenewInterval)
+        this._lockRenewInterval = null
+      }
       if (this._revisionKeyHandler) {
         window.removeEventListener('keydown', this._revisionKeyHandler)
         this._revisionKeyHandler = null

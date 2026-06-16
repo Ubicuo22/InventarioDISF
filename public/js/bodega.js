@@ -17,5 +17,6 @@ function bodega() {
     ...comprasModule(),
     ...dashboardModule(),
     ...pendientesModule(),
+    ...conteoModule(),
   }
 }
