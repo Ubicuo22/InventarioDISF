@@ -131,13 +131,33 @@ router.get('/pendientes-hoy', async (req, res) => {
       const faltantes  = Array.isArray(lastRevision.faltantes)  ? lastRevision.faltantes  : []
       if (pendientes.length === 0 && faltantes.length === 0) continue
 
+      // Build name→{cantidad,unidad} map from cart items
+      const prodMap = {}
+      for (const [sec, items] of Object.entries(carrito)) {
+        if (sec.startsWith('__') || !Array.isArray(items)) continue
+        for (const item of items) {
+          prodMap[item.nombre_producto] = {
+            cantidad: parseFloat(item.cantidad) || 0,
+            unidad:   item.unidad_producto || '',
+            seccion:  sec
+          }
+        }
+      }
+
+      const enriquecer = (nombre) => ({
+        nombre,
+        cantidad: prodMap[nombre]?.cantidad ?? null,
+        unidad:   prodMap[nombre]?.unidad   ?? '',
+        seccion:  prodMap[nombre]?.seccion  ?? ''
+      })
+
       result.push({
         folio_numero:     row.folio_numero,
         nombre_cliente:   row.nombre_cliente,
         nombre_grupo:     row.nombre_grupo,
         observacion,
-        pendientes,
-        faltantes,
+        pendientes:       pendientes.map(enriquecer),
+        faltantes:        faltantes.map(enriquecer),
         fecha_revision:   lastRevision.fecha,
         usuario_revision: lastRevision.usuario
       })
@@ -188,6 +208,142 @@ router.patch('/:folio/pendiente', requireModulo('pedidos'), async (req, res) => 
   } catch (e) {
     console.error('[ordenes] PATCH /:folio/pendiente', e.message)
     res.status(500).json({ ok: false, error: 'Error al resolver pendiente' })
+  }
+})
+
+/* ─── PATCH /api/ordenes/:folio/item-cantidad — editar cantidad de un producto pendiente ─── */
+router.patch('/:folio/item-cantidad', requireModulo('pedidos'), async (req, res) => {
+  try {
+    const folio = parseInt(req.params.folio, 10)
+    if (!folio || isNaN(folio)) return res.status(400).json({ ok: false, error: 'folio inválido' })
+    const { nombre_producto, cantidad } = req.body
+    if (!nombre_producto || cantidad == null) return res.status(400).json({ ok: false, error: 'nombre_producto y cantidad requeridos' })
+    const cant = parseFloat(cantidad)
+    if (isNaN(cant) || cant < 0) return res.status(400).json({ ok: false, error: 'cantidad inválida' })
+
+    const [row] = await q(
+      'SELECT datos_carrito, estado FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      [folio]
+    )
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+    if (row.estado === 'registrada') return res.status(400).json({ ok: false, error: 'Orden ya registrada' })
+
+    const carrito = typeof row.datos_carrito === 'string' ? JSON.parse(row.datos_carrito) : (row.datos_carrito || {})
+
+    let actualizado = false
+    for (const [sec, items] of Object.entries(carrito)) {
+      if (sec.startsWith('__') || !Array.isArray(items)) continue
+      for (const item of items) {
+        if (item.nombre_producto === nombre_producto) {
+          item.cantidad = cant
+          actualizado = true
+        }
+      }
+    }
+    if (!actualizado) return res.status(404).json({ ok: false, error: 'Producto no encontrado en el carrito' })
+
+    const total = calcTotal(carrito)
+    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, total_estimado = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), total, folio])
+
+    registrar(req, 'pedidos', 'item_cantidad_editada', { folio, producto: nombre_producto, cantidad: cant })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[ordenes] PATCH /:folio/item-cantidad', e.message)
+    res.status(500).json({ ok: false, error: 'Error al actualizar cantidad' })
+  }
+})
+
+/* ─── PATCH /api/ordenes/:folio/mover-a-faltante — mueve item de pendientes → faltantes ─── */
+router.patch('/:folio/mover-a-faltante', requireModulo('pedidos'), async (req, res) => {
+  try {
+    const folio = parseInt(req.params.folio, 10)
+    if (!folio || isNaN(folio)) return res.status(400).json({ ok: false, error: 'folio inválido' })
+    const { nombre_producto } = req.body
+    if (!nombre_producto) return res.status(400).json({ ok: false, error: 'nombre_producto requerido' })
+
+    const [row] = await q('SELECT datos_carrito, estado FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1', [folio])
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+    if (row.estado === 'registrada') return res.status(400).json({ ok: false, error: 'Orden ya registrada' })
+
+    const carrito = typeof row.datos_carrito === 'string' ? JSON.parse(row.datos_carrito) : (row.datos_carrito || {})
+    const historial = carrito.__historial__ || []
+
+    let lastRevIdx = -1
+    for (let i = historial.length - 1; i >= 0; i--) {
+      if (historial[i].tipoEvento === 'revision') { lastRevIdx = i; break }
+    }
+    if (lastRevIdx === -1) return res.status(400).json({ ok: false, error: 'No hay revisión registrada' })
+
+    const rev = historial[lastRevIdx]
+    rev.pendientes = (rev.pendientes || []).filter(n => n !== nombre_producto)
+    if (!rev.faltantes) rev.faltantes = []
+    if (!rev.faltantes.includes(nombre_producto)) rev.faltantes.push(nombre_producto)
+    carrito.__historial__ = historial
+
+    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), folio])
+
+    registrar(req, 'pedidos', 'item_movido_a_faltante', { folio, producto: nombre_producto })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[ordenes] PATCH /:folio/mover-a-faltante', e.message)
+    res.status(500).json({ ok: false, error: 'Error al mover a faltante' })
+  }
+})
+
+/* ─── PATCH /api/ordenes/:folio/cambiar-item — sustituye un producto en el carrito ─── */
+router.patch('/:folio/cambiar-item', requireModulo('pedidos'), async (req, res) => {
+  try {
+    const folio = parseInt(req.params.folio, 10)
+    if (!folio || isNaN(folio)) return res.status(400).json({ ok: false, error: 'folio inválido' })
+    const { nombre_viejo, id_nuevo, nombre_nuevo, unidad_nueva } = req.body
+    if (!nombre_viejo || !id_nuevo || !nombre_nuevo) return res.status(400).json({ ok: false, error: 'nombre_viejo, id_nuevo y nombre_nuevo requeridos' })
+
+    const [row] = await q('SELECT datos_carrito, estado FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1', [folio])
+    if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+    if (row.estado === 'registrada') return res.status(400).json({ ok: false, error: 'Orden ya registrada' })
+
+    const carrito = typeof row.datos_carrito === 'string' ? JSON.parse(row.datos_carrito) : (row.datos_carrito || {})
+
+    // Reemplazar en todas las secciones del carrito
+    let reemplazado = false
+    for (const [sec, items] of Object.entries(carrito)) {
+      if (sec.startsWith('__') || !Array.isArray(items)) continue
+      for (const item of items) {
+        if (item.nombre_producto === nombre_viejo) {
+          item.id_producto      = id_nuevo
+          item.nombre_producto  = nombre_nuevo
+          item.unidad_producto  = unidad_nueva || item.unidad_producto
+          reemplazado = true
+        }
+      }
+    }
+    if (!reemplazado) return res.status(404).json({ ok: false, error: 'Producto no encontrado en el carrito' })
+
+    // Actualizar nombre en pendientes/faltantes del último historial de revisión
+    const historial = carrito.__historial__ || []
+    let lastRevIdx = -1
+    for (let i = historial.length - 1; i >= 0; i--) {
+      if (historial[i].tipoEvento === 'revision') { lastRevIdx = i; break }
+    }
+    if (lastRevIdx !== -1) {
+      const rev = historial[lastRevIdx]
+      const sustituir = (arr) => Array.isArray(arr) ? arr.map(n => n === nombre_viejo ? nombre_nuevo : n) : arr
+      rev.pendientes = sustituir(rev.pendientes)
+      rev.faltantes  = sustituir(rev.faltantes)
+      carrito.__historial__ = historial
+    }
+
+    const total = calcTotal(carrito)
+    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, total_estimado = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), total, folio])
+
+    registrar(req, 'pedidos', 'item_sustituido', { folio, viejo: nombre_viejo, nuevo: nombre_nuevo })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[ordenes] PATCH /:folio/cambiar-item', e.message)
+    res.status(500).json({ ok: false, error: 'Error al cambiar producto' })
   }
 })
 

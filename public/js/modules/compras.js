@@ -6,8 +6,8 @@
  */
 
 function comprasModule() {
-  const hoy    = () => new Date().toISOString().slice(0, 10)
-  const hace30 = () => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const hoy    = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+  const hace30 = () => new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
 
   return {
     // ── Estado ────────────────────────────────────────────────
@@ -40,18 +40,20 @@ function comprasModule() {
 
     // ── Filtros rápidos ───────────────────────────────────────
     async filtroCompras(periodo) {
+      const mxDate = (d) => d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
       const h = new Date()
       if (periodo === 'hoy') {
-        this.comprasDesde = this.comprasHasta = h.toISOString().slice(0, 10)
+        this.comprasDesde = this.comprasHasta = mxDate(h)
       } else if (periodo === '7d') {
-        this.comprasDesde = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
-        this.comprasHasta = h.toISOString().slice(0, 10)
+        this.comprasDesde = mxDate(new Date(Date.now() - 7 * 86400000))
+        this.comprasHasta = mxDate(h)
       } else if (periodo === '30d') {
-        this.comprasDesde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
-        this.comprasHasta = h.toISOString().slice(0, 10)
+        this.comprasDesde = mxDate(new Date(Date.now() - 30 * 86400000))
+        this.comprasHasta = mxDate(h)
       } else if (periodo === 'mes') {
-        this.comprasDesde = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-01`
-        this.comprasHasta = h.toISOString().slice(0, 10)
+        const mx = mxDate(h)
+        this.comprasDesde = `${mx.slice(0, 7)}-01`
+        this.comprasHasta = mx
       }
       await this.cargarCompras()
     },

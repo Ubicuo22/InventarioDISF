@@ -38,64 +38,192 @@
   .coords{font-size:11px;color:#4b5563;font-family:monospace;text-align:center;margin-top:4px}
   .logo{font-size:32px;margin-bottom:4px}
   .version{font-size:10px;color:#374151;margin-top:auto;padding-top:16px}
+  .wake-banner{background:#1c2333;border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 14px;width:100%;max-width:380px;font-size:12px;color:#fbbf24;line-height:1.5;text-align:center}
+  .wake-banner strong{display:block;margin-bottom:2px}
+  /* ── Radar ── */
+  .radar-wrap{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center}
+  .radar-ring{position:absolute;border-radius:50%;border:1.5px solid var(--rc,#34d399);opacity:0;animation:ripple 2.4s ease-out infinite}
+  .r1{width:160px;height:160px;animation-delay:0s}
+  .r2{width:160px;height:160px;animation-delay:.8s}
+  .r3{width:160px;height:160px;animation-delay:1.6s}
+  .radar-core{width:72px;height:72px;border-radius:50%;background:rgba(52,211,153,.12);border:2px solid var(--rc,#34d399);display:flex;align-items:center;justify-content:center;color:var(--rc,#34d399);transition:background .4s,border-color .4s,color .4s;box-shadow:0 0 24px rgba(52,211,153,.2)}
+  @keyframes ripple{0%{transform:scale(.45);opacity:.7}100%{transform:scale(1);opacity:0}}
+  .radar-wrap.warn .radar-ring,.radar-wrap.warn .radar-core{--rc:#fbbf24}
+  .radar-wrap.warn .radar-core{background:rgba(251,191,36,.1);box-shadow:0 0 24px rgba(251,191,36,.2)}
+  .radar-wrap.err  .radar-ring,.radar-wrap.err  .radar-core{--rc:#f87171}
+  .radar-wrap.err  .radar-core{background:rgba(248,113,113,.1);box-shadow:0 0 24px rgba(248,113,113,.2)}
+  .radar-wrap.idle .radar-ring{animation:none;opacity:0}
+  .radar-wrap.idle .radar-core{--rc:#6b7280;background:rgba(107,114,128,.1);box-shadow:none}
+  /* ── Stat boxes ── */
+  .stat-box{background:#111827;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px 12px}
+  .stat-lbl{font-size:10px;color:#4b5563;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+  .stat-val{font-size:15px;font-weight:700;color:#f1f5f9}
+  /* ── Unit cards ── */
+  .unit-card{width:100%;padding:16px 18px;border-radius:16px;border:1.5px solid rgba(255,255,255,.07);background:#111827;cursor:pointer;display:flex;align-items:center;gap:14px;transition:border-color .15s,background .15s;-webkit-tap-highlight-color:transparent;text-align:left}
+  .unit-card:active{transform:scale(.98)}
+  .unit-card.selected{border-color:#0ea5e9;background:rgba(14,165,233,.08)}
+  .unit-card .uc-icon{width:44px;height:44px;border-radius:12px;background:#1f2937;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#94a3b8;transition:background .15s,color .15s}
+  .unit-card.selected .uc-icon{background:rgba(14,165,233,.15);color:#38bdf8}
+  .unit-card .uc-name{font-size:17px;font-weight:700;color:#f1f5f9;line-height:1.2}
+  .unit-card .uc-sub{font-size:12px;color:#4b5563;margin-top:3px}
+  .unit-card .uc-check{margin-left:auto;flex-shrink:0;opacity:0;transition:opacity .15s;color:#0ea5e9}
+  .unit-card.selected .uc-check{opacity:1}
+  .unit-skeleton{height:76px;border-radius:16px;background:linear-gradient(90deg,#111827 25%,#1f2937 50%,#111827 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .step{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+  .step:last-child{border-bottom:none}
+  .step-num{width:26px;height:26px;border-radius:50%;background:#0ea5e9;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .step-txt{font-size:13px;color:#cbd5e1;line-height:1.5}
+  .step-txt strong{color:#fff;display:block;margin-bottom:2px}
 </style>
 </head>
 <body>
 
-<!-- SETUP -->
-<div id="setup" class="screen active">
-  <div class="logo">🚛</div>
-  <h1>Tracker GPS</h1>
-  <p class="sub">Rastreo de rutas — DISFRULEG<br>Mantén la pantalla encendida mientras manejas</p>
+<!-- INSTRUCCIONES (primera vez) -->
+<div id="instrucciones" class="screen">
+  <div class="logo">⚙️</div>
+  <h1>Configuración rápida</h1>
+  <p class="sub">Haz esto una sola vez para que el GPS funcione aunque la pantalla se apague</p>
+
   <div class="card" style="width:100%;max-width:380px">
-    <label>Nombre / Unidad</label>
-    <input id="cfg-nombre" type="text" placeholder="Ej. Antonio prueba" autocomplete="off">
-    <label>URL del backend</label>
-    <input id="cfg-url" type="url" value="https://telemetria.ubicuo.icu">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-txt">
+        <strong>Abre Ajustes del teléfono</strong>
+        Busca "Aplicaciones" o "Apps"
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-txt">
+        <strong>Entra a Chrome</strong>
+        Toca en la app de Chrome de la lista
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-txt">
+        <strong>Batería → Sin restricciones</strong>
+        En Samsung: "Optimización de batería" → Chrome → <em style="color:#34d399">No optimizar</em>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-txt">
+        <strong>Regresa aquí y continúa</strong>
+        Solo necesitas hacerlo una vez
+      </div>
+    </div>
   </div>
-  <button class="btn-primary" onclick="iniciarSetup()">Registrar y comenzar</button>
-  <p class="sub" style="font-size:11px">Se genera un ID de dispositivo automáticamente.<br>Solo necesitas hacerlo una vez.</p>
+
+  <button class="btn-primary" onclick="instruccionesListas()">Ya lo hice — continuar</button>
   <p class="version">DISFRULEG Tracker v1.0</p>
 </div>
 
-<!-- TRACKING -->
-<div id="tracking" class="screen">
-  <div class="logo">📡</div>
-  <h1>Rastreando</h1>
+<!-- SETUP -->
+<div id="setup" class="screen" style="justify-content:flex-start;padding:0 24px env(safe-area-inset-bottom);min-height:100dvh;gap:0">
+  <input id="cfg-url" type="url" value="https://telemetria.ubicuo.icu" style="display:none">
 
-  <div class="card">
-    <div class="row">
-      <span class="lbl">Estado</span>
-      <span class="val" id="t-estado"><span class="dot idle"></span>Iniciando...</span>
-    </div>
-    <div class="row">
-      <span class="lbl">Último ping</span>
-      <span class="val" id="t-ping">—</span>
-    </div>
-    <div class="row">
-      <span class="lbl">Precisión GPS</span>
-      <span class="val" id="t-precision">—</span>
-    </div>
-    <div class="row">
-      <span class="lbl">Velocidad</span>
-      <span class="val" id="t-velocidad">—</span>
-    </div>
-    <div class="row">
-      <span class="lbl">Pings enviados</span>
-      <span class="val" id="t-total">0</span>
-    </div>
-    <div class="row">
-      <span class="lbl">En cola (offline)</span>
-      <span class="val" id="t-cola">0 <span class="queue-badge" id="t-cola-badge" style="display:none">pendiente</span></span>
-    </div>
-    <div class="ping-bar"><div class="ping-fill" id="t-bar"></div></div>
+  <!-- Header -->
+  <div style="padding-top:max(env(safe-area-inset-top),40px);padding-bottom:32px;text-align:center;width:100%">
+    <p style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#4b5563;margin-bottom:10px">DISFRULEG</p>
+    <h1 style="font-size:26px;font-weight:800;color:#f1f5f9;letter-spacing:-0.02em">¿Quién maneja hoy?</h1>
+    <p style="font-size:13px;color:#6b7280;margin-top:6px">Selecciona tu nombre para comenzar</p>
   </div>
 
-  <p class="coords" id="t-coords">Esperando GPS...</p>
-  <p class="status-text" id="t-msg">Obteniendo ubicación...</p>
+  <!-- Lista de unidades -->
+  <div id="unidades-list" style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:10px;flex:1;overflow-y:auto">
+    <!-- Loading state -->
+    <div id="unidades-loading" style="display:flex;flex-direction:column;gap:10px">
+      <div class="unit-skeleton"></div>
+      <div class="unit-skeleton"></div>
+      <div class="unit-skeleton"></div>
+    </div>
+  </div>
 
-  <button class="btn-danger" onclick="detener()" style="max-width:380px">Detener rastreo</button>
-  <p class="version" id="t-uuid" style="word-break:break-all;text-align:center;padding:8px;font-size:9px;color:#1f2937"></p>
+  <!-- Botón continuar -->
+  <div style="width:100%;max-width:420px;padding:20px 0 max(env(safe-area-inset-bottom),24px)">
+    <button class="btn-primary" id="btn-iniciar" onclick="iniciarSetup()" disabled
+      style="opacity:.35;transition:opacity .2s,transform .1s;font-size:16px;letter-spacing:0.02em">
+      Comenzar rastreo
+    </button>
+  </div>
+</div>
+
+<!-- TRACKING -->
+<div id="tracking" class="screen" style="gap:0;justify-content:space-between;padding:env(safe-area-inset-top) 24px env(safe-area-inset-bottom);min-height:100dvh">
+
+  <!-- Nombre repartidor -->
+  <div style="padding-top:max(env(safe-area-inset-top),20px);text-align:center">
+    <p style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#4b5563;margin-bottom:4px">DISFRULEG · RASTREO</p>
+    <p id="t-nombre" style="font-size:18px;font-weight:700;color:#f1f5f9"></p>
+  </div>
+
+  <!-- Círculo animado -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:20px;padding:20px 0">
+    <div class="radar-wrap" id="radar-wrap">
+      <div class="radar-ring r1"></div>
+      <div class="radar-ring r2"></div>
+      <div class="radar-ring r3"></div>
+      <div class="radar-core" id="radar-core">
+        <!-- Ícono de señal GPS — SVG sin emoji -->
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+          <path d="M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Estado texto -->
+    <div style="text-align:center">
+      <p id="t-estado-txt" style="font-size:22px;font-weight:700;color:#f1f5f9;letter-spacing:-0.02em">Iniciando</p>
+      <p id="t-msg" style="font-size:13px;color:#6b7280;margin-top:4px">Obteniendo ubicación...</p>
+    </div>
+  </div>
+
+  <!-- Stats grid -->
+  <div style="width:100%;max-width:380px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div class="stat-box">
+      <p class="stat-lbl">Velocidad</p>
+      <p class="stat-val" id="t-velocidad">— km/h</p>
+    </div>
+    <div class="stat-box">
+      <p class="stat-lbl">Precisión</p>
+      <p class="stat-val" id="t-precision">— m</p>
+    </div>
+    <div class="stat-box">
+      <p class="stat-lbl">Pings</p>
+      <p class="stat-val" id="t-total">0</p>
+    </div>
+    <div class="stat-box" style="grid-column:1/3">
+      <p class="stat-lbl">Último ping</p>
+      <p class="stat-val" id="t-ping" style="font-size:13px">—</p>
+    </div>
+    <div class="stat-box" id="cola-box">
+      <p class="stat-lbl">Cola</p>
+      <p class="stat-val" id="t-cola" style="color:#f97316">0</p>
+    </div>
+  </div>
+
+  <!-- Coords -->
+  <p id="t-coords" style="font-size:11px;color:#374151;font-family:monospace;text-align:center"></p>
+
+  <!-- Banner background -->
+  <div class="wake-banner" id="wake-banner" style="display:none">
+    <strong>Pantalla apagada — sin señal activa</strong>
+    Ve a Ajustes → Chrome → Batería → Sin restricciones
+  </div>
+
+  <!-- Botón detener -->
+  <div style="width:100%;max-width:380px;padding-bottom:max(env(safe-area-inset-bottom),16px)">
+    <button onclick="confirmarDetener()"
+      style="width:100%;padding:14px;border-radius:12px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#f87171;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:0.02em">
+      Detener rastreo
+    </button>
+    <p id="t-uuid" style="font-size:9px;color:#1f2937;text-align:center;margin-top:8px;word-break:break-all"></p>
+  </div>
+
 </div>
 
 <script>
@@ -110,27 +238,162 @@ let watchId = null
 let intervalId = null
 let lastPos = null
 let enviando = false
+let wakeLock = null
+let audioCtx = null
+let audioNode = null
 
 function guardarCfg(data){ cfg = data; localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) }
 function cargarCfg(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null') }catch{ return null } }
 
+// ── Wake Lock: mantiene pantalla encendida ────────────────────
+async function pedirWakeLock(){
+  if(!('wakeLock' in navigator)) return
+  try {
+    wakeLock = await navigator.wakeLock.request('screen')
+    wakeLock.addEventListener('release', () => {
+      // El sistema liberó el lock (usuario bloqueó o cambió de app)
+      mostrarBannerBackground(true)
+      // Intentar re-adquirir cuando la página vuelva a ser visible
+    })
+  } catch {}
+}
+
+// ── Silent audio: evita que iOS mate JS en background ─────────
+// Toca silencio cada 4s. iOS mantiene vivo el proceso cuando hay audio activo.
+function iniciarAudioKeepAlive(){
+  if(audioCtx) return
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 })
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate)
+    function tocar(){
+      if(!audioCtx) return
+      audioNode = audioCtx.createBufferSource()
+      audioNode.buffer = buf
+      audioNode.connect(audioCtx.destination)
+      audioNode.start()
+      audioNode.onended = () => setTimeout(tocar, 4000)
+    }
+    tocar()
+  } catch {}
+}
+
+function detenerAudioKeepAlive(){
+  if(audioNode) try { audioNode.stop() } catch {}
+  if(audioCtx)  try { audioCtx.close() } catch {}
+  audioCtx = null
+  audioNode = null
+}
+
+// ── Visibility API: recovery al volver a primer plano ─────────
+document.addEventListener('visibilitychange', async () => {
+  if(document.visibilityState === 'visible'){
+    mostrarBannerBackground(false)
+    // Re-adquirir wake lock si se perdió
+    if(!wakeLock || wakeLock.released) await pedirWakeLock()
+    // Forzar GPS update y flush de cola inmediatamente
+    if(navigator.geolocation && watchId !== null){
+      navigator.geolocation.getCurrentPosition(
+        pos => { lastPos = pos; actualizarUI(pos); enviarPing() },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      )
+    }
+    if(queue.length) flushQueue()
+  } else {
+    mostrarBannerBackground(true)
+  }
+})
+
+function mostrarBannerBackground(visible){
+  const b = document.getElementById('wake-banner')
+  if(b) b.style.display = visible ? 'block' : 'none'
+}
+
 // ── Boot ──────────────────────────────────────────────────────
-window.onload = () => {
+window.onload = async () => {
   const saved = cargarCfg()
+  const url = saved?.url || 'https://telemetria.ubicuo.icu'
+  document.getElementById('cfg-url').value = url
+
   if(saved?.device_uuid && saved?.api_token){
     cfg = saved
     arrancarTracking()
-  } else {
-    document.getElementById('cfg-url').value = saved?.url || 'https://telemetria.ubicuo.icu'
-    document.getElementById('cfg-nombre').value = saved?.nombre || ''
-    mostrar('setup')
+    return
   }
+
+  // Primera vez: mostrar instrucciones de batería
+  const instruccionesVistas = localStorage.getItem('disfruleg_setup_done')
+  if(!instruccionesVistas){
+    mostrar('instrucciones')
+  } else {
+    mostrar('setup')
+    await cargarUnidades(url)
+  }
+}
+
+function instruccionesListas(){
+  localStorage.setItem('disfruleg_setup_done', '1')
+  const url = document.getElementById('cfg-url').value || 'https://telemetria.ubicuo.icu'
+  mostrar('setup')
+  cargarUnidades(url)
+}
+
+let unidadSeleccionada = null
+
+async function cargarUnidades(url){
+  const list = document.getElementById('unidades-list')
+  const btn  = document.getElementById('btn-iniciar')
+  btn.disabled = true
+  btn.style.opacity = '.35'
+  try {
+    const r = await fetch(`${url}/api/unidades`)
+    const data = await r.json()
+    const unidades = Array.isArray(data) ? data : (data.data || [])
+    if(!unidades.length) throw new Error('Sin unidades')
+
+    list.innerHTML = unidades.map(u => `
+      <button class="unit-card" onclick="elegirUnidad(${u.id}, '${(u.conductor||u.nombre).replace(/'/g,"\\'")}', '${u.nombre.replace(/'/g,"\\'")}', this)"
+        data-id="${u.id}" data-conductor="${u.conductor||u.nombre}" data-nombre="${u.nombre}">
+        <div class="uc-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="1" y="4" width="15" height="12" rx="1.5"/>
+            <path d="M16 8.5h3.2l2.8 3V17h-6V8.5z"/>
+            <circle cx="5.5" cy="18" r="2.5"/>
+            <circle cx="18.5" cy="18" r="2.5"/>
+          </svg>
+        </div>
+        <div>
+          <p class="uc-name">${u.conductor || u.nombre}</p>
+          <p class="uc-sub">${u.conductor ? u.nombre : 'Toca para seleccionar'}</p>
+        </div>
+        <svg class="uc-check" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </button>
+    `).join('')
+  } catch(e) {
+    list.innerHTML = `<div style="text-align:center;padding:32px 0;color:#6b7280;font-size:13px">
+      No se pudo conectar al servidor<br>
+      <span style="font-size:11px;color:#374151">Reintentando...</span>
+    </div>`
+    setTimeout(() => cargarUnidades(url), 4000)
+  }
+}
+
+function elegirUnidad(id, conductor, nombre, el){
+  unidadSeleccionada = { id, conductor, nombre }
+  document.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'))
+  el.classList.add('selected')
+  const btn = document.getElementById('btn-iniciar')
+  btn.disabled = false
+  btn.style.opacity = '1'
 }
 
 // ── Setup ─────────────────────────────────────────────────────
 async function iniciarSetup(){
-  const nombre = document.getElementById('cfg-nombre').value.trim() || 'Tracker'
-  const url    = document.getElementById('cfg-url').value.trim().replace(/\/$/, '')
+  const url = document.getElementById('cfg-url').value.trim().replace(/\/$/, '')
+  if(!unidadSeleccionada){ return }
+  const { id: unidadId, conductor, nombre } = unidadSeleccionada
 
   const uuid = cargarCfg()?.device_uuid || crypto.randomUUID()
 
@@ -141,29 +404,50 @@ async function iniciarSetup(){
     const res = await fetch(`${url}/api/dispositivos`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ device_uuid: uuid, unidad_id: 0, modelo: nombre, android_version: 'iOS-PWA' })
+      body: JSON.stringify({ device_uuid: uuid, unidad_id: unidadId, modelo: nombre, android_version: 'iOS-PWA' })
     })
     const data = await res.json()
     if(!data.ok) throw new Error('Error al registrar')
-    guardarCfg({ device_uuid: uuid, api_token: data.api_token, url, nombre })
+    guardarCfg({ device_uuid: uuid, api_token: data.api_token, url, nombre: conductor || nombre, unidad_id: unidadId })
     document.getElementById('t-uuid').textContent = `ID: ${uuid.slice(0,8)}... · ${nombre}`
-    arrancarTracking()
+    arrancarTracking(true)
   } catch(e) {
+    mostrar('setup')
     setStatus('err', `Error: ${e.message}`)
+    alert(`No se pudo registrar: ${e.message}`)
   }
 }
 
 // ── Tracking ──────────────────────────────────────────────────
-function arrancarTracking(){
+async function arrancarTracking(conInteraccion = false){
   mostrar('tracking')
-  document.getElementById('t-uuid').textContent = `ID: ${cfg.device_uuid?.slice(0,8)}... · ${cfg.nombre||''}`
+  document.getElementById('t-nombre').textContent = cfg.nombre || ''
+  document.getElementById('t-uuid').textContent = `ID: ${cfg.device_uuid?.slice(0,8)}`
 
   if(!navigator.geolocation){ setStatus('err', 'GPS no disponible'); return }
 
+  await pedirWakeLock()
+
+  // AudioContext requiere gesto del usuario previo.
+  // Si arrancamos con interacción (primer setup) lo activamos ya.
+  // Si arrancamos desde onload sin gesto, esperamos el primer toque.
+  if(conInteraccion){
+    iniciarAudioKeepAlive()
+  } else {
+    // Escuchar primer toque para activar audio (solo una vez)
+    const activarConToque = () => {
+      iniciarAudioKeepAlive()
+      document.removeEventListener('touchstart', activarConToque)
+      document.removeEventListener('click', activarConToque)
+    }
+    document.addEventListener('touchstart', activarConToque, { once: true })
+    document.addEventListener('click', activarConToque, { once: true })
+  }
+
   watchId = navigator.geolocation.watchPosition(
     pos => { lastPos = pos; actualizarUI(pos) },
-    err => setStatus('err', `GPS: ${err.message}`),
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 }
+    err => setStatus('warn', `GPS: ${err.message} — reintentando`),
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
   )
 
   intervalId = setInterval(enviarPing, INTERVALO_MS)
@@ -175,7 +459,7 @@ function actualizarUI(pos){
   document.getElementById('t-coords').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
   document.getElementById('t-precision').textContent = `${Math.round(accuracy)} m`
   document.getElementById('t-velocidad').textContent = speed != null ? `${(speed * 3.6).toFixed(1)} km/h` : '0 km/h'
-  animarBarra()
+  pulsarRadar()
 }
 
 async function enviarPing(){
@@ -243,28 +527,54 @@ window.addEventListener('offline', () => setStatus('warn','Sin internet — cola
 
 function actualizarCola(){
   const n = queue.length
-  document.getElementById('t-cola').firstChild.textContent = n + ' '
-  const badge = document.getElementById('t-cola-badge')
-  badge.style.display = n > 0 ? 'inline-block' : 'none'
-}
-
-function animarBarra(){
-  const bar = document.getElementById('t-bar')
-  bar.style.width = '100%'
-  setTimeout(() => bar.style.width = '0%', INTERVALO_MS - 500)
+  const el = document.getElementById('t-cola')
+  if(el){
+    el.textContent = n
+    el.style.color = n > 0 ? '#f97316' : '#f1f5f9'
+  }
 }
 
 function setStatus(tipo, msg){
-  const dots = {ok:'ok', warn:'warn', err:'err', idle:'idle'}
-  document.getElementById('t-estado').innerHTML = `<span class="dot ${dots[tipo]||'idle'}"></span>${tipo === 'ok' ? 'Activo' : tipo === 'warn' ? 'Advertencia' : tipo === 'err' ? 'Error' : 'Inactivo'}`
-  document.getElementById('t-msg').textContent = msg
+  const labels = {ok:'Activo', warn:'Advertencia', err:'Error', idle:'Inactivo'}
+  const wrap = document.getElementById('radar-wrap')
+  if(wrap){
+    wrap.className = 'radar-wrap ' + (tipo === 'ok' ? '' : tipo)
+  }
+  const txt = document.getElementById('t-estado-txt')
+  if(txt) txt.textContent = labels[tipo] || 'Inactivo'
+  const m = document.getElementById('t-msg')
+  if(m) m.textContent = msg
 }
 
-function detener(){
-  if(watchId) navigator.geolocation.clearWatch(watchId)
+function pulsarRadar(){
+  // Reinicia la animación de las ondas en cada ping GPS recibido
+  const rings = document.querySelectorAll('.radar-ring')
+  rings.forEach(r => {
+    r.style.animation = 'none'
+    r.offsetHeight // reflow
+    r.style.animation = ''
+  })
+}
+
+function confirmarDetener(){
+  if(!confirm('¿Seguro que quieres detener el rastreo?\n\nToca "Cancelar" si fue sin querer.')) return
+  if(!confirm('¿Borrar la configuración y volver al inicio?')) {
+    // Solo detener sin borrar config
+    detener(false)
+    return
+  }
+  detener(true)
+}
+
+function detener(borrarConfig = false){
+  if(watchId)    navigator.geolocation.clearWatch(watchId)
   if(intervalId) clearInterval(intervalId)
+  if(wakeLock)   try { wakeLock.release() } catch {}
+  detenerAudioKeepAlive()
+  watchId = null
+  intervalId = null
   setStatus('idle','Rastreo detenido')
-  if(confirm('¿Borrar configuración y volver al inicio?')){
+  if(borrarConfig){
     localStorage.removeItem(STORAGE_KEY)
     location.reload()
   }

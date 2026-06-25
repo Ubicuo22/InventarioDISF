@@ -34,7 +34,7 @@ function mermasModule() {
       this.mermaBusqueda   = ''
       this.mermaResultados = []
       this.mermaDropVisible = false
-      const hoy = new Date().toISOString().slice(0, 10)
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
       this.mermaForm = {
         id_producto: null, nombre_producto: '', unidad_producto: '',
         stock_actual: null, tipo: '', cantidad: '', fecha: hoy, motivo: '', notas: ''

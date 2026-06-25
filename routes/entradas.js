@@ -11,6 +11,7 @@ const { pool, q } = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
 const { enviarATodos } = require('../utils/push')
 const { registrar } = require('../utils/actividad')
+const { fechaMexico } = require('../utils/fecha')
 
 // Conversiones PEPS activas cuyo BASE es este producto
 // Retorna los derivados que usan este producto como fuente de stock
@@ -428,7 +429,7 @@ router.post('/ajuste-inventario', requireAuth, async (req, res) => {
     const stockSistema = parseFloat(prod.stock)
     const delta        = +(fisicaNum - stockSistema).toFixed(4)
     const usuario      = req.user.username
-    const fecha        = new Date().toISOString().slice(0, 10)
+    const fecha        = fechaMexico()
     let idCompraAjuste = null
 
     if (delta > 0) {

@@ -71,6 +71,11 @@ router.get('/data', requireDashboardToken, async (req, res) => {
           COALESCE(SUM(c.total_con_impuestos), 0)    AS costo_total
         FROM compra c
         WHERE DATE(c.fecha_registro) = ?
+          AND (c.notas IS NULL OR (
+                c.notas NOT LIKE 'PHANTOM:%'
+            AND c.notas NOT LIKE 'AJUSTE:%'
+            AND NOT (c.notas LIKE 'BOOTSTRAP:%' AND c.precio_unitario_compra <= 0.01)
+          ))
       `, [hoy]),
 
       // ── Stock crítico (≤ 5 unidades) ────────────────────
@@ -150,12 +155,22 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
            COUNT(*)                                AS num_compras,
            COALESCE(SUM(total_con_impuestos), 0)  AS total_gasto
          FROM compra
-         WHERE DATE(fecha_registro) = ?`, [hoy]),
+         WHERE DATE(fecha_registro) = ?
+           AND (notas IS NULL OR (
+                 notas NOT LIKE 'PHANTOM:%'
+             AND notas NOT LIKE 'AJUSTE:%'
+             AND NOT (notas LIKE 'BOOTSTRAP:%' AND precio_unitario_compra <= 0.01)
+           ))`, [hoy]),
 
       // Compras ayer (para tendencia)
       q(`SELECT COALESCE(SUM(total_con_impuestos), 0) AS total_gasto
          FROM compra
-         WHERE DATE(fecha_registro) = ?`, [ayer]),
+         WHERE DATE(fecha_registro) = ?
+           AND (notas IS NULL OR (
+                 notas NOT LIKE 'PHANTOM:%'
+             AND notas NOT LIKE 'AJUSTE:%'
+             AND NOT (notas LIKE 'BOOTSTRAP:%' AND precio_unitario_compra <= 0.01)
+           ))`, [ayer]),
 
       // Stock crítico (≤ 5 unidades)
       q(`SELECT
@@ -267,12 +282,17 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
                  ), ?
                ) < 0`, [hoy]),
 
-      // Última entrada de inventario (para tarjeta Historial)
+      // Última entrada de inventario real (para tarjeta Historial)
       q(`SELECT c.fecha_registro, c.cantidad_compra, c.total_con_impuestos,
                 p.nombre_producto, p.unidad_producto,
                 COALESCE(c.usuario_registro, '—') AS usuario
          FROM compra c
          LEFT JOIN producto p ON p.id_producto = c.id_producto
+         WHERE c.notas IS NULL OR (
+               c.notas NOT LIKE 'PHANTOM:%'
+           AND c.notas NOT LIKE 'AJUSTE:%'
+           AND NOT (c.notas LIKE 'BOOTSTRAP:%' AND c.precio_unitario_compra <= 0.01)
+         )
          ORDER BY c.fecha_registro DESC
          LIMIT 1`),
 

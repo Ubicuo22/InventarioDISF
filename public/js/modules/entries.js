@@ -31,7 +31,7 @@ function entriesModule() {
     },
 
     resetForm() {
-      const hoy = new Date().toISOString().slice(0, 10)
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
       this.form = {
         idProducto: null, nombreProducto: '', stockActual: 0,
         unidad: '',

@@ -73,7 +73,8 @@ function reviewModule () {
       return Object.keys(this.revisionCart).filter(k => !k.startsWith('__'))
     },
 
-    /** Lista plana de items, respetando orden de secciones (General primero si existe). */
+    /** Lista plana de items, respetando orden de secciones (General primero si existe).
+     *  Cada entrada incluye flatIdx para diferenciar duplicados del mismo producto. */
     revisionFlatItems () {
       const keys = this._revisionFilteredKeys()
       const ordered = keys.includes('General')
@@ -84,7 +85,7 @@ function reviewModule () {
         const items = this.revisionCart[sec]
         if (!Array.isArray(items)) continue
         for (const item of items) {
-          out.push({ item, section: sec })
+          out.push({ item, section: sec, flatIdx: out.length })
         }
       }
       return out
@@ -131,8 +132,8 @@ function reviewModule () {
     },
 
     revisionProgressPct () {
-      const total = this.revisionTotal()
-      return total === 0 ? 0 : Math.round((this.revisionReviewedCount() / total) * 100)
+      const originalTotal = this.revisionTotal() + this.revisionMissingNames.length
+      return originalTotal === 0 ? 0 : Math.round((this.revisionReviewedCount() / originalTotal) * 100)
     },
 
     /** Agrupa items por sección para el sidebar. */
@@ -176,7 +177,16 @@ function reviewModule () {
           ? JSON.parse(o.datos_carrito)
           : (o.datos_carrito || {})
 
-        this.revisionCart = Object.keys(cart).length ? cart : { General: [] }
+        // Normalizar campo: el Electron guarda unidad_producto, el modal usa item.unidad
+        const normCart = {}
+        for (const [k, v] of Object.entries(cart)) {
+          if (k.startsWith('__') || !Array.isArray(v)) { normCart[k] = v; continue }
+          normCart[k] = v.map(item => ({
+            ...item,
+            unidad: item.unidad || item.unidad_producto || ''
+          }))
+        }
+        this.revisionCart = Object.keys(normCart).length ? normCart : { General: [] }
         this._revisionOriginalCart = JSON.parse(JSON.stringify(this.revisionCart))
         this.revisionFolio = o.folio_numero
         this.revisionIdCliente = o.id_cliente || null
@@ -655,6 +665,7 @@ function reviewModule () {
         id_producto:     prod.id_producto,
         nombre_producto: prod.nombre_producto,
         unidad:          prod.unidad_producto,
+        unidad_producto: prod.unidad_producto,
         precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
         cantidad:        items[idx].cantidad   // conservar cantidad pedida
       }
@@ -729,6 +740,7 @@ function reviewModule () {
           id_producto:     prod.id_producto,
           nombre_producto: prod.nombre_producto,
           unidad:          prod.unidad_producto,
+          unidad_producto: prod.unidad_producto,
           precio_unitario: parseFloat(prod.precio_base) || 0,
           cantidad:        cant
         })
@@ -790,23 +802,31 @@ function reviewModule () {
           ? JSON.parse(orden.datos_carrito)
           : (orden.datos_carrito || {})
         const hist = cart.__historial__ || []
-        if (hist.length === 0) return null  // null = no info
+        if (hist.length === 0) return null
+
+        // Buscar la última entrada de revisión
+        let lastRevIdx = -1
         for (let i = hist.length - 1; i >= 0; i--) {
-          const e = hist[i]
-          if (e.tipoEvento === 'revision') {
-            if (i !== hist.length - 1) return null  // hubo cambios después de la revisión
-            const pendientes = e.pendientes || []
-            return {
-              reviewed: pendientes.length === 0,  // solo "revisada" si no hay pendientes
-              conPendientes: pendientes.length > 0,
-              usuario: e.usuario,
-              fecha: e.fecha,
-              faltantes: e.faltantes || [],
-              pendientes
-            }
-          }
+          if (hist[i].tipoEvento === 'revision') { lastRevIdx = i; break }
         }
-        return null
+        if (lastRevIdx === -1) return null
+
+        // Invalidar solo si hay entradas de diff (sin tipoEvento) DESPUÉS de la revisión
+        // Eventos tipados como 'impresion' no invalidan el estado de revisión
+        for (let i = lastRevIdx + 1; i < hist.length; i++) {
+          if (!hist[i].tipoEvento) return null
+        }
+
+        const e = hist[lastRevIdx]
+        const pendientes = e.pendientes || []
+        return {
+          reviewed: pendientes.length === 0,
+          conPendientes: pendientes.length > 0,
+          usuario: e.usuario,
+          fecha: e.fecha,
+          faltantes: e.faltantes || [],
+          pendientes
+        }
       } catch { return null }
     }
   }

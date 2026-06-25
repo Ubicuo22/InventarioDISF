@@ -41,7 +41,7 @@ router.get('/resumen', requireAuth, async (req, res) => {
         -- no cuentan en totales de gasto ni promedios
         AND (c.notas IS NULL OR (
               c.notas NOT LIKE 'PHANTOM:%'
-          AND c.notas NOT LIKE '%AJUSTE INVENTARIO%'
+          AND c.notas NOT LIKE 'AJUSTE:%'
           AND NOT (c.notas LIKE 'BOOTSTRAP:%' AND c.precio_unitario_compra <= 0.01)
         ))
       ORDER BY c.fecha_compra DESC, c.id_compra DESC

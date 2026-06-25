@@ -16,6 +16,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 
+  <!-- Leaflet — mapa en vivo -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <!-- Anti-flash: resuelve y aplica el tema ANTES de la primera pintura.
        Lee localStorage; si no hay valor guardado usa prefers-color-scheme.
        Expone window.__THEME para que uiModule lo herede sin re-resolver. -->
@@ -38,7 +42,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.bd6275fd.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.031ae3c2.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -250,6 +254,16 @@
         <span>Compras</span>
       </button>
 
+      <button x-show="tienePermiso('pedidos')"
+        @click="tab = 'reparto'; $nextTick(() => initLogisticsMap())"
+        class="sidebar-item" :class="tab === 'reparto' ? 'active' : ''">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1"/>
+        </svg>
+        <span>Reparto</span>
+      </button>
+
     </div>
 
     <!-- Usuario (pie del sidebar) -->
@@ -312,7 +326,7 @@
       <div class="flex items-center gap-2">
         <!-- Indicador conexión DB -->
         <div class="flex items-center gap-1" :title="dbOk ? 'Conectado a la base de datos' : 'Sin conexión'">
-          <span class="w-2 h-2 rounded-full" :class="dbOk ? 'bg-emerald-400' : 'bg-red-400'"></span>
+          <span class="w-2 h-2 rounded-full" :class="dbOk ? 'bg-green-400' : 'bg-red-400'"></span>
         </div>
 
         <!-- Toggle de tema (sol / luna) -->
@@ -336,7 +350,7 @@
           :title="pushSuscrito ? 'Notificaciones activas — toca para desactivar' : 'Activar notificaciones'"
           :disabled="pushCargando"
           class="p-1 transition-colors relative"
-          :class="pushSuscrito ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-500 hover:text-slate-300'">
+          :class="pushSuscrito ? 'text-green-400 hover:text-green-300' : 'text-slate-500 hover:text-slate-300'">
           <!-- Spinner mientras carga -->
           <svg x-show="pushCargando" class="animate-spin w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -379,7 +393,7 @@
   </header>
 
   <!-- ── Contenido ── -->
-  <main class="flex-1 max-w-3xl md:max-w-4xl lg:max-w-6xl mx-auto w-full px-4 pt-4" style="padding-bottom: max(9rem, calc(3.75rem + env(safe-area-inset-bottom) + 5rem))"
+  <main x-show="tab !== 'reparto'" class="flex-1 max-w-3xl md:max-w-4xl lg:max-w-6xl mx-auto w-full px-4 pt-4" style="padding-bottom: max(9rem, calc(3.75rem + env(safe-area-inset-bottom) + 5rem))"
     @touchstart.passive="ptrTouchStart($event)"
     @touchmove.passive="ptrTouchMove($event)"
     @touchend.passive="ptrTouchEnd()">
@@ -395,7 +409,7 @@
           fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
         </svg>
-        <svg x-show="ptrSpinning" class="animate-spin w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24">
+        <svg x-show="ptrSpinning" class="animate-spin w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
         </svg>
@@ -707,7 +721,7 @@
         </button>
 
         <!-- ▸ MERMAS — ahora con monto perdido -->
-        <button x-show="tienePermiso('mermas')" @click="tab = 'mermas'"
+        <button x-show="tienePermiso('mermas')" @click="tab = 'mermas'; cargarMermasRecientes()"
           class="bento-tile bento-tile--orange bento-col-2 tap">
           <div class="flex items-center justify-between mb-3">
             <div class="icon-bubble">
@@ -1168,7 +1182,7 @@
       <div class="flex gap-1 mb-3 overflow-x-auto">
         <button @click="pedidosTab = 'activos'; limpiarFiltrosPedidos(); cargarOrdenes()"
           class="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap"
-          :class="pedidosTab === 'activos' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500 hover:text-slate-300'">
+          :class="pedidosTab === 'activos' ? 'bg-green-500/20 text-green-400' : 'text-slate-500 hover:text-slate-300'">
           Activos
           <span x-show="pedidosTab === 'activos' && ordenes.length > 0"
             class="ml-1 text-[10px] tabular-nums opacity-70"
@@ -1304,18 +1318,6 @@
                 <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                   <p class="text-xs text-slate-500"
                     x-text="`${o.nombre_grupo} · ${fmtFecha(o.fecha_creacion)}`"></p>
-                  <!-- Chips de envío solo para grupo Defensa -->
-                  <span x-show="o.nombre_grupo?.toLowerCase().includes('defensa') && o.fecha_envio"
-                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 text-[10px] font-medium">
-                    <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    <span x-text="`Enviado ${fmtFecha(o.fecha_envio)}`"></span>
-                  </span>
-                  <span x-show="o.nombre_grupo?.toLowerCase().includes('defensa') && !o.fecha_envio"
-                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-400 text-[10px] font-medium">
-                    Pendiente envío
-                  </span>
                 </div>
                 <!-- Observación del pedido -->
                 <p x-show="getOrdenObservacion(o)"
@@ -1335,16 +1337,6 @@
                   x-text="o.estado === 'guardada' ? 'activo' : 'registrado'"></p>
               </div>
 
-              <!-- Botón "Marcar enviado" — solo grupo Defensa sin fecha_envio -->
-              <button
-                x-show="(pedidosTab === 'activos' || pedidosTab === 'revisadas') && o.nombre_grupo?.toLowerCase().includes('defensa') && !o.fecha_envio"
-                @click.stop="marcarEnviado(o.folio_numero)"
-                class="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-sky-500/15 text-sky-400 active:scale-95 transition-all"
-                title="Marcar como enviado">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                </svg>
-              </button>
 
               <!-- Botón Revisar (activos y revisadas) -->
               <button x-show="pedidosTab === 'activos' || pedidosTab === 'revisadas'"
@@ -1412,68 +1404,164 @@
           </div>
         </div>
 
-        <!-- Tarjetas por pedido -->
-        <div x-show="!cargandoPendientes && pendientesHoy.length > 0" class="space-y-3">
+        <!-- Lista acordeón por pedido -->
+        <div x-show="!cargandoPendientes && pendientesHoy.length > 0" class="card overflow-hidden">
           <template x-for="orden in pendientesHoy" :key="orden.folio_numero">
-            <div class="card p-4">
+            <div class="border-b border-slate-800/60 last:border-0">
 
-              <!-- Header de la orden -->
-              <div class="flex items-start justify-between gap-2 mb-3">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-[11px] text-slate-500 font-mono">#<span x-text="orden.folio_numero"></span></span>
-                    <span x-show="orden.observacion"
-                      class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 truncate max-w-[140px]"
-                      x-text="orden.observacion"></span>
+              <!-- Trigger del dropdown -->
+              <button @click="togglePendiente(orden.folio_numero)"
+                class="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-white/[0.02] active:bg-white/[0.04] transition-colors">
+                <!-- Chevron -->
+                <svg :class="estaAbierto(orden.folio_numero) ? 'rotate-90 text-slate-400' : 'text-slate-600'"
+                  class="flex-shrink-0 w-3.5 h-3.5 transition-all duration-200"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+                <!-- Nombre cliente -->
+                <span class="flex-1 text-[13px] font-semibold text-white leading-snug truncate" x-text="orden.nombre_cliente"></span>
+                <!-- Folio -->
+                <span class="flex-shrink-0 text-[10px] text-slate-600 font-mono tabular-nums mr-1" x-text="'#' + orden.folio_numero"></span>
+                <!-- Badges -->
+                <span x-show="orden.pendientes.length > 0"
+                  class="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-amber-500/15 text-amber-400"
+                  x-text="orden.pendientes.length"></span>
+                <span x-show="orden.faltantes.length > 0"
+                  class="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-red-500/15 text-red-400"
+                  x-text="orden.faltantes.length"></span>
+              </button>
+
+              <!-- Panel expandido -->
+              <div x-show="estaAbierto(orden.folio_numero)">
+
+                <!-- Subheader: grupo + observación -->
+                <div x-show="orden.nombre_grupo || orden.observacion"
+                  class="flex items-center gap-2 px-4 pb-2 pt-0 flex-wrap ml-[26px]">
+                  <span x-show="orden.nombre_grupo" class="text-[11px] text-slate-500 truncate" x-text="orden.nombre_grupo"></span>
+                  <span x-show="orden.observacion"
+                    class="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-400 truncate max-w-[160px]"
+                    x-text="orden.observacion"></span>
+                </div>
+
+                <!-- Secciones agrupadas -->
+                <template x-for="grupo in agruparPorSeccion([...orden.pendientes.map(i => ({...i, tipo:'pendiente'})), ...orden.faltantes.map(i => ({...i, tipo:'faltante'}))])" :key="grupo.seccion">
+                  <div>
+                    <!-- Encabezado de sección -->
+                    <div x-show="grupo.seccion && grupo.seccion !== 'Sin sección'"
+                      class="flex items-center gap-2 px-4 py-1.5 ml-[26px]">
+                      <span class="text-[9px] tracking-[0.12em] uppercase font-bold text-slate-600 whitespace-nowrap" x-text="grupo.seccion"></span>
+                      <div class="flex-1 h-px bg-slate-800"></div>
+                    </div>
+                    <!-- Items de la sección -->
+                    <div class="ml-[26px]">
+                      <template x-for="item in grupo.items" :key="item.nombre + '-' + item.tipo">
+                        <div class="border-t border-slate-800/40 first:border-0">
+                          <!-- Fila principal -->
+                          <div class="flex items-center gap-2 px-4 py-2.5">
+                            <!-- Barra lateral de color -->
+                            <div :class="item.tipo === 'faltante' ? 'bg-red-500/50' : 'bg-amber-500/50'"
+                              class="flex-shrink-0 w-0.5 h-6 rounded-full self-center"></div>
+                            <!-- Badge cantidad (tap = editar) -->
+                            <button @click="abrirEdicionCantidad(orden.folio_numero, item, item.tipo)"
+                              :class="item.tipo === 'faltante'
+                                ? (pendienteEditando?.folio === orden.folio_numero && pendienteEditando?.nombre === item.nombre ? 'bg-red-500/25 text-red-300 ring-1 ring-red-500/40' : 'bg-red-500/10 text-red-400')
+                                : (pendienteEditando?.folio === orden.folio_numero && pendienteEditando?.nombre === item.nombre ? 'bg-amber-500/25 text-amber-300 ring-1 ring-amber-500/40' : 'bg-amber-500/10 text-amber-400')"
+                              class="flex-shrink-0 w-[62px] text-center text-[11px] font-bold px-1.5 py-1 rounded-md transition-all"
+                              x-text="item.cantidad != null ? item.cantidad + (item.unidad ? ' ' + item.unidad : '') : '—'">
+                            </button>
+                            <!-- Nombre -->
+                            <span class="flex-1 text-[13px] text-slate-200 leading-tight min-w-0 truncate" x-text="item.nombre"></span>
+                            <!-- Acciones -->
+                            <div class="flex-shrink-0 flex items-center gap-0.5">
+                              <!-- Cambiar producto -->
+                              <button @click="abrirCambioProducto(orden.folio_numero, item, item.tipo)"
+                                :class="pendienteCambiando?.folio === orden.folio_numero && pendienteCambiando?.nombre === item.nombre ? 'text-blue-300 bg-blue-500/20' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-700/50'"
+                                class="w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90"
+                                title="Cambiar producto">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                                </svg>
+                              </button>
+                              <!-- Marcar faltante (solo pendientes) -->
+                              <button x-show="item.tipo === 'pendiente'"
+                                @click="moverAFaltante(orden.folio_numero, item.nombre)"
+                                class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all active:scale-90"
+                                title="Marcar como faltante">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                </svg>
+                              </button>
+                              <!-- Resolver -->
+                              <button @click="resolverPendiente(orden.folio_numero, item.tipo, item.nombre)"
+                                :class="item.tipo === 'faltante' ? 'text-red-500/60 hover:text-red-400 hover:bg-red-500/10' : 'text-amber-500/60 hover:text-amber-300 hover:bg-amber-500/10'"
+                                class="w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-90"
+                                title="Marcar listo">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          <!-- Editor de cantidad -->
+                          <div x-show="pendienteEditando?.folio === orden.folio_numero && pendienteEditando?.nombre === item.nombre"
+                            class="flex items-center gap-2 px-4 pb-3 ml-[26px]">
+                            <input type="number" step="0.01" min="0"
+                              x-model="pendienteEditCant"
+                              @keydown.enter="guardarCantidadPendiente()"
+                              @keydown.escape="pendienteEditando = null"
+                              :class="item.tipo === 'faltante' ? 'border-red-500/40 focus:border-red-400' : 'border-amber-500/40 focus:border-amber-400'"
+                              class="w-24 bg-slate-900 border text-white text-sm font-bold rounded-lg px-2.5 py-1.5 text-center focus:outline-none"/>
+                            <span class="text-xs text-slate-500" x-text="item.unidad"></span>
+                            <button @click="guardarCantidadPendiente()"
+                              class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors">Guardar</button>
+                            <button @click="pendienteEditando = null" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+                          </div>
+                          <!-- Buscador de cambio -->
+                          <div x-show="pendienteCambiando?.folio === orden.folio_numero && pendienteCambiando?.nombre === item.nombre"
+                            class="px-4 pb-3 ml-[26px]">
+                            <div class="relative mb-1.5">
+                              <input type="text" placeholder="Buscar producto para reemplazar…"
+                                x-model="cambioQuery"
+                                @input.debounce.300ms="buscarProductoCambio()"
+                                @keydown.escape="pendienteCambiando = null; cambioQuery = ''; cambioResultados = []"
+                                class="w-full bg-slate-900 border border-blue-500/30 text-white text-sm rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-blue-400 placeholder-slate-600"/>
+                              <svg x-show="cambioBuscando" class="absolute right-2.5 top-2.5 w-3.5 h-3.5 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                              </svg>
+                            </div>
+                            <div x-show="cambioResultados.length > 0"
+                              class="bg-slate-900 border border-slate-700/60 rounded-lg overflow-hidden max-h-44 overflow-y-auto mb-2 shadow-xl">
+                              <template x-for="prod in cambioResultados" :key="prod.id_producto">
+                                <button @click="confirmarCambioProducto(prod)"
+                                  class="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-0 text-left gap-3">
+                                  <span class="text-sm text-white truncate" x-text="prod.nombre_producto"></span>
+                                  <span class="text-[11px] text-slate-500 flex-shrink-0 font-medium" x-text="prod.unidad_producto"></span>
+                                </button>
+                              </template>
+                            </div>
+                            <button @click="pendienteCambiando = null; cambioQuery = ''; cambioResultados = []"
+                              class="text-xs text-slate-600 hover:text-slate-400 transition-colors">Cancelar</button>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
                   </div>
-                  <p class="font-semibold text-white text-sm mt-0.5 truncate" x-text="orden.nombre_cliente"></p>
-                  <p class="text-[11px] text-slate-500 truncate" x-text="orden.nombre_grupo"></p>
+                </template>
+
+                <!-- Footer: revisión + todo listo -->
+                <div class="flex items-center justify-between px-4 py-3 mt-1 border-t border-slate-800/50 ml-[26px]">
+                  <span class="text-[10px] text-slate-600"
+                    x-text="'Revisado por ' + orden.usuario_revision"></span>
+                  <button @click="resolverTodosOrden(orden.folio_numero)"
+                    class="flex items-center gap-1.5 text-[11px] font-semibold text-green-500/70 hover:text-green-400 transition-colors active:scale-95">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Todo listo
+                  </button>
                 </div>
-                <button @click="resolverTodosOrden(orden.folio_numero)"
-                  class="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 active:scale-95 transition-all whitespace-nowrap">
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                  </svg>
-                  Todo listo
-                </button>
-              </div>
 
-              <!-- Pendientes (amber) -->
-              <div x-show="orden.pendientes.length > 0" class="mb-2.5">
-                <p class="text-[10px] text-amber-400/70 uppercase tracking-wide font-semibold mb-1.5">Pendientes</p>
-                <div class="flex flex-wrap gap-1.5">
-                  <template x-for="nombre in orden.pendientes" :key="nombre">
-                    <button @click="resolverPendiente(orden.folio_numero, 'pendiente', nombre)"
-                      class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 transition-all">
-                      <svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                      </svg>
-                      <span x-text="nombre"></span>
-                    </button>
-                  </template>
-                </div>
-              </div>
-
-              <!-- Faltantes (rojo) -->
-              <div x-show="orden.faltantes.length > 0">
-                <p class="text-[10px] text-red-400/70 uppercase tracking-wide font-semibold mb-1.5">Faltantes</p>
-                <div class="flex flex-wrap gap-1.5">
-                  <template x-for="nombre in orden.faltantes" :key="nombre">
-                    <button @click="resolverPendiente(orden.folio_numero, 'faltante', nombre)"
-                      class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-red-500/10 text-red-300 border border-red-500/20 hover:bg-red-500/20 active:scale-95 transition-all">
-                      <svg class="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                      </svg>
-                      <span x-text="nombre"></span>
-                    </button>
-                  </template>
-                </div>
-              </div>
-
-              <!-- Pie: usuario + fecha revisión -->
-              <p class="text-[10px] text-slate-600 mt-3"
-                x-text="'Revisado por ' + orden.usuario_revision + ' · ' + fmtFecha(orden.fecha_revision)"></p>
-
+              </div><!-- /panel expandido -->
             </div>
           </template>
         </div>
@@ -1499,7 +1587,7 @@
         </div>
         <div class="card p-3">
           <p class="text-[10px] uppercase text-slate-500 tracking-wide">Contados hoy</p>
-          <p class="text-xl font-bold text-emerald-400 tabular-nums" x-text="conteoStats().contados"></p>
+          <p class="text-xl font-bold text-green-400 tabular-nums" x-text="conteoStats().contados"></p>
         </div>
         <div class="card p-3">
           <p class="text-[10px] uppercase text-slate-500 tracking-wide">Pendientes</p>
@@ -1514,7 +1602,7 @@
           </svg>
           <input type="text" x-model.debounce.300ms="conteoQuery" @input="cargarConteoLista()"
             placeholder="Buscar producto..."
-            class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50">
+            class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500/50">
         </div>
         <label class="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/60 cursor-pointer">
           <input type="checkbox" x-model="conteoSoloPendientes" @change="cargarConteoLista()" class="rounded">
@@ -1541,12 +1629,12 @@
                 class="w-full px-3 py-2.5 flex items-center gap-2 text-left transition-colors border-l-[3px] border-b"
                 style="border-bottom-color:var(--glass-border)"
                 :class="conteoSeleccionado && conteoSeleccionado.id_producto === p.id_producto
-                  ? 'bg-emerald-500/10 border-l-emerald-400'
+                  ? 'bg-green-500/10 border-l-green-400'
                   : p.ultima_fecha
                     ? 'border-l-transparent opacity-60 hover:opacity-100 hover:bg-white/5'
                     : 'border-l-transparent hover:bg-white/5'">
                 <div class="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                  :class="p.ultima_fecha ? 'bg-emerald-500/80' : 'border border-slate-600'">
+                  :class="p.ultima_fecha ? 'bg-green-500/80' : 'border border-slate-600'">
                   <svg x-show="p.ultima_fecha" class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                   </svg>
@@ -1587,7 +1675,7 @@
                 </div>
                 <div class="rounded-2xl p-4 border"
                   :class="conteoDelta() === null ? 'bg-slate-800/40 border-slate-700/60' :
-                           conteoDelta() > 0 ? 'bg-emerald-500/10 border-emerald-500/40' :
+                           conteoDelta() > 0 ? 'bg-green-500/10 border-green-500/40' :
                            conteoDelta() < 0 ? 'bg-red-500/10 border-red-500/40' :
                                                'bg-slate-800/40 border-slate-700/60'">
                   <p class="text-[10px] uppercase text-slate-500 tracking-wide">Diferencia</p>
@@ -1604,8 +1692,8 @@
                 <input id="conteo-input-fisica" type="number" step="0.01" min="0"
                   x-model="conteoCantidadFisica"
                   @keydown.enter="conteoAplicarAjuste()"
-                  placeholder="0.00"
-                  class="mt-2 w-full bg-slate-800/60 border border-slate-700/60 rounded-2xl px-4 py-4 text-3xl font-bold text-white text-center tabular-nums focus:outline-none focus:border-emerald-500/60">
+                  placeholder="Cantidad física"
+                  class="mt-2 w-full bg-slate-800/60 border border-slate-700/60 rounded-2xl px-4 py-4 text-3xl font-bold text-white text-center tabular-nums focus:outline-none focus:border-green-500/60">
               </label>
 
               <div x-show="conteoErrorAjuste" class="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
@@ -2301,7 +2389,301 @@
 
     </div><!-- /tab compras -->
 
+    <!-- ══════════════════════════════════════════════════════════
+         TAB: MERMAS
+    ══════════════════════════════════════════════════════════ -->
+    <div x-show="tab === 'mermas'" x-cloak class="max-w-3xl md:max-w-4xl mx-auto px-4 pt-5 pb-28">
+
+      <!-- Cabecera -->
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-white">Mermas</h2>
+        <div class="flex gap-2">
+          <button @click="cargarMermasRecientes()" :disabled="cargandoMermas"
+            class="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:sf-lo disabled:opacity-40">
+            <svg class="w-5 h-5" :class="{'animate-spin': cargandoMermas}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+          <button @click="abrirMerma()"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-colors text-sm font-semibold">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Nueva merma
+          </button>
+        </div>
+      </div>
+
+      <!-- Cargando -->
+      <div x-show="cargandoMermas" class="py-14 text-center text-slate-500 text-sm">Cargando…</div>
+
+      <!-- Lista -->
+      <div x-show="!cargandoMermas" class="card overflow-hidden">
+        <!-- Empty state -->
+        <div x-show="mermasRecientes.length === 0" class="py-14 text-center">
+          <svg class="w-10 h-10 text-slate-700 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <p class="text-slate-500 text-sm">Sin mermas registradas</p>
+        </div>
+
+        <!-- Tabla -->
+        <table x-show="mermasRecientes.length > 0" class="w-full text-sm">
+          <thead class="border-b border-slate-700">
+            <tr>
+              <th class="text-left px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Fecha</th>
+              <th class="text-left px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Producto</th>
+              <th class="text-center px-3 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Tipo</th>
+              <th class="text-center px-3 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Cant.</th>
+              <th class="text-left px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide hidden sm:table-cell">Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="m in mermasRecientes" :key="m.id_merma">
+              <tr class="border-b bd glass-divider hover:sf-lo transition-colors">
+                <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap"
+                  x-text="fmtFecha(m.fecha_merma)"></td>
+                <td class="px-4 py-3">
+                  <p class="text-white font-medium text-sm leading-snug" x-text="m.nombre_producto"></p>
+                  <p class="text-slate-500 text-xs mt-0.5" x-text="m.usuario_registro"></p>
+                </td>
+                <td class="px-3 py-3 text-center">
+                  <span class="text-xs font-semibold" :class="colorTipoMerma(m.tipo_merma)"
+                    x-text="fmtTipoMerma(m.tipo_merma)"></span>
+                </td>
+                <td class="px-3 py-3 text-center font-bold text-orange-400"
+                  x-text="`${m.cantidad_merma} ${m.unidad_producto}`"></td>
+                <td class="px-4 py-3 text-slate-400 text-xs hidden sm:table-cell" x-text="m.motivo"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+    </div><!-- /tab mermas -->
+
   </main>
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB: Reparto — mapa en vivo
+       Layout: mapa full + chips flotantes + panel detalle
+       ══════════════════════════════════════════════════════════ -->
+  <div x-show="tab === 'reparto'" x-cloak
+    class="relative bg-[#0d0f14] overflow-hidden"
+    style="height:calc(100dvh - env(safe-area-inset-top) - 3.75rem)"
+    x-effect="tab === 'reparto' && _logMapReady && $nextTick(() => { if(window._lmap) window._lmap.invalidateSize() })">
+
+    <!-- ══ MAPA — ocupa todo el espacio ══ -->
+    <div id="logistics-map" style="position:absolute;inset:0;z-index:1"></div>
+
+    <!-- ══ CHIPS flotantes arriba ══ -->
+    <div class="absolute top-3 left-0 right-0 z-[400] px-3 flex items-center gap-2 overflow-x-auto"
+      style="scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch">
+
+      <!-- Spinner mientras carga -->
+      <div x-show="logisticsCargando && logisticsUnidades.length === 0"
+        class="flex items-center gap-2 px-3 py-2 rounded-full text-xs text-slate-400"
+        style="background:rgba(15,23,42,0.85);backdrop-filter:blur(10px);border:1px solid rgba(148,163,184,0.15);white-space:nowrap">
+        <div class="w-3 h-3 rounded-full border-2 border-sky-400 border-t-transparent animate-spin"></div>
+        Cargando…
+      </div>
+
+      <!-- Error -->
+      <div x-show="logisticsError && !logisticsCargando"
+        class="flex items-center gap-2 px-3 py-2 rounded-full text-xs text-red-400"
+        style="background:rgba(15,23,42,0.85);backdrop-filter:blur(10px);border:1px solid rgba(239,68,68,0.3);white-space:nowrap">
+        <span>Sin telemetría</span>
+      </div>
+
+      <!-- Un chip por unidad -->
+      <template x-for="u in logisticsUnidades" :key="u.unidad_id">
+        <button @click="seleccionarLogisticsUnidad(u.unidad_id)"
+          class="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all flex-shrink-0"
+          :style="logisticsSelectedId === u.unidad_id
+            ? `background:${_logColor(u.ruta_estado)}22;border:1.5px solid ${_logColor(u.ruta_estado)};backdrop-filter:blur(10px)`
+            : 'background:rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.15);backdrop-filter:blur(10px)'">
+          <!-- Status dot -->
+          <span class="w-2 h-2 rounded-full flex-shrink-0"
+            :style="`background:${_logColor(u.ruta_estado)};box-shadow:0 0 5px ${_logColor(u.ruta_estado)}99`"></span>
+          <!-- Nombre repartidor -->
+          <span class="text-white" x-text="logisticsConductor(u) || logisticsNombreUnidad(u)"></span>
+          <!-- Velocidad si está en movimiento -->
+          <span x-show="u.velocidad_kmh > 0"
+            class="text-[11px] font-normal"
+            :style="`color:${_logColor(u.ruta_estado)}`"
+            x-text="`${Math.round(u.velocidad_kmh)} km/h`"></span>
+          <!-- Batería baja -->
+          <span x-show="u.bateria_actual != null && u.bateria_actual < 20"
+            class="text-[11px] text-red-400 font-normal"
+            x-text="`🔋${u.bateria_actual}%`"></span>
+        </button>
+      </template>
+    </div>
+
+    <!-- ══ PANEL DETALLE — flotante derecha (slide in) ══ -->
+    <div x-show="logisticsSelectedId !== null && logisticsUnidadActual()" x-cloak
+      class="absolute top-14 right-3 bottom-3 z-[400] flex flex-col rounded-2xl overflow-hidden"
+      style="width:min(320px,90vw);background:rgba(13,15,20,0.92);backdrop-filter:blur(16px);border:1px solid rgba(148,163,184,0.12)">
+
+      <!-- Header -->
+      <div class="px-4 py-3 border-b flex items-start justify-between flex-shrink-0"
+        style="border-color:rgba(148,163,184,0.1)">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-white truncate" x-text="logisticsNombreUnidad(logisticsUnidadActual())"></p>
+          <p class="text-xs text-slate-400 truncate" x-text="logisticsConductor(logisticsUnidadActual())"></p>
+          <p class="text-xs mt-0.5 font-medium"
+            :style="`color:${_logColor(logisticsUnidadActual()?.ruta_estado)}`"
+            x-text="logisticsEstadoLabel(logisticsUnidadActual()?.ruta_estado)"></p>
+        </div>
+        <button @click="seleccionarLogisticsUnidad(logisticsSelectedId)"
+          class="text-slate-500 hover:text-white p-1 -mr-1 flex-shrink-0 transition-colors">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-3 flex-shrink-0" style="border-bottom:1px solid rgba(148,163,184,0.1)">
+        <div class="px-3 py-2.5 text-center" style="border-right:1px solid rgba(148,163,184,0.08)">
+          <p class="text-[10px] text-slate-500 uppercase tracking-wide">Velocidad</p>
+          <p class="text-sm font-bold text-white"
+            x-text="logisticsUnidadActual()?.velocidad_kmh != null ? `${Math.round(logisticsUnidadActual().velocidad_kmh)} km/h` : '—'"></p>
+        </div>
+        <div class="px-3 py-2.5 text-center" style="border-right:1px solid rgba(148,163,184,0.08)">
+          <p class="text-[10px] text-slate-500 uppercase tracking-wide">Batería</p>
+          <p class="text-sm font-bold"
+            :class="(logisticsUnidadActual()?.bateria_actual ?? 100) < 20 ? 'text-red-400' : 'text-white'"
+            x-text="logisticsUnidadActual()?.bateria_actual != null ? `${logisticsUnidadActual().bateria_actual}%` : '—'"></p>
+        </div>
+        <div class="px-3 py-2.5 text-center">
+          <p class="text-[10px] text-slate-500 uppercase tracking-wide">Ping</p>
+          <p class="text-sm font-bold text-white" x-text="logisticsTimeSince(logisticsUnidadActual()?.ultimo_ping)"></p>
+        </div>
+      </div>
+
+      <!-- Scrollable body -->
+      <div class="flex-1 overflow-y-auto">
+        <template x-if="!logisticsRuta">
+          <div class="px-4 py-10 text-center text-xs text-slate-500">Sin ruta activa hoy</div>
+        </template>
+
+        <template x-if="logisticsRuta">
+          <div>
+
+            <!-- ── Progreso entregas ── -->
+            <template x-if="logisticsProgreso()">
+              <div class="px-4 py-3" style="border-bottom:1px solid rgba(148,163,184,0.08)">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wide font-medium">Entregas del día</p>
+                  <p class="text-xs font-bold text-sky-400"
+                    x-text="`${logisticsProgreso().done}/${logisticsProgreso().total}`"></p>
+                </div>
+                <div class="h-1.5 rounded-full" style="background:rgba(148,163,184,0.1)">
+                  <div class="h-full rounded-full transition-all"
+                    style="background:linear-gradient(90deg,#38bdf8,#34d399);box-shadow:0 0 8px rgba(56,189,248,0.3)"
+                    :style="`width:${logisticsProgreso().pct}%`"></div>
+                </div>
+              </div>
+            </template>
+
+            <!-- ── Pedidos ── -->
+            <template x-if="logisticsRuta.pedidos.length > 0">
+              <div style="border-bottom:1px solid rgba(148,163,184,0.08)">
+                <p class="px-4 pt-3 pb-1 text-[10px] text-slate-500 uppercase tracking-wide font-medium">Pedidos</p>
+                <template x-for="p in logisticsRuta.pedidos" :key="p.id">
+                  <div class="px-4 py-2 flex items-center gap-2.5"
+                    style="border-bottom:1px solid rgba(148,163,184,0.05)">
+                    <!-- Dot estado -->
+                    <span class="w-2 h-2 rounded-full flex-shrink-0"
+                      :style="`background:${logisticsPedidoColor(p.estado)}`"></span>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-medium text-white truncate" x-text="p.cliente || `Folio #${p.folio}`"></p>
+                      <p class="text-[10px] text-slate-500"
+                        x-text="`#${p.folio_numero || p.folio}${p.monto ? ' · $' + Number(p.monto).toLocaleString('es-MX') : ''}`"></p>
+                    </div>
+                    <span class="text-[10px] font-medium flex-shrink-0"
+                      :style="`color:${logisticsPedidoColor(p.estado)}`"
+                      x-text="logisticsPedidoLabel(p.estado)"></span>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <!-- ── Paradas ── -->
+            <template x-if="logisticsParadas.length > 0">
+              <div style="border-bottom:1px solid rgba(148,163,184,0.08)">
+                <p class="px-4 pt-3 pb-1 text-[10px] text-slate-500 uppercase tracking-wide font-medium"
+                  x-text="`Paradas (${logisticsParadas.length})`"></p>
+                <template x-for="(p, i) in logisticsParadas" :key="i">
+                  <button @click="logisticsIrAParada(i)"
+                    class="w-full px-4 py-2 flex items-center gap-2.5 text-left transition-colors hover:bg-white/5"
+                    style="border-bottom:1px solid rgba(148,163,184,0.05)">
+                    <div class="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
+                      :style="p.cliente_nombre ? 'background:rgba(56,189,248,0.15);color:#38bdf8' : 'background:rgba(251,191,36,0.15);color:#fbbf24'"
+                      x-text="i + 1"></div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-medium truncate"
+                        :class="p.cliente_nombre ? 'text-sky-300' : 'text-slate-300'"
+                        x-text="p.cliente_nombre || `Parada ${i + 1}`"></p>
+                      <p class="text-[10px] text-slate-500"
+                        x-text="`${logisticsFormatHora(p.inicio)} — ${logisticsFormatHora(p.fin)} · ${p.duracion_min} min`"></p>
+                    </div>
+                    <!-- Flecha -->
+                    <svg class="w-3 h-3 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                    </svg>
+                  </button>
+                </template>
+              </div>
+            </template>
+
+            <!-- ── Bitácora eventos ── -->
+            <div>
+              <p class="px-4 pt-3 pb-1 text-[10px] text-slate-500 uppercase tracking-wide font-medium">Bitácora</p>
+              <template x-if="logisticsRuta.eventos.length === 0">
+                <p class="px-4 py-3 text-xs text-slate-500">Sin eventos aún</p>
+              </template>
+              <template x-for="(ev, idx) in [...logisticsRuta.eventos].reverse()" :key="idx">
+                <div class="px-4 py-2.5 flex items-start gap-2.5"
+                  style="border-bottom:1px solid rgba(148,163,184,0.06)">
+                  <span class="text-[11px] font-bold leading-none flex-shrink-0 mt-0.5 w-4 text-center"
+                    :style="`color:${logisticsEventoColor(ev.tipo)}`"
+                    x-text="logisticsEventoIcon(ev.tipo)"></span>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs text-white" x-text="logisticsEventoLabel(ev.tipo)"></p>
+                    <p x-show="ev.geocerca_nombre" class="text-[10px] text-slate-400 mt-0.5" x-text="ev.geocerca_nombre"></p>
+                  </div>
+                  <p class="text-[10px] text-slate-500 flex-shrink-0" x-text="logisticsFormatHora(ev.timestamp)"></p>
+                </div>
+              </template>
+
+              <!-- Hora salida si está disponible -->
+              <template x-if="logisticsRuta.hora_salida_bodega">
+                <p class="px-4 py-2.5 text-[10px] text-slate-600 flex items-center gap-1.5">
+                  <span>▶</span>
+                  <span x-text="`Salida: ${logisticsFormatHora(logisticsRuta.hora_salida_bodega)}`"></span>
+                </p>
+              </template>
+            </div>
+
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ══ Error overlay si no hay datos ══ -->
+    <div x-show="logisticsError && logisticsUnidades.length === 0 && !logisticsCargando"
+      class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[300]"
+      style="background:rgba(13,15,20,0.7)">
+      <svg class="w-10 h-10 text-red-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728m-3.536-3.536a4 4 0 000-5.656M6.343 6.343a9 9 0 000 12.728m3.536-3.536a4 4 0 010-5.656M12 13a1 1 0 100-2 1 1 0 000 2z"/>
+      </svg>
+      <p class="text-sm text-red-400 font-medium" x-text="logisticsError"></p>
+      <p class="text-xs text-slate-500 mt-1">Verificar servidor de telemetría</p>
+    </div>
+
+  </div><!-- /tab-reparto -->
 
   <!-- ── Bottom Nav Liquid Glass (flotante) ── -->
   <nav x-show="tab !== 'home'" x-cloak class="bottom-nav-glass">
@@ -2366,10 +2748,22 @@
       <span>Compras</span>
     </button>
 
+    <!-- Reparto -->
+    <button x-show="tienePermiso('pedidos')"
+      @click="tab = 'reparto'; $nextTick(() => initLogisticsMap())"
+      :class="tab === 'reparto' ? 'nav-active' : ''"
+      class="relative">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"/>
+      </svg>
+      <span>Reparto</span>
+    </button>
+
   </nav>
 
   <!-- FAB liquid glass — solo en inventario y pedidos -->
-  <button x-show="tab === 'inventario' || tab === 'pedidos'"
+  <button x-show="tab === 'inventario' || tab === 'pedidos'" x-cloak
     @click="tab === 'pedidos' ? abrirNuevaOrden() : abrirModal()"
     class="sm:hidden fab-glass">
     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -3326,7 +3720,7 @@
       <!-- Subtotal -->
       <div class="rounded-lg px-4 py-2.5" style="background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2)">
         <p class="text-xs text-slate-400">Subtotal</p>
-        <p class="text-xl font-bold text-emerald-400 tabular-nums"
+        <p class="text-xl font-bold text-green-400 tabular-nums"
           x-text="`$${((parseFloat(agregarModal.cantidad)||0)*(parseFloat(agregarModal.precio)||0)).toFixed(2)}`"></p>
       </div>
 
@@ -3362,11 +3756,12 @@
 ══════════════════════════════════════════════════════════ -->
 <div x-show="revisionModalOpen" x-cloak
   class="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center"
+  style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom)"
   @keydown.escape.window="cerrarRevision()">
-  <div class="modal-backdrop absolute inset-0" @click="cerrarRevision()"></div>
+  <div class="modal-backdrop absolute inset-0"></div>
 
   <div class="relative w-full h-full sm:h-auto sm:max-w-2xl md:max-w-4xl lg:max-w-5xl sm:mx-4 sm:rounded-2xl bg-modal flex flex-col"
-    style="max-height:100dvh; overflow:hidden" @click.stop>
+    style="max-height:100%; overflow:hidden" @click.stop>
 
     <!-- Handle móvil -->
     <div class="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
@@ -3504,12 +3899,12 @@
                   x-text="`${revisionSectionStats(secName).done}/${revisionSectionStats(secName).total}`"></span>
               </div>
 
-              <template x-for="fi in items" :key="`${fi.section}::${fi.item.id_producto}`">
+              <template x-for="fi in items" :key="String(fi.flatIdx)">
                 <button
-                  @click="revisionSaltarA(revisionFlatItems().findIndex(x => x.section === fi.section && x.item.id_producto === fi.item.id_producto)); revisionShowSidebar = false"
+                  @click="revisionSaltarA(fi.flatIdx); revisionShowSidebar = false"
                   class="rev-list-row"
                   :class="
-                    revisionCurrent() && revisionCurrent().item.id_producto === fi.item.id_producto && revisionCurrent().section === fi.section
+                    revisionCurrentIdx === fi.flatIdx
                       ? 'rev-list-row--active'
                       : revisionIsPending(fi.section, fi.item.id_producto)
                         ? 'rev-list-row--pending'
@@ -3540,14 +3935,14 @@
                         ? 'text-amber-300'
                         : revisionIsReviewed(fi.section, fi.item.id_producto)
                           ? 'text-slate-500 line-through decoration-slate-600/60'
-                          : (revisionCurrent() && revisionCurrent().item.id_producto === fi.item.id_producto && revisionCurrent().section === fi.section)
+                          : revisionCurrentIdx === fi.flatIdx
                             ? 'text-white'
                             : 'text-slate-200'"
                       x-text="fi.item.nombre_producto"></p>
                   </div>
 
                   <!-- Indicador activo -->
-                  <div x-show="revisionCurrent() && revisionCurrent().item.id_producto === fi.item.id_producto && revisionCurrent().section === fi.section"
+                  <div x-show="revisionCurrentIdx === fi.flatIdx"
                     class="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0"
                     style="box-shadow:0 0 6px 2px rgba(52,211,153,0.6)"></div>
                 </button>
@@ -3646,7 +4041,7 @@
                   class="w-full py-4 sm:py-5 text-[5rem] sm:text-[6rem] font-black text-center tabular-nums bg-transparent rounded-2xl focus:outline-none transition-all cursor-text"
                   :class="revisionCantidadModificada()
                     ? 'text-amber-300 border-2 border-amber-500/70 focus:border-amber-400'
-                    : 'text-white border-2 border-white/10 focus:border-emerald-500/60'"
+                    : 'text-white border-2 border-white/10 focus:border-green-500/60'"
                   style="appearance:textfield; -moz-appearance:textfield; -webkit-appearance:none; line-height:1.05; touch-action:manipulation; font-size:80px" />
                 <!-- Badge modificado -->
                 <div x-show="revisionCantidadModificada()"
@@ -3684,7 +4079,7 @@
               </div>
             </div>
 
-            <!-- Acciones: Cambiar · Faltante · Pendiente -->
+            <!-- Acciones: Cambiar · Faltante · Pendiente · Agregar -->
             <div class="grid grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-5">
               <button @click="revisionAbrirCambiar()"
                 class="btn-rev-slate flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl">
@@ -3731,9 +4126,23 @@
             </template>
 
             <!-- Hint swipe -->
-            <p class="text-center text-[10px] text-slate-700/80 md:hidden mt-4">
-              ← Anterior &nbsp;·&nbsp; Revisar →
-            </p>
+            <div class="flex items-center justify-center gap-3 md:hidden mt-4">
+              <div class="flex items-center gap-1.5 text-slate-600">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
+                <span class="text-[10px] font-medium">anterior</span>
+              </div>
+              <div class="w-5 h-px bg-slate-700"></div>
+              <span class="text-[10px] text-slate-600 font-medium">desliza</span>
+              <div class="w-5 h-px bg-slate-700"></div>
+              <div class="flex items-center gap-1.5 text-slate-600">
+                <span class="text-[10px] font-medium">revisar</span>
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -3841,7 +4250,7 @@
           <svg x-show="!revisionIsCurrentReviewed()" class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
           </svg>
-          <span x-text="revisionIsCurrentReviewed() ? 'Siguiente' : 'Marcar y sig.'"></span>
+          <span x-text="revisionIsCurrentReviewed() ? 'Siguiente' : (revisionCurrentIdx === revisionTotal() - 1 ? 'Marcar listo' : 'Marcar y sig.')"></span>
           <span class="opacity-60 text-xs font-semibold tabular-nums" x-text="`${revisionReviewedCount()+(!revisionIsCurrentReviewed()?1:0)}/${revisionTotal()}`"></span>
           <svg x-show="revisionIsCurrentReviewed()" class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
@@ -4049,7 +4458,7 @@
             @keydown.escape="revisionCerrarAgregar()"
             placeholder="Nombre del producto..."
             autocomplete="off"
-            class="w-full bg-slate-800/70 border border-slate-700/60 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50">
+            class="w-full bg-slate-800/70 border border-slate-700/60 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500/50">
         </div>
       </div>
 
@@ -4109,7 +4518,7 @@
                 :id="`rev-cant-${prod.id_producto}`"
                 x-model="revisionAgregarModal.cantidades[prod.id_producto]"
                 :placeholder="prod.unidad_producto === 'kg' ? '0.00' : '1'"
-                class="w-16 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-emerald-500/60"
+                class="w-16 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-green-500/60"
                 @keydown.enter="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1)">
               <button @click="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1)"
                 class="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all">
@@ -4139,7 +4548,7 @@
         <input id="rev-nuevo-unidad" type="text"
           x-model="revisionAgregarModal.nuevaUnidad"
           placeholder="kg, pz, caja, bolsa..."
-          class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+          class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500/50"
           @keydown.enter="$el.nextElementSibling && $el.nextElementSibling.focus()">
       </div>
 
@@ -4151,7 +4560,7 @@
           <input type="number" min="0" step="0.01"
             x-model="revisionAgregarModal.nuevoPrecio"
             placeholder="0.00"
-            class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl pl-7 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50">
+            class="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl pl-7 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-green-500/50">
         </div>
       </div>
 
@@ -5214,10 +5623,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.bd6275fd.js agrupa todos los módulos en 1 request.
+     bodega-bundle.031ae3c2.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.bd6275fd.js"></script>
+<script src="/js/bodega-bundle.031ae3c2.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

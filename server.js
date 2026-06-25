@@ -81,6 +81,9 @@ app.use('/api/dashboard', require('./routes/dashboard'))
 // ─── Rutas de administración (solo admin) ────────────────────
 app.use('/api/admin', require('./routes/admin'))
 
+// ─── Proxy telemetría (sin auth — solo red local) ────────────
+app.use('/api/telemetria', require('./routes/telemetria'))
+
 // Health check público
 app.get('/api/status', async (req, res) => {
   try {
