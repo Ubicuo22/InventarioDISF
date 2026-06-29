@@ -162,13 +162,23 @@ router.put('/usuarios/:id/permisos', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Solo se asignan permisos a supervisores' })
     }
 
-    // Reemplazar permisos
-    await pool.execute('DELETE FROM permisos_usuario WHERE id_usuario = ?', [id])
-    for (const modulo of modulos) {
-      await pool.execute(
-        'INSERT IGNORE INTO permisos_usuario (id_usuario, modulo_id) VALUES (?, ?)',
-        [id, String(modulo).slice(0, 50)]
-      )
+    // Reemplazar permisos en una transacción — si falla el INSERT, el DELETE se revierte
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      await conn.execute('DELETE FROM permisos_usuario WHERE id_usuario = ?', [id])
+      for (const modulo of modulos) {
+        await conn.execute(
+          'INSERT IGNORE INTO permisos_usuario (id_usuario, modulo_id) VALUES (?, ?)',
+          [id, String(modulo).slice(0, 50)]
+        )
+      }
+      await conn.commit()
+    } catch (e) {
+      await conn.rollback()
+      throw e
+    } finally {
+      conn.release()
     }
 
     res.json({ ok: true })

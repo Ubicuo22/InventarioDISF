@@ -11,6 +11,7 @@
  *   - Mermas del día (count, monto)
  */
 
+const crypto = require('crypto')
 const router = require('express').Router()
 const { q }  = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
@@ -18,7 +19,14 @@ const { fechaMexico } = require('../utils/fecha')
 
 function requireDashboardToken(req, res, next) {
   const token = req.query.token
-  if (!token || token !== process.env.DASHBOARD_TOKEN) {
+  const expected = process.env.DASHBOARD_TOKEN
+  if (!token || !expected) {
+    return res.status(401).json({ ok: false, error: 'Token inválido' })
+  }
+  // timingSafeEqual evita ataques de timing — ambos buffers deben tener el mismo largo
+  const a = Buffer.from(token)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return res.status(401).json({ ok: false, error: 'Token inválido' })
   }
   next()
