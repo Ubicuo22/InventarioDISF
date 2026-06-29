@@ -96,7 +96,6 @@ app.get('/api/status', async (req, res) => {
 })
 
 // Fallback SPA — debe ir al final
-app.use('/api',            requireAuth, require('./routes/rutas'))
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })

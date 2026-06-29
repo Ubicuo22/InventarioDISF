@@ -29,12 +29,6 @@ async function enviarResumen() {
       [hoy]
     )
 
-    // Productos con stock crítico (≤ 5 unidades)
-    const [criticoRow] = await q(
-      `SELECT COUNT(*) AS total FROM producto
-       WHERE stock <= 5 AND activo = 1`
-    )
-
     // Mermas del día
     const [mermasRow] = await q(
       `SELECT COUNT(*) AS total FROM merma
@@ -45,7 +39,6 @@ async function enviarResumen() {
     const pedidos  = pedidosRow?.total  || 0
     const entradas = entradasRow?.total || 0
     const gasto    = parseFloat(entradasRow?.gasto || 0)
-    const critico  = criticoRow?.total  || 0
     const mermas   = mermasRow?.total   || 0
 
     const gastoStr = '$' + gasto.toLocaleString('es-MX', {
@@ -56,8 +49,7 @@ async function enviarResumen() {
     partes.push(`📋 Pedidos: ${pedidos}`)
     // Compras siempre se incluye (aunque el gasto sea $0.00)
     partes.push(`🛒 Compras: ${entradas} · ${gastoStr}`)
-    if (mermas  > 0) partes.push(`⚠️ Mermas: ${mermas}`)
-    if (critico > 0) partes.push(`🔴 Stock crítico: ${critico}`)
+    if (mermas > 0) partes.push(`⚠️ Mermas: ${mermas}`)
 
     const fecha = new Date().toLocaleDateString('es-MX', {
       weekday: 'long', day: 'numeric', month: 'short'

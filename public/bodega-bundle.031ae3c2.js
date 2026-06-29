@@ -1,4 +1,4 @@
-/* bodega-bundle.b79e2b12.js — 2026-06-16T21:26:21.248Z */
+/* bodega-bundle.031ae3c2.js — 2026-06-25T19:37:42.961Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -753,7 +753,7 @@ function entriesModule() {
     },
 
     resetForm() {
-      const hoy = new Date().toISOString().slice(0, 10)
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
       this.form = {
         idProducto: null, nombreProducto: '', stockActual: 0,
         unidad: '',
@@ -1322,7 +1322,8 @@ function reviewModule () {
       return Object.keys(this.revisionCart).filter(k => !k.startsWith('__'))
     },
 
-    /** Lista plana de items, respetando orden de secciones (General primero si existe). */
+    /** Lista plana de items, respetando orden de secciones (General primero si existe).
+     *  Cada entrada incluye flatIdx para diferenciar duplicados del mismo producto. */
     revisionFlatItems () {
       const keys = this._revisionFilteredKeys()
       const ordered = keys.includes('General')
@@ -1333,7 +1334,7 @@ function reviewModule () {
         const items = this.revisionCart[sec]
         if (!Array.isArray(items)) continue
         for (const item of items) {
-          out.push({ item, section: sec })
+          out.push({ item, section: sec, flatIdx: out.length })
         }
       }
       return out
@@ -1380,8 +1381,8 @@ function reviewModule () {
     },
 
     revisionProgressPct () {
-      const total = this.revisionTotal()
-      return total === 0 ? 0 : Math.round((this.revisionReviewedCount() / total) * 100)
+      const originalTotal = this.revisionTotal() + this.revisionMissingNames.length
+      return originalTotal === 0 ? 0 : Math.round((this.revisionReviewedCount() / originalTotal) * 100)
     },
 
     /** Agrupa items por sección para el sidebar. */
@@ -1425,7 +1426,16 @@ function reviewModule () {
           ? JSON.parse(o.datos_carrito)
           : (o.datos_carrito || {})
 
-        this.revisionCart = Object.keys(cart).length ? cart : { General: [] }
+        // Normalizar campo: el Electron guarda unidad_producto, el modal usa item.unidad
+        const normCart = {}
+        for (const [k, v] of Object.entries(cart)) {
+          if (k.startsWith('__') || !Array.isArray(v)) { normCart[k] = v; continue }
+          normCart[k] = v.map(item => ({
+            ...item,
+            unidad: item.unidad || item.unidad_producto || ''
+          }))
+        }
+        this.revisionCart = Object.keys(normCart).length ? normCart : { General: [] }
         this._revisionOriginalCart = JSON.parse(JSON.stringify(this.revisionCart))
         this.revisionFolio = o.folio_numero
         this.revisionIdCliente = o.id_cliente || null
@@ -1790,10 +1800,8 @@ function reviewModule () {
         if (this.revisionMissingNames.length) partes.push(`${this.revisionMissingNames.length} faltante${this.revisionMissingNames.length !== 1 ? 's' : ''}`)
         if (this.revisionPendingNames.length)  partes.push(`${this.revisionPendingNames.length} pendiente${this.revisionPendingNames.length !== 1 ? 's' : ''}`)
         this.mostrarToast(`Revisión guardada${partes.length ? ' · ' + partes.join(' · ') : ''}`)
-        const folioParaAsignar = this.revisionFolio
         this.cerrarRevision()
         await this.cargarOrdenes()
-        await this.abrirAsignacionRepartidor(folioParaAsignar)
       } catch (e) {
         // Mostrar error en el modal con botón de reintentar (no cerrar el modal)
         const msg = !navigator.onLine
@@ -1906,6 +1914,7 @@ function reviewModule () {
         id_producto:     prod.id_producto,
         nombre_producto: prod.nombre_producto,
         unidad:          prod.unidad_producto,
+        unidad_producto: prod.unidad_producto,
         precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
         cantidad:        items[idx].cantidad   // conservar cantidad pedida
       }
@@ -1980,6 +1989,7 @@ function reviewModule () {
           id_producto:     prod.id_producto,
           nombre_producto: prod.nombre_producto,
           unidad:          prod.unidad_producto,
+          unidad_producto: prod.unidad_producto,
           precio_unitario: parseFloat(prod.precio_base) || 0,
           cantidad:        cant
         })
@@ -2041,59 +2051,32 @@ function reviewModule () {
           ? JSON.parse(orden.datos_carrito)
           : (orden.datos_carrito || {})
         const hist = cart.__historial__ || []
-        if (hist.length === 0) return null  // null = no info
+        if (hist.length === 0) return null
+
+        // Buscar la última entrada de revisión
+        let lastRevIdx = -1
         for (let i = hist.length - 1; i >= 0; i--) {
-          const e = hist[i]
-          if (e.tipoEvento === 'revision') {
-            if (i !== hist.length - 1) return null  // hubo cambios después de la revisión
-            const pendientes = e.pendientes || []
-            return {
-              reviewed: pendientes.length === 0,  // solo "revisada" si no hay pendientes
-              conPendientes: pendientes.length > 0,
-              usuario: e.usuario,
-              fecha: e.fecha,
-              faltantes: e.faltantes || [],
-              pendientes
-            }
-          }
+          if (hist[i].tipoEvento === 'revision') { lastRevIdx = i; break }
         }
-        return null
+        if (lastRevIdx === -1) return null
+
+        // Invalidar solo si hay entradas de diff (sin tipoEvento) DESPUÉS de la revisión
+        // Eventos tipados como 'impresion' no invalidan el estado de revisión
+        for (let i = lastRevIdx + 1; i < hist.length; i++) {
+          if (!hist[i].tipoEvento) return null
+        }
+
+        const e = hist[lastRevIdx]
+        const pendientes = e.pendientes || []
+        return {
+          reviewed: pendientes.length === 0,
+          conPendientes: pendientes.length > 0,
+          usuario: e.usuario,
+          fecha: e.fecha,
+          faltantes: e.faltantes || [],
+          pendientes
+        }
       } catch { return null }
-    },
-
-    // ── Modal asignación de repartidor ─────────────────────────
-    asignacionModal: { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null },
-
-    async abrirAsignacionRepartidor (folio) {
-      this.asignacionModal = { visible: true, repartidores: [], cargando: true, error: null, folioAsignar: folio }
-      try {
-        const r = await API.get('/api/repartidores')
-        this.asignacionModal.repartidores = r.ok ? (r.data || []) : []
-        if (!r.ok) this.asignacionModal.error = 'No se pudieron cargar los repartidores'
-      } catch (e) {
-        this.asignacionModal.error = 'Error de conexión'
-      } finally {
-        this.asignacionModal.cargando = false
-      }
-    },
-
-    async asignarRepartidor (unidad_id, conductor) {
-      const folio = this.asignacionModal.folioAsignar
-      if (!folio || !unidad_id) return
-      this.asignacionModal.cargando = true
-      try {
-        const r = await API.post('/api/rutas/asignar-pedido', { folio_numero: folio, unidad_id, conductor })
-        if (!r.ok) throw new Error(r.error || 'Error al asignar')
-        this.asignacionModal = { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null }
-        this.mostrarToast(`Pedido #${folio} asignado a ${conductor}`)
-      } catch (e) {
-        this.asignacionModal.error = e.message
-        this.asignacionModal.cargando = false
-      }
-    },
-
-    cerrarAsignacion () {
-      this.asignacionModal = { visible: false, repartidores: [], cargando: false, error: null, folioAsignar: null }
     }
   }
 }
@@ -2260,7 +2243,7 @@ function mermasModule() {
       this.mermaBusqueda   = ''
       this.mermaResultados = []
       this.mermaDropVisible = false
-      const hoy = new Date().toISOString().slice(0, 10)
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
       this.mermaForm = {
         id_producto: null, nombre_producto: '', unidad_producto: '',
         stock_actual: null, tipo: '', cantidad: '', fecha: hoy, motivo: '', notas: ''
@@ -3220,8 +3203,8 @@ function cobranzaModule() {
  */
 
 function comprasModule() {
-  const hoy    = () => new Date().toISOString().slice(0, 10)
-  const hace30 = () => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const hoy    = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+  const hace30 = () => new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
 
   return {
     // ── Estado ────────────────────────────────────────────────
@@ -3254,18 +3237,20 @@ function comprasModule() {
 
     // ── Filtros rápidos ───────────────────────────────────────
     async filtroCompras(periodo) {
+      const mxDate = (d) => d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
       const h = new Date()
       if (periodo === 'hoy') {
-        this.comprasDesde = this.comprasHasta = h.toISOString().slice(0, 10)
+        this.comprasDesde = this.comprasHasta = mxDate(h)
       } else if (periodo === '7d') {
-        this.comprasDesde = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
-        this.comprasHasta = h.toISOString().slice(0, 10)
+        this.comprasDesde = mxDate(new Date(Date.now() - 7 * 86400000))
+        this.comprasHasta = mxDate(h)
       } else if (periodo === '30d') {
-        this.comprasDesde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
-        this.comprasHasta = h.toISOString().slice(0, 10)
+        this.comprasDesde = mxDate(new Date(Date.now() - 30 * 86400000))
+        this.comprasHasta = mxDate(h)
       } else if (periodo === 'mes') {
-        this.comprasDesde = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-01`
-        this.comprasHasta = h.toISOString().slice(0, 10)
+        const mx = mxDate(h)
+        this.comprasDesde = `${mx.slice(0, 7)}-01`
+        this.comprasHasta = mx
       }
       await this.cargarCompras()
     },
@@ -3541,12 +3526,27 @@ function pendientesModule() {
   return {
     pendientesHoy:      [],
     cargandoPendientes: false,
+    pendientesAbiertos: [],   // folios expandidos
+
+    // Edición de cantidad
+    pendienteEditando:  null,
+    pendienteEditCant:  '',
+
+    // Cambio de producto
+    pendienteCambiando: null,
+    cambioQuery:        '',
+    cambioResultados:   [],
+    cambioBuscando:     false,
 
     async cargarPendientesHoy() {
       this.cargandoPendientes = true
+      this.pendienteEditando  = null
+      this.pendienteCambiando = null
       try {
         const r = await API.get('/api/ordenes/pendientes-hoy')
-        this.pendientesHoy = r.data || []
+        this.pendientesHoy     = r.data || []
+        // Expandir todos por defecto
+        this.pendientesAbiertos = this.pendientesHoy.map(o => o.folio_numero)
       } catch {
         this.pendientesHoy = []
       } finally {
@@ -3560,15 +3560,162 @@ function pendientesModule() {
       )
     },
 
+    togglePendiente(folio) {
+      if (this.pendientesAbiertos.includes(folio)) {
+        this.pendientesAbiertos = this.pendientesAbiertos.filter(f => f !== folio)
+        if (this.pendienteEditando?.folio === folio)  this.pendienteEditando  = null
+        if (this.pendienteCambiando?.folio === folio) this.pendienteCambiando = null
+      } else {
+        this.pendientesAbiertos = [...this.pendientesAbiertos, folio]
+      }
+    },
+
+    estaAbierto(folio) {
+      return this.pendientesAbiertos.includes(folio)
+    },
+
+    // Agrupa array de items [{nombre,cantidad,unidad,seccion}] por sección
+    agruparPorSeccion(items) {
+      const map = {}
+      for (const item of items) {
+        const sec = item.seccion || 'Sin sección'
+        if (!map[sec]) map[sec] = []
+        map[sec].push(item)
+      }
+      return Object.keys(map).map(sec => ({ seccion: sec, items: map[sec] }))
+    },
+
+    // ── Editar cantidad ──────────────────────────────────────
+    abrirEdicionCantidad(folio, item, tipo) {
+      this.pendienteCambiando = null
+      if (this.pendienteEditando?.folio === folio && this.pendienteEditando?.nombre === item.nombre) {
+        this.pendienteEditando = null
+        return
+      }
+      this.pendienteEditando = { folio, nombre: item.nombre, tipo }
+      this.pendienteEditCant = item.cantidad != null ? String(item.cantidad) : ''
+    },
+
+    async guardarCantidadPendiente() {
+      if (!this.pendienteEditando) return
+      const cant = parseFloat(this.pendienteEditCant)
+      if (isNaN(cant) || cant < 0) { this.pendienteEditando = null; return }
+
+      const { folio, nombre, tipo } = this.pendienteEditando
+      const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
+      if (orden) {
+        const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
+        const item = orden[campo].find(i => i.nombre === nombre)
+        if (item) item.cantidad = cant
+      }
+      this.pendienteEditando = null
+
+      try {
+        const r = await API.patch(`/api/ordenes/${folio}/item-cantidad`, { nombre_producto: nombre, cantidad: cant })
+        if (!r.ok) throw new Error(r.error || 'Error')
+      } catch (e) {
+        await this.cargarPendientesHoy()
+        this.mostrarToast(e.message || 'Error al guardar', true)
+      }
+    },
+
+    // ── Mover pendiente → faltante ───────────────────────────
+    async moverAFaltante(folio, nombre) {
+      const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
+      if (!orden) return
+      if (this.pendienteEditando?.nombre === nombre) this.pendienteEditando = null
+      if (this.pendienteCambiando?.nombre === nombre) this.pendienteCambiando = null
+
+      const item = orden.pendientes.find(i => i.nombre === nombre)
+      orden.pendientes = orden.pendientes.filter(i => i.nombre !== nombre)
+      if (item) orden.faltantes.push(item)
+
+      try {
+        const r = await API.patch(`/api/ordenes/${folio}/mover-a-faltante`, { nombre_producto: nombre })
+        if (!r.ok) throw new Error(r.error || 'Error')
+      } catch (e) {
+        await this.cargarPendientesHoy()
+        this.mostrarToast(e.message || 'Error al mover', true)
+      }
+    },
+
+    // ── Cambiar producto ─────────────────────────────────────
+    abrirCambioProducto(folio, item, tipo) {
+      this.pendienteEditando = null
+      if (this.pendienteCambiando?.folio === folio && this.pendienteCambiando?.nombre === item.nombre) {
+        this.pendienteCambiando = null
+        this.cambioQuery = ''
+        this.cambioResultados = []
+        return
+      }
+      this.pendienteCambiando = { folio, nombre: item.nombre, tipo }
+      this.cambioQuery = ''
+      this.cambioResultados = []
+    },
+
+    async buscarProductoCambio() {
+      const q = this.cambioQuery.trim()
+      if (q.length < 1) { this.cambioResultados = []; return }
+      this.cambioBuscando = true
+      try {
+        const r = await API.get(`/api/productos/buscar?q=${encodeURIComponent(q)}`)
+        this.cambioResultados = r.data || []
+      } catch {
+        this.cambioResultados = []
+      } finally {
+        this.cambioBuscando = false
+      }
+    },
+
+    async confirmarCambioProducto(prod) {
+      if (!this.pendienteCambiando) return
+      const { folio, nombre: nombreViejo, tipo } = this.pendienteCambiando
+
+      const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
+      if (orden) {
+        const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
+        const idx = orden[campo].findIndex(i => i.nombre === nombreViejo)
+        if (idx !== -1) {
+          orden[campo][idx] = {
+            nombre:   prod.nombre_producto,
+            cantidad: orden[campo][idx].cantidad,
+            unidad:   prod.unidad_producto || orden[campo][idx].unidad,
+            seccion:  orden[campo][idx].seccion
+          }
+        }
+      }
+
+      this.pendienteCambiando = null
+      this.cambioQuery = ''
+      this.cambioResultados = []
+
+      try {
+        const r = await API.patch(`/api/ordenes/${folio}/cambiar-item`, {
+          nombre_viejo: nombreViejo,
+          id_nuevo:     prod.id_producto,
+          nombre_nuevo: prod.nombre_producto,
+          unidad_nueva: prod.unidad_producto
+        })
+        if (!r.ok) throw new Error(r.error || 'Error')
+        this.mostrarToast(`Cambiado a ${prod.nombre_producto}`)
+      } catch (e) {
+        await this.cargarPendientesHoy()
+        this.mostrarToast(e.message || 'Error al cambiar', true)
+      }
+    },
+
+    // ── Resolver / resolver todos ────────────────────────────
     async resolverPendiente(folio, tipo, nombre_producto) {
       const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
       if (!orden) return
+      if (this.pendienteEditando?.nombre === nombre_producto) this.pendienteEditando = null
+      if (this.pendienteCambiando?.nombre === nombre_producto) this.pendienteCambiando = null
 
-      // Optimistic update
       const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
-      orden[campo] = orden[campo].filter(n => n !== nombre_producto)
+      orden[campo] = orden[campo].filter(i => i.nombre !== nombre_producto)
       if (orden.pendientes.length === 0 && orden.faltantes.length === 0) {
-        this.pendientesHoy = this.pendientesHoy.filter(o => o.folio_numero !== folio)
+        this.pendientesHoy     = this.pendientesHoy.filter(o => o.folio_numero !== folio)
+        this.pendientesAbiertos = this.pendientesAbiertos.filter(f => f !== folio)
       }
 
       try {
@@ -3581,8 +3728,10 @@ function pendientesModule() {
     },
 
     async resolverTodosOrden(folio) {
-      // Optimistic: remove order from list immediately
-      this.pendientesHoy = this.pendientesHoy.filter(o => o.folio_numero !== folio)
+      this.pendientesHoy      = this.pendientesHoy.filter(o => o.folio_numero !== folio)
+      this.pendientesAbiertos = this.pendientesAbiertos.filter(f => f !== folio)
+      this.pendienteEditando  = null
+      this.pendienteCambiando = null
       try {
         const r = await API.patch(`/api/ordenes/${folio}/resolver-todos`)
         if (!r.ok) throw new Error(r.error || 'Error')
@@ -3706,9 +3855,467 @@ function conteoModule() {
 }
 
 
+;/* ── public/js/modules/logistics.js ── */
+function logisticsModule() {
+  return {
+    // ── State ────────────────────────────────────────────────────
+    logisticsUnidades:      [],
+    logisticsGeocercas:     [],
+    logisticsSelectedId:    null,
+    logisticsRuta:          null,  // { pedidos:[], eventos:[], hora_salida_bodega, estado }
+    logisticsHistorial:     [],
+    logisticsParadas:       [],
+    logisticsCargando:      false,
+    logisticsError:         null,
+    _logPollTimer:          null,
+    _logDetailTimer:        null,
+    _logMapReady:           false,
+
+    // ── Estado derivado (igual que Electron) ─────────────────────
+    _deriveEstado(u) {
+      if (!u.ultimo_ping) return 'sin_senal'
+      if (Date.now() - new Date(u.ultimo_ping).getTime() > 2 * 60 * 1000) return 'sin_senal'
+      return (u.velocidad_kmh ?? 0) >= 3 ? 'en_ruta' : 'en_bodega'
+    },
+
+    // ── Colors ───────────────────────────────────────────────────
+    _logColor(estado) {
+      const map = {
+        en_ruta:    '#38bdf8',
+        en_cliente: '#fbbf24',
+        en_bodega:  '#34d399',
+        sin_senal:  '#f87171',
+        pendiente:  '#64748b',
+      }
+      return map[estado] || '#64748b'
+    },
+
+    logisticsEstadoLabel(estado) {
+      const map = {
+        en_ruta:    'En ruta',
+        en_cliente: 'En cliente',
+        en_bodega:  'En bodega',
+        sin_senal:  'Sin señal',
+        pendiente:  'Pendiente',
+      }
+      return map[estado] || (estado ? estado.replace(/_/g, ' ') : 'Inactivo')
+    },
+
+    logisticsNombreUnidad(u) {
+      return u?.unidad_nombre || `Unidad ${u?.unidad_id}`
+    },
+
+    logisticsConductor(u) {
+      return u?.conductor || u?.nombre_repartidor || ''
+    },
+
+    logisticsTimeSince(ts) {
+      if (!ts) return '—'
+      const diff = Date.now() - new Date(ts).getTime()
+      const secs = Math.floor(diff / 1000)
+      if (secs < 60) return `${secs}s`
+      const mins = Math.floor(secs / 60)
+      if (mins < 60) return `${mins}m`
+      return `${Math.floor(mins / 60)}h ${mins % 60}m`
+    },
+
+    // ── Computed ─────────────────────────────────────────────────
+    logisticsUnidadActual() {
+      return this.logisticsUnidades.find(u => u.unidad_id === this.logisticsSelectedId) || null
+    },
+
+    logisticsProgreso() {
+      if (!this.logisticsRuta?.pedidos?.length) return null
+      const total = this.logisticsRuta.pedidos.length
+      const done  = this.logisticsRuta.pedidos.filter(
+        p => p.estado === 'entregado_probable' || p.estado === 'confirmado'
+      ).length
+      return { done, total, pct: Math.round((done / total) * 100) }
+    },
+
+    logisticsPedidoColor(estado) {
+      const map = {
+        entregado_probable: '#34d399',
+        confirmado:         '#34d399',
+        en_camino:          '#38bdf8',
+        pendiente:          '#64748b',
+        cancelado:          '#f87171',
+      }
+      return map[estado] || '#64748b'
+    },
+
+    logisticsPedidoLabel(estado) {
+      const map = {
+        entregado_probable: 'Entregado',
+        confirmado:         'Confirmado',
+        en_camino:          'En camino',
+        pendiente:          'Pendiente',
+        cancelado:          'Cancelado',
+      }
+      return map[estado] || estado
+    },
+
+    // ── Map init ─────────────────────────────────────────────────
+    async initLogisticsMap() {
+      if (this._logMapReady) {
+        if (window._lmap) {
+          window._lmap.invalidateSize()
+          setTimeout(() => window._lmap && window._lmap.invalidateSize(), 300)
+        }
+        return
+      }
+      if (typeof L === 'undefined') { this.logisticsError = 'Leaflet no cargado'; return }
+      const container = document.getElementById('logistics-map')
+      if (!container) return
+
+      this._logMapReady = true
+      this.logisticsError = null
+
+      window._lmap = L.map('logistics-map', {
+        center: [19.7174, -101.1663],
+        zoom: 13,
+        zoomControl: true,
+        attributionControl: false,
+      })
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd', maxZoom: 19,
+      }).addTo(window._lmap)
+
+      L.control.attribution({ prefix: false })
+        .addAttribution('© OpenStreetMap © CartoDB')
+        .addTo(window._lmap)
+
+      window._lmarkers   = {}
+      window._lgeocercas = []
+      window._ltrail     = null
+      window._lparadas   = []
+
+      if (window._lmapRO) window._lmapRO.disconnect()
+      window._lmapRO = new ResizeObserver(() => { if (window._lmap) window._lmap.invalidateSize() })
+      window._lmapRO.observe(container)
+
+      setTimeout(() => window._lmap && window._lmap.invalidateSize(), 150)
+      setTimeout(() => window._lmap && window._lmap.invalidateSize(), 500)
+
+      this.logisticsCargando = true
+      await Promise.all([
+        this.cargarLogisticsGeocercas(),
+        this.cargarLogisticsUnidades(),
+      ])
+      this.logisticsCargando = false
+      this._startLogisticsPoll()
+    },
+
+    destroyLogisticsMap() {
+      this._stopLogisticsPoll()
+      if (window._lmap) { window._lmap.remove(); window._lmap = null }
+      window._lmarkers = null
+      window._lgeocercas = null
+      window._ltrail = null
+      window._lparadas = null
+      this._logMapReady = false
+      this.logisticsSelectedId = null
+      this.logisticsRuta = null
+      this.logisticsHistorial = []
+      this.logisticsParadas = []
+    },
+
+    _startLogisticsPoll() {
+      this._stopLogisticsPoll()
+      this._logPollTimer = setInterval(() => this.cargarLogisticsUnidades(), 5000)
+    },
+
+    _stopLogisticsPoll() {
+      if (this._logPollTimer)  { clearInterval(this._logPollTimer);  this._logPollTimer  = null }
+      if (this._logDetailTimer){ clearInterval(this._logDetailTimer); this._logDetailTimer = null }
+    },
+
+    // ── Data loading ─────────────────────────────────────────────
+    async cargarLogisticsUnidades() {
+      try {
+        const r = await fetch('/api/telemetria/unidades/live')
+        if (!r.ok) throw new Error()
+        const data = await r.json()
+        this.logisticsUnidades = Array.isArray(data) ? data : []
+        this._actualizarMarkers()
+        this.logisticsError = null
+      } catch {
+        this.logisticsError = 'Sin conexión con telemetría'
+      }
+    },
+
+    async cargarLogisticsGeocercas() {
+      try {
+        const r = await fetch('/api/telemetria/geocercas')
+        if (!r.ok) throw new Error()
+        const data = await r.json()
+        this.logisticsGeocercas = Array.isArray(data) ? data : []
+        this._renderGeocercas()
+      } catch {}
+    },
+
+    // ── Markers ──────────────────────────────────────────────────
+    _markerIcon(unidad_id, estado) {
+      const color = this._logColor(estado)
+      const isSelected = this.logisticsSelectedId === unidad_id
+      const u = this.logisticsUnidades.find(x => x.unidad_id === unidad_id)
+      const nombre = u?.conductor || u?.nombre_repartidor || u?.unidad_nombre || `U${unidad_id}`
+      const glow = isSelected
+        ? `filter:drop-shadow(0 0 6px ${color})`
+        : `filter:drop-shadow(0 0 3px ${color}88)`
+      return L.divIcon({
+        className: '',
+        html: `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+          <div style="background:rgba(10,14,22,0.82);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap;letter-spacing:0.03em;backdrop-filter:blur(4px)">${nombre}</div>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="${color}" xmlns="http://www.w3.org/2000/svg" style="${glow}">
+            <rect x="1" y="3" width="15" height="13" rx="1"/>
+            <path d="M16 8h3l3 3v5h-6V8z"/>
+            <circle cx="5.5" cy="18.5" r="2.5"/>
+            <circle cx="18.5" cy="18.5" r="2.5"/>
+          </svg>
+        </div>`,
+        iconSize: [80, 52],
+        iconAnchor: [40, 52],
+        popupAnchor: [0, -52],
+      })
+    },
+
+    _actualizarMarkers() {
+      if (!window._lmap || !window._lmarkers) return
+      const vistos = new Set()
+
+      for (const u of this.logisticsUnidades) {
+        if (!u.lat || !u.lng) continue
+        vistos.add(u.unidad_id)
+        const estado = this._deriveEstado(u)
+        const icon = this._markerIcon(u.unidad_id, estado)
+
+        if (window._lmarkers[u.unidad_id]) {
+          window._lmarkers[u.unidad_id].setLatLng([u.lat, u.lng])
+          window._lmarkers[u.unidad_id].setIcon(icon)
+        } else {
+          const m = L.marker([u.lat, u.lng], { icon })
+            .addTo(window._lmap)
+            .on('click', () => this.seleccionarLogisticsUnidad(u.unidad_id))
+          window._lmarkers[u.unidad_id] = m
+        }
+      }
+
+      for (const id in window._lmarkers) {
+        if (!vistos.has(parseInt(id))) {
+          window._lmap.removeLayer(window._lmarkers[id])
+          delete window._lmarkers[id]
+        }
+      }
+    },
+
+    // ── Geofences ────────────────────────────────────────────────
+    _renderGeocercas() {
+      if (!window._lmap) return
+      if (window._lgeocercas) window._lgeocercas.forEach(l => window._lmap.removeLayer(l))
+      window._lgeocercas = []
+      for (const g of this.logisticsGeocercas) {
+        if (!g.activa) continue
+        const color  = g.tipo === 'bodega' ? '#34d399' : '#38bdf8'
+        const dashes = g.tipo === 'cliente' ? '5 4' : null
+        const circle = L.circle([g.lat, g.lng], {
+          radius: g.radio_m, color, fillColor: color, fillOpacity: 0.08,
+          weight: g.tipo === 'bodega' ? 2 : 1.5, dashArray: dashes,
+        }).addTo(window._lmap)
+        circle.bindTooltip(g.nombre, { permanent: false, direction: 'top' })
+        window._lgeocercas.push(circle)
+      }
+    },
+
+    // ── Unit selection ────────────────────────────────────────────
+    async seleccionarLogisticsUnidad(unidadId) {
+      if (this.logisticsSelectedId === unidadId) {
+        this.logisticsSelectedId = null
+        this.logisticsRuta       = null
+        this.logisticsHistorial  = []
+        this._clearTrail()
+        this._clearParadas()
+        if (this._logDetailTimer) { clearInterval(this._logDetailTimer); this._logDetailTimer = null }
+        this._actualizarMarkers()
+        return
+      }
+
+      this.logisticsSelectedId = unidadId
+      this._actualizarMarkers()
+
+      const u = this.logisticsUnidades.find(x => x.unidad_id === unidadId)
+      if (u?.lat && u?.lng && window._lmap) {
+        window._lmap.flyTo([u.lat, u.lng], 15, { animate: true, duration: 0.8 })
+      }
+
+      if (u?.ruta_id) {
+        await this._cargarDetalle(u.ruta_id)
+        if (this._logDetailTimer) clearInterval(this._logDetailTimer)
+        this._logDetailTimer = setInterval(async () => {
+          const cur = this.logisticsUnidades.find(x => x.unidad_id === unidadId)
+          if (cur?.ruta_id) await this._cargarDetalle(cur.ruta_id)
+        }, 15000)
+      } else {
+        this.logisticsRuta      = null
+        this.logisticsHistorial = []
+        this._clearTrail()
+        this._clearParadas()
+      }
+    },
+
+    async _cargarDetalle(rutaId) {
+      try {
+        const [detRes, histRes, parRes] = await Promise.all([
+          fetch(`/api/telemetria/rutas/${rutaId}/detalle`),
+          fetch(`/api/telemetria/rutas/${rutaId}/historial`),
+          fetch(`/api/telemetria/rutas/${rutaId}/paradas`),
+        ])
+
+        if (detRes.ok) {
+          const d = await detRes.json()
+          this.logisticsRuta = {
+            id:                  d.id,
+            estado:              d.estado,
+            hora_salida_bodega:  d.hora_salida_bodega ?? null,
+            hora_regreso_bodega: d.hora_regreso_bodega ?? null,
+            pedidos: Array.isArray(d.pedidos) ? d.pedidos : [],
+            eventos: Array.isArray(d.eventos) ? d.eventos : [],
+          }
+        }
+
+        if (histRes.ok) {
+          const hist = await histRes.json()
+          const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+          this.logisticsHistorial = Array.isArray(hist)
+            ? hist.filter(p => {
+                if (!p.timestamp_servidor) return true
+                return new Date(p.timestamp_servidor).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }) === hoy
+              })
+            : []
+          this._renderTrail()
+        }
+
+        if (parRes.ok) {
+          const par = await parRes.json()
+          this.logisticsParadas = Array.isArray(par) ? par : []
+          this._renderParadas()
+        }
+      } catch {}
+    },
+
+    // ── Trail polyline ────────────────────────────────────────────
+    _renderTrail() {
+      this._clearTrail()
+      if (!window._lmap || !this.logisticsHistorial.length) return
+      window._ltrail = L.polyline(
+        this.logisticsHistorial.map(p => [parseFloat(p.lat), parseFloat(p.lng)]),
+        { color: '#38bdf8', weight: 3, opacity: 0.7, smoothFactor: 1 }
+      ).addTo(window._lmap)
+    },
+
+    _clearTrail() {
+      if (window._lmap && window._ltrail) {
+        window._lmap.removeLayer(window._ltrail)
+        window._ltrail = null
+      }
+    },
+
+    // ── Paradas ───────────────────────────────────────────────────
+    _renderParadas() {
+      this._clearParadas()
+      if (!window._lmap || !this.logisticsParadas.length) return
+      window._lparadas = []
+      this.logisticsParadas.forEach((p, i) => {
+        const hora = new Date(p.inicio).toLocaleTimeString('es-MX', {
+          hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City'
+        })
+        const color   = p.cliente_nombre ? '#38bdf8' : '#fbbf24'
+        const tooltip = p.cliente_nombre
+          ? `${p.cliente_nombre} — ${p.duracion_min} min (${hora})`
+          : `Parada ${i + 1}: ${p.duracion_min} min (${hora})`
+        const m = L.circleMarker([p.lat, p.lng], {
+          radius: 6, color, fillColor: color, fillOpacity: 0.9, weight: 2,
+        }).addTo(window._lmap)
+        m.bindTooltip(tooltip, { direction: 'top' })
+        window._lparadas.push(m)
+      })
+    },
+
+    _clearParadas() {
+      if (window._lmap && window._lparadas) {
+        window._lparadas.forEach(m => window._lmap.removeLayer(m))
+      }
+      window._lparadas = []
+      this.logisticsParadas = []
+    },
+
+    // ── Helpers UI ────────────────────────────────────────────────
+    logisticsEventoIcon(tipo) {
+      const map = {
+        inicio_ruta:            '▶',
+        salida_bodega:          '▶',
+        llegada_cliente:        '◉',
+        entrega_probable:       '✓',
+        parada_extraordinaria:  '!',
+        sin_senal:              '✕',
+        senal_recuperada:       '↑',
+        fin_ruta:               '■',
+        regreso_bodega:         '■',
+      }
+      return map[tipo] || '·'
+    },
+
+    logisticsEventoColor(tipo) {
+      const map = {
+        inicio_ruta:            '#38bdf8',
+        salida_bodega:          '#38bdf8',
+        llegada_cliente:        '#fbbf24',
+        entrega_probable:       '#34d399',
+        parada_extraordinaria:  '#f97316',
+        sin_senal:              '#f87171',
+        senal_recuperada:       '#34d399',
+        fin_ruta:               '#94a3b8',
+        regreso_bodega:         '#94a3b8',
+      }
+      return map[tipo] || '#64748b'
+    },
+
+    logisticsEventoLabel(tipo) {
+      const map = {
+        inicio_ruta:            'Salida de bodega',
+        salida_bodega:          'Salida de bodega',
+        llegada_cliente:        'Llegada a cliente',
+        entrega_probable:       'Entrega',
+        parada_extraordinaria:  'Parada extraordinaria',
+        sin_senal:              'Sin señal',
+        senal_recuperada:       'Señal recuperada',
+        fin_ruta:               'Regreso a bodega',
+        regreso_bodega:         'Regreso a bodega',
+      }
+      return map[tipo] || (tipo || '').replace(/_/g, ' ')
+    },
+
+    logisticsFormatHora(ts) {
+      if (!ts) return '—'
+      return new Date(ts).toLocaleTimeString('es-MX', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City'
+      })
+    },
+
+    logisticsIrAParada(idx) {
+      const p = this.logisticsParadas[idx]
+      if (p && window._lmap) {
+        window._lmap.flyTo([p.lat, p.lng], 17, { animate: true, duration: 0.5 })
+      }
+    },
+  }
+}
+
+
 ;/* ── public/js/bodega.js ── */
 // Composición del store Alpine.js.
-// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard → pendientes
+// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard → pendientes → logistics
 function bodega() {
   return {
     ...uiModule(),
@@ -3727,5 +4334,6 @@ function bodega() {
     ...dashboardModule(),
     ...pendientesModule(),
     ...conteoModule(),
+    ...logisticsModule(),
   }
 }

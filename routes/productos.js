@@ -9,26 +9,39 @@ const router = require('express').Router()
 const { q } = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
 
-// Lista de productos con stock actual
+// Lista de productos con stock virtual (propio + cobertura base vía equivalencias)
 router.get('/', requireAuth, async (req, res) => {
   try {
     const { busqueda } = req.query
     const params = []
     let sql = `
       SELECT
-        id_producto,
-        numero_producto,
-        nombre_producto,
-        unidad_producto,
-        stock
-      FROM producto
-      WHERE activo = 1
+        p.id_producto,
+        p.numero_producto,
+        p.nombre_producto,
+        p.unidad_producto,
+        CASE
+          WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+          THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+          ELSE p.stock
+        END AS stock
+      FROM producto p
+      LEFT JOIN (
+        SELECT id_producto_derivado, MIN(id_conversion) AS min_id
+        FROM producto_conversion_peps
+        WHERE activo = 1 AND id_grupo IS NULL
+          AND id_producto_derivado != id_producto_base
+        GROUP BY id_producto_derivado
+      ) cp_min ON p.id_producto = cp_min.id_producto_derivado
+      LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
+      LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
+      WHERE p.activo = 1
     `
     if (busqueda) {
-      sql += ` AND nombre_producto LIKE ?`
+      sql += ` AND p.nombre_producto LIKE ?`
       params.push(`%${busqueda}%`)
     }
-    sql += ` ORDER BY nombre_producto ASC`
+    sql += ` ORDER BY p.nombre_producto ASC`
 
     const rows = await q(sql, params)
     res.json({ ok: true, data: rows })
@@ -38,18 +51,35 @@ router.get('/', requireAuth, async (req, res) => {
   }
 })
 
-// Resumen rápido de stock
+// Resumen rápido de stock (usa stock virtual con equivalencias)
 router.get('/resumen', requireAuth, async (req, res) => {
   try {
     const [stats] = await q(`
       SELECT
-        COUNT(*)                                              AS total_productos,
-        SUM(stock > 0)                                        AS con_stock,
-        SUM(stock <= 0)                                       AS sin_stock,
-        SUM(stock < 0)                                        AS stock_negativo,
-        SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS stock_bajo
-      FROM producto
-      WHERE activo = 1
+        COUNT(*)                                                          AS total_productos,
+        SUM(stock_v > 0)                                                  AS con_stock,
+        SUM(stock_v <= 0)                                                 AS sin_stock,
+        SUM(stock_v < 0)                                                  AS stock_negativo,
+        SUM(CASE WHEN stock_v > 0 AND stock_v <= 5 THEN 1 ELSE 0 END)    AS stock_bajo
+      FROM (
+        SELECT
+          CASE
+            WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+            THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+            ELSE p.stock
+          END AS stock_v
+        FROM producto p
+        LEFT JOIN (
+          SELECT id_producto_derivado, MIN(id_conversion) AS min_id
+          FROM producto_conversion_peps
+          WHERE activo = 1 AND id_grupo IS NULL
+            AND id_producto_derivado != id_producto_base
+          GROUP BY id_producto_derivado
+        ) cp_min ON p.id_producto = cp_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
+        LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
+        WHERE p.activo = 1
+      ) t
     `)
     res.json({ ok: true, data: stats })
   } catch (err) {
