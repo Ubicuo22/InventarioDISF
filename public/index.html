@@ -3306,7 +3306,6 @@
         <button
           type="submit"
           class="btn-primary flex-1 transition-colors duration-200"
-          :class="guardadoOk ? '!bg-emerald-500' : ''"
           :disabled="guardando || guardadoOk || !form.idProducto"
         >
           <span x-show="!guardando && !guardadoOk">Registrar</span>
@@ -3611,7 +3610,6 @@
         <button type="button" @click="cerrarOrden()" class="btn-ghost flex-1">Cancelar</button>
         <button type="button" @click="abrirConfirmarGuardado()"
           class="btn-primary flex-1 transition-colors duration-200"
-          :class="ordenGuardadaOk ? '!bg-emerald-500' : ''"
           :disabled="guardandoOrden || ordenGuardadaOk || (!ordenForm.id_cliente && !ordenForm.folio_numero) || cartItems().length === 0">
           <span x-show="!guardandoOrden && !ordenGuardadaOk">Guardar pedido</span>
           <span x-show="guardandoOrden && !ordenGuardadaOk" class="flex items-center justify-center gap-2">
