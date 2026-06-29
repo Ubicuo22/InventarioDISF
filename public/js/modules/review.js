@@ -96,7 +96,7 @@ function reviewModule () {
         const items = this.revisionCart[sec]
         if (!Array.isArray(items)) continue
         for (const item of items) {
-          out.push({ item, section: sec })
+          out.push({ item, section: sec, flatIdx: out.length })
         }
       }
       return out
