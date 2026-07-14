@@ -1,4 +1,4 @@
-/* bodega-bundle.031ae3c2.js — 2026-06-25T19:37:42.961Z */
+/* bodega-bundle.54ff8dd0.js — 2026-06-25T23:28:18.548Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -3308,6 +3308,8 @@ function dashboardModule() {
     dashTs:        null,       // Date del último refresh exitoso
     dashAnimNums:  {},         // valores animados de conteo { key: number }
     _dashAnimRaf:  null,
+    dashRutas:      null,       // { total, en_ruta, en_bodega, sin_senal }
+    dashRutasOk:    false,      // true cuando el fetch terminó (éxito o fallo)
 
     // ── Carga ─────────────────────────────────────────────
     async cargarDashboard() {
@@ -3321,6 +3323,30 @@ function dashboardModule() {
         }
       } catch { /* silent — no romper la carga inicial */ }
       finally  { this.dashCargando = false }
+      // Cargar estado de rutas en paralelo (no bloquea)
+      this._cargarDashRutas()
+    },
+
+    async _cargarDashRutas() {
+      try {
+        const r = await fetch('/api/telemetria/unidades/live')
+        if (!r.ok) throw new Error()
+        const data = await r.json()
+        const unidades = Array.isArray(data) ? data : []
+        const now = Date.now()
+        let en_ruta = 0, en_bodega = 0, sin_senal = 0
+        for (const u of unidades) {
+          const stale = !u.ultimo_ping || (now - new Date(u.ultimo_ping).getTime() > 2 * 60 * 1000)
+          if (stale)                              sin_senal++
+          else if ((u.velocidad_kmh ?? 0) >= 3)  en_ruta++
+          else                                    en_bodega++
+        }
+        this.dashRutas  = { total: unidades.length, en_ruta, en_bodega, sin_senal }
+      } catch {
+        this.dashRutas  = { total: 0, en_ruta: 0, en_bodega: 0, sin_senal: 0, error: true }
+      } finally {
+        this.dashRutasOk = true
+      }
     },
 
     // ── Helpers de presentación ───────────────────────────
@@ -3464,26 +3490,7 @@ function dashboardModule() {
         })
       }
 
-      // 2. Stock crítico (alto)
-      if ((m.stock?.sin_stock || 0) > 0) {
-        out.push({
-          tipo: 'stock',
-          color: 'orange',
-          mensaje: `${m.stock.sin_stock} ${m.stock.sin_stock === 1 ? 'producto sin stock' : 'productos sin stock'}`,
-          monto: '',
-          accion: 'Ver',
-          onClick: () => { this.tab = 'inventario' }
-        })
-      } else if ((m.stock?.criticos || 0) > 0) {
-        out.push({
-          tipo: 'stock_bajo',
-          color: 'amber',
-          mensaje: `${m.stock.criticos} con stock bajo`,
-          monto: '',
-          accion: 'Ver',
-          onClick: () => { this.tab = 'inventario' }
-        })
-      }
+      // 2. Stock — no se alerta por sin_stock (bodega opera con inventario justo para entrega)
 
       // 3. Lotes PEPS estancados (>60 días con stock)
       if ((m.lotes_antiguos || 0) > 0) {
@@ -3871,11 +3878,42 @@ function logisticsModule() {
     _logDetailTimer:        null,
     _logMapReady:           false,
 
-    // ── Estado derivado (igual que Electron) ─────────────────────
+    // ── Estado derivado ───────────────────────────────────────────
+    _haversineM(lat1, lng1, lat2, lng2) {
+      const R = 6371000
+      const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180
+      const df = (lat2 - lat1) * Math.PI / 180
+      const dl = (lng2 - lng1) * Math.PI / 180
+      const a = Math.sin(df/2)**2 + Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    },
+
+    _dentroDeGeocercaBodega(lat, lng) {
+      if (!lat || !lng) return false
+      return this.logisticsGeocercas.some(g =>
+        g.activa && g.tipo === 'bodega' &&
+        this._haversineM(parseFloat(lat), parseFloat(lng), g.lat, g.lng) <= g.radio_m
+      )
+    },
+
     _deriveEstado(u) {
       if (!u.ultimo_ping) return 'sin_senal'
       if (Date.now() - new Date(u.ultimo_ping).getTime() > 2 * 60 * 1000) return 'sin_senal'
+      // Si está dentro del perímetro de la bodega, nunca muestra "en_ruta"
+      // aunque el GPS reporte velocidad por ruido interno
+      if (this._dentroDeGeocercaBodega(u.lat, u.lng)) return 'en_bodega'
       return (u.velocidad_kmh ?? 0) >= 3 ? 'en_ruta' : 'en_bodega'
+    },
+
+    // ── Tiles ────────────────────────────────────────────────────
+    _tilesUrl() {
+      const dark = document.documentElement.getAttribute('data-theme') !== 'light'
+      return `https://{s}.basemaps.cartocdn.com/${dark ? 'dark' : 'light'}_all/{z}/{x}/{y}{r}.png`
+    },
+
+    actualizarTilesMap() {
+      if (!window._lmap || !window._ltiles) return
+      window._ltiles.setUrl(this._tilesUrl())
     },
 
     // ── Colors ───────────────────────────────────────────────────
@@ -3964,7 +4002,14 @@ function logisticsModule() {
         }
         return
       }
-      if (typeof L === 'undefined') { this.logisticsError = 'Leaflet no cargado'; return }
+      if (typeof L === 'undefined') {
+        // Leaflet no disponible — igual cargamos unidades para mostrar chips
+        this.logisticsCargando = true
+        await this.cargarLogisticsUnidades()
+        this.logisticsCargando = false
+        this._logPollTimer = setInterval(() => this.cargarLogisticsUnidades(), 5000)
+        return
+      }
       const container = document.getElementById('logistics-map')
       if (!container) return
 
@@ -3978,7 +4023,7 @@ function logisticsModule() {
         attributionControl: false,
       })
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      window._ltiles = L.tileLayer(this._tilesUrl(), {
         subdomains: 'abcd', maxZoom: 19,
       }).addTo(window._lmap)
 
@@ -3990,10 +4035,22 @@ function logisticsModule() {
       window._lgeocercas = []
       window._ltrail     = null
       window._lparadas   = []
+      window._ltiles     = null
 
       if (window._lmapRO) window._lmapRO.disconnect()
       window._lmapRO = new ResizeObserver(() => { if (window._lmap) window._lmap.invalidateSize() })
       window._lmapRO.observe(container)
+
+      // Observar cambios de data-theme en <html> para intercambiar tiles
+      if (window._lthemeObs) window._lthemeObs.disconnect()
+      window._lthemeObs = new MutationObserver(() => {
+        if (!window._lmap || !window._ltiles) return
+        const dark = document.documentElement.getAttribute('data-theme') !== 'light'
+        window._ltiles.setUrl(
+          `https://{s}.basemaps.cartocdn.com/${dark ? 'dark' : 'light'}_all/{z}/{x}/{y}{r}.png`
+        )
+      })
+      window._lthemeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
       setTimeout(() => window._lmap && window._lmap.invalidateSize(), 150)
       setTimeout(() => window._lmap && window._lmap.invalidateSize(), 500)
@@ -4036,8 +4093,17 @@ function logisticsModule() {
       try {
         const r = await fetch('/api/telemetria/unidades/live')
         if (!r.ok) throw new Error()
-        const data = await r.json()
-        this.logisticsUnidades = Array.isArray(data) ? data : []
+        const raw = await r.json()
+        const arr = Array.isArray(raw) ? raw : []
+        // Deduplicar por unidad_id — mantener el dispositivo con ping más reciente
+        const best = {}
+        for (const u of arr) {
+          const id = u.unidad_id
+          if (!best[id] || (u.ultimo_ping || '') > (best[id].ultimo_ping || '')) {
+            best[id] = u
+          }
+        }
+        this.logisticsUnidades = Object.values(best)
         this._actualizarMarkers()
         this.logisticsError = null
       } catch {

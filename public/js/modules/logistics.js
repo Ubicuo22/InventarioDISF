@@ -13,11 +13,42 @@ function logisticsModule() {
     _logDetailTimer:        null,
     _logMapReady:           false,
 
-    // ── Estado derivado (igual que Electron) ─────────────────────
+    // ── Estado derivado ───────────────────────────────────────────
+    _haversineM(lat1, lng1, lat2, lng2) {
+      const R = 6371000
+      const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180
+      const df = (lat2 - lat1) * Math.PI / 180
+      const dl = (lng2 - lng1) * Math.PI / 180
+      const a = Math.sin(df/2)**2 + Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    },
+
+    _dentroDeGeocercaBodega(lat, lng) {
+      if (!lat || !lng) return false
+      return this.logisticsGeocercas.some(g =>
+        g.activa && g.tipo === 'bodega' &&
+        this._haversineM(parseFloat(lat), parseFloat(lng), g.lat, g.lng) <= g.radio_m
+      )
+    },
+
     _deriveEstado(u) {
       if (!u.ultimo_ping) return 'sin_senal'
       if (Date.now() - new Date(u.ultimo_ping).getTime() > 2 * 60 * 1000) return 'sin_senal'
+      // Si está dentro del perímetro de la bodega, nunca muestra "en_ruta"
+      // aunque el GPS reporte velocidad por ruido interno
+      if (this._dentroDeGeocercaBodega(u.lat, u.lng)) return 'en_bodega'
       return (u.velocidad_kmh ?? 0) >= 3 ? 'en_ruta' : 'en_bodega'
+    },
+
+    // ── Tiles ────────────────────────────────────────────────────
+    _tilesUrl() {
+      const dark = document.documentElement.getAttribute('data-theme') !== 'light'
+      return `https://{s}.basemaps.cartocdn.com/${dark ? 'dark' : 'light'}_all/{z}/{x}/{y}{r}.png`
+    },
+
+    actualizarTilesMap() {
+      if (!window._lmap || !window._ltiles) return
+      window._ltiles.setUrl(this._tilesUrl())
     },
 
     // ── Colors ───────────────────────────────────────────────────
@@ -106,7 +137,14 @@ function logisticsModule() {
         }
         return
       }
-      if (typeof L === 'undefined') { this.logisticsError = 'Leaflet no cargado'; return }
+      if (typeof L === 'undefined') {
+        // Leaflet no disponible — igual cargamos unidades para mostrar chips
+        this.logisticsCargando = true
+        await this.cargarLogisticsUnidades()
+        this.logisticsCargando = false
+        this._logPollTimer = setInterval(() => this.cargarLogisticsUnidades(), 5000)
+        return
+      }
       const container = document.getElementById('logistics-map')
       if (!container) return
 
@@ -120,7 +158,7 @@ function logisticsModule() {
         attributionControl: false,
       })
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      window._ltiles = L.tileLayer(this._tilesUrl(), {
         subdomains: 'abcd', maxZoom: 19,
       }).addTo(window._lmap)
 
@@ -132,10 +170,22 @@ function logisticsModule() {
       window._lgeocercas = []
       window._ltrail     = null
       window._lparadas   = []
+      window._ltiles     = null
 
       if (window._lmapRO) window._lmapRO.disconnect()
       window._lmapRO = new ResizeObserver(() => { if (window._lmap) window._lmap.invalidateSize() })
       window._lmapRO.observe(container)
+
+      // Observar cambios de data-theme en <html> para intercambiar tiles
+      if (window._lthemeObs) window._lthemeObs.disconnect()
+      window._lthemeObs = new MutationObserver(() => {
+        if (!window._lmap || !window._ltiles) return
+        const dark = document.documentElement.getAttribute('data-theme') !== 'light'
+        window._ltiles.setUrl(
+          `https://{s}.basemaps.cartocdn.com/${dark ? 'dark' : 'light'}_all/{z}/{x}/{y}{r}.png`
+        )
+      })
+      window._lthemeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
       setTimeout(() => window._lmap && window._lmap.invalidateSize(), 150)
       setTimeout(() => window._lmap && window._lmap.invalidateSize(), 500)
@@ -178,8 +228,17 @@ function logisticsModule() {
       try {
         const r = await fetch('/api/telemetria/unidades/live')
         if (!r.ok) throw new Error()
-        const data = await r.json()
-        this.logisticsUnidades = Array.isArray(data) ? data : []
+        const raw = await r.json()
+        const arr = Array.isArray(raw) ? raw : []
+        // Deduplicar por unidad_id — mantener el dispositivo con ping más reciente
+        const best = {}
+        for (const u of arr) {
+          const id = u.unidad_id
+          if (!best[id] || (u.ultimo_ping || '') > (best[id].ultimo_ping || '')) {
+            best[id] = u
+          }
+        }
+        this.logisticsUnidades = Object.values(best)
         this._actualizarMarkers()
         this.logisticsError = null
       } catch {

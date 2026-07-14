@@ -19,6 +19,37 @@
   <!-- Leaflet — mapa en vivo -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    /* ── Leaflet dark mode forzado ── */
+    .leaflet-container { background: #0d0f14; color-scheme: dark; }
+    .leaflet-bar a, .leaflet-bar a:hover {
+      background: rgba(13,15,20,0.92);
+      border-color: rgba(148,163,184,0.15);
+      color: #f1f5f9;
+    }
+    .leaflet-bar a:hover { background: rgba(30,35,48,0.95); color: #fff; }
+    .leaflet-bar { border: 1px solid rgba(148,163,184,0.15) !important; box-shadow: none; }
+    .leaflet-control-zoom-in, .leaflet-control-zoom-out { font-size: 18px !important; }
+    .leaflet-control-attribution {
+      background: rgba(13,15,20,0.75) !important;
+      color: #475569 !important;
+      backdrop-filter: blur(4px);
+    }
+    .leaflet-control-attribution a { color: #64748b !important; }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: rgba(13,15,20,0.95);
+      color: #f1f5f9;
+      border: 1px solid rgba(148,163,184,0.15);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    .leaflet-tooltip {
+      background: rgba(13,15,20,0.9);
+      color: #f1f5f9;
+      border: 1px solid rgba(148,163,184,0.2);
+      box-shadow: none;
+    }
+    .leaflet-tooltip::before { border-top-color: rgba(148,163,184,0.2); }
+  </style>
 
   <!-- Anti-flash: resuelve y aplica el tema ANTES de la primera pintura.
        Lee localStorage; si no hay valor guardado usa prefers-color-scheme.
@@ -42,7 +73,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.031ae3c2.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.54ff8dd0.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -589,33 +620,58 @@
             x-text="dashMetricas?.inventario ? `${dashMetricas.inventario.con_stock} con stock` : '—'"></p>
         </button>
 
-        <!-- ▸ STOCK CRÍTICO — tarjeta condicional, solo si hay productos críticos -->
-        <button x-show="tienePermiso('inventario') && (dashMetricas?.stock?.criticos ?? 0) > 0"
-          @click="tab = 'inventario'"
+        <!-- ▸ RUTAS — estado en vivo de unidades -->
+        <button @click="tab = 'reparto'; $nextTick(() => initLogisticsMap())"
           class="bento-tile bento-col-2 tap"
-          :class="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'bento-tile--red' : ''">
+          :class="(dashRutas?.en_ruta ?? 0) > 0 ? 'bento-tile--blue' : ''">
           <div class="flex items-center justify-between mb-3">
-            <div class="icon-bubble"
-              :style="(dashMetricas?.stock?.sin_stock ?? 0) > 0
-                ? 'background: rgba(239,68,68,0.18)'
-                : 'background: rgba(245,158,11,0.18)'">
-              <svg class="w-5 h-5"
-                :style="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'color:#f87171' : 'color:#fbbf24'"
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            <div class="icon-bubble" :style="(dashRutas?.en_ruta ?? 0) > 0
+              ? 'background:rgba(56,189,248,0.15)'
+              : 'background:rgba(100,116,139,0.15)'">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"
+                :style="(dashRutas?.en_ruta ?? 0) > 0 ? 'color:#38bdf8' : 'color:#64748b'">
+                <rect x="1" y="3" width="15" height="13" rx="1.5" stroke-linejoin="round"/>
+                <path stroke-linejoin="round" d="M16 8h3l3 3v5h-6V8z"/>
+                <circle cx="5.5" cy="18.5" r="2" fill="none"/>
+                <circle cx="18.5" cy="18.5" r="2" fill="none"/>
               </svg>
             </div>
             <span class="text-[10px] uppercase tracking-wider font-semibold"
-              :class="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'text-red-400' : 'text-amber-400'">Stock crítico</span>
+              :class="(dashRutas?.en_ruta ?? 0) > 0 ? 'text-sky-400' : 'text-slate-500'">Rutas</span>
           </div>
-          <p class="stat-num"
-            :class="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'text-red-400' : 'text-amber-400'"
-            x-text="dashAnimInt('stock_critico')"></p>
-          <p class="text-[11px] mt-1.5 num-tab"
-            :class="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'text-red-300' : 'text-slate-500'"
-            x-text="(dashMetricas?.stock?.sin_stock ?? 0) > 0
-              ? `${dashMetricas.stock.sin_stock} sin stock`
-              : `${dashMetricas?.stock?.bajo_stock ?? 0} bajos`"></p>
+
+          <!-- Cargando -->
+          <template x-if="!dashRutasOk">
+            <div>
+              <p class="stat-num text-slate-700">—</p>
+              <p class="text-[11px] mt-1.5 text-slate-600">Conectando...</p>
+            </div>
+          </template>
+
+          <!-- Error de conexión -->
+          <template x-if="dashRutasOk && dashRutas?.error">
+            <div>
+              <p class="stat-num text-slate-600">—</p>
+              <p class="text-[11px] mt-1.5 text-slate-500">Sin telemetría</p>
+            </div>
+          </template>
+
+          <!-- Con datos -->
+          <template x-if="dashRutasOk && !dashRutas?.error">
+            <div>
+              <p class="stat-num" :class="dashRutas.en_ruta > 0 ? 'text-sky-400' : 'text-slate-400'"
+                x-text="dashRutas.total"></p>
+              <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span x-show="dashRutas.en_ruta > 0" class="text-[11px] text-sky-400"
+                  x-text="`${dashRutas.en_ruta} en ruta`"></span>
+                <span x-show="dashRutas.en_bodega > 0" class="text-[11px] text-emerald-400"
+                  x-text="`${dashRutas.en_bodega} en bodega`"></span>
+                <span x-show="dashRutas.sin_senal > 0" class="text-[11px] text-slate-500"
+                  x-text="`${dashRutas.sin_senal} sin señal`"></span>
+                <span x-show="dashRutas.total === 0" class="text-[11px] text-slate-500">Sin unidades</span>
+              </div>
+            </div>
+          </template>
         </button>
 
         <!-- ▸ PEDIDOS (creados hoy) -->
@@ -766,51 +822,6 @@
             </div>
           </template>
         </button>
-
-        <!-- ▸ TOP CRÍTICOS — solo si hay productos con stock bajo -->
-        <div x-show="tienePermiso('inventario') && (dashMetricas?.stock?.top ?? []).length > 0"
-          class="bento-col-4">
-          <button @click="tab = 'inventario'"
-            class="bento-tile w-full text-left tap"
-            :class="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'bento-tile--red' : 'bento-tile--amber'">
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-2">
-                <div class="icon-bubble"
-                  :style="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'background:rgba(239,68,68,0.18)' : 'background:rgba(245,158,11,0.18)'">
-                  <svg class="w-4 h-4"
-                    :style="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'color:#f87171' : 'color:#fbbf24'"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
-                  </svg>
-                </div>
-                <span class="text-[11px] font-semibold uppercase tracking-wide"
-                  :class="(dashMetricas?.stock?.sin_stock ?? 0) > 0 ? 'text-red-400' : 'text-amber-400'">
-                  Requieren reposición
-                </span>
-              </div>
-              <svg class="w-4 h-4 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-              </svg>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-              <template x-for="p in (dashMetricas?.stock?.top ?? [])" :key="p.nombre_producto">
-                <div class="flex items-center gap-3 px-3 py-2 rounded-lg"
-                  style="background: var(--glass-1); border: 1px solid var(--glass-border)">
-                  <!-- Dot de estado -->
-                  <div class="w-2 h-2 rounded-full flex-shrink-0"
-                    :class="p.stock <= 0 ? 'bg-red-400' : 'bg-amber-400'"></div>
-                  <span class="flex-1 min-w-0 text-xs font-medium truncate"
-                    style="color: var(--text)"
-                    x-text="p.nombre_producto.toUpperCase()"></span>
-                  <span class="text-xs font-bold tabular-nums flex-shrink-0"
-                    :class="p.stock <= 0 ? 'text-red-400' : 'text-amber-400'"
-                    x-text="p.stock <= 0 ? 'Sin stock' : (parseFloat(p.stock) % 1 === 0 ? Math.round(p.stock) : parseFloat(p.stock).toFixed(1)) + ' ' + (p.unidad_producto || '')">
-                  </span>
-                </div>
-              </template>
-            </div>
-          </button>
-        </div>
 
         <!-- ▸ ADMIN (admin-only) -->
         <button x-show="session?.rol === 'admin'" @click="abrirAdminPanel()"
@@ -5076,6 +5087,7 @@
           type="number" min="0.001" step="0.001" placeholder="0.00"
           class="input-dark w-full"
           :class="mermaForm.stock_actual !== null && parseFloat(mermaForm.cantidad) > mermaForm.stock_actual ? 'border-red-500/60' : ''"
+          @input="if(parseFloat($event.target.value) < 0) { mermaForm.cantidad = ''; $event.target.value = '' }"
         />
         <!-- Advertencia stock insuficiente -->
         <p x-show="mermaForm.stock_actual !== null && parseFloat(mermaForm.cantidad) > mermaForm.stock_actual"
@@ -5623,10 +5635,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.031ae3c2.js agrupa todos los módulos en 1 request.
+     bodega-bundle.54ff8dd0.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.031ae3c2.js"></script>
+<script src="/js/bodega-bundle.54ff8dd0.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

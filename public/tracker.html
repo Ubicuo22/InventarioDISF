@@ -230,6 +230,8 @@
 const INTERVALO_MS   = 5000
 const BATCH_MAX      = 50
 const STORAGE_KEY    = 'disfruleg_tracker_v1'
+const QUEUE_KEY      = 'disfruleg_queue_v1'
+const PINGS_KEY      = 'disfruleg_pings_v1'
 
 let cfg = {}
 let queue = []
@@ -241,6 +243,20 @@ let enviando = false
 let wakeLock = null
 let audioCtx = null
 let audioNode = null
+
+function saveQueue(){
+  if(queue.length > 500) queue = queue.slice(-500)
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)) } catch {}
+}
+function loadQueue(){
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]') } catch { return [] }
+}
+function saveTotalPings(){
+  try { localStorage.setItem(PINGS_KEY, String(totalPings)) } catch {}
+}
+function loadTotalPings(){
+  return parseInt(localStorage.getItem(PINGS_KEY) || '0', 10) || 0
+}
 
 function guardarCfg(data){ cfg = data; localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) }
 function cargarCfg(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null') }catch{ return null } }
@@ -395,6 +411,29 @@ async function iniciarSetup(){
   if(!unidadSeleccionada){ return }
   const { id: unidadId, conductor, nombre } = unidadSeleccionada
 
+  // Verificar si la unidad ya está siendo rastreada por otro dispositivo
+  try {
+    const liveRes = await fetch(`${url}/api/telemetria/unidades/live`)
+    if(liveRes.ok){
+      const liveData = await liveRes.json()
+      const arr = Array.isArray(liveData) ? liveData : []
+      const ahora = Date.now()
+      const activa = arr.find(u =>
+        u.unidad_id === unidadId &&
+        u.ultimo_ping &&
+        (ahora - new Date(u.ultimo_ping).getTime()) < 2 * 60 * 1000
+      )
+      if(activa){
+        const sigue = confirm(
+          `⚠️ ${nombre} ya está siendo rastreado en otro dispositivo.\n\n` +
+          `Último ping hace ${Math.round((ahora - new Date(activa.ultimo_ping).getTime()) / 1000)}s.\n\n` +
+          `Si continúas, habrá dos dispositivos enviando la misma unidad.\n¿Deseas continuar de todas formas?`
+        )
+        if(!sigue) return
+      }
+    }
+  } catch { /* si falla la verificación, se permite continuar */ }
+
   const uuid = cargarCfg()?.device_uuid || crypto.randomUUID()
 
   setStatus('ok', 'Registrando dispositivo...')
@@ -423,6 +462,13 @@ async function arrancarTracking(conInteraccion = false){
   mostrar('tracking')
   document.getElementById('t-nombre').textContent = cfg.nombre || ''
   document.getElementById('t-uuid').textContent = `ID: ${cfg.device_uuid?.slice(0,8)}`
+
+  // Restaurar cola y contador persistidos (sobreviven si Android mató el PWA)
+  queue = loadQueue()
+  totalPings = loadTotalPings()
+  document.getElementById('t-total').textContent = totalPings
+  actualizarCola()
+  if(queue.length) flushQueue()
 
   if(!navigator.geolocation){ setStatus('err', 'GPS no disponible'); return }
 
@@ -476,6 +522,7 @@ async function enviarPing(){
   }
 
   queue.push(ping)
+  saveQueue()
   actualizarCola()
 
   if(enviando || !navigator.onLine) return
@@ -506,6 +553,7 @@ async function flushQueue(){
 
     if(res.ok){
       totalPings += lote.length
+      saveTotalPings()
       document.getElementById('t-total').textContent = totalPings
       document.getElementById('t-ping').textContent = new Date().toLocaleTimeString('es-MX')
       setStatus('ok', navigator.onLine ? 'Rastreando...' : 'Offline — en cola')
@@ -518,6 +566,7 @@ async function flushQueue(){
     setStatus('warn', 'Sin red — guardando en cola')
   }
   enviando = false
+  saveQueue()
   actualizarCola()
   if(queue.length) setTimeout(flushQueue, 3000)
 }
@@ -576,6 +625,8 @@ function detener(borrarConfig = false){
   setStatus('idle','Rastreo detenido')
   if(borrarConfig){
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(QUEUE_KEY)
+    localStorage.removeItem(PINGS_KEY)
     location.reload()
   }
 }

@@ -11,8 +11,9 @@ router.post('/', async (req, res) => {
   const { id_producto, tipo_merma, cantidad_merma, motivo, fecha_merma, notas } = req.body
   if (!id_producto)    return res.status(400).json({ ok: false, error: 'id_producto requerido' })
   if (!tipo_merma)     return res.status(400).json({ ok: false, error: 'tipo_merma requerido' })
-  if (!cantidad_merma || cantidad_merma <= 0)
-                       return res.status(400).json({ ok: false, error: 'cantidad_merma debe ser mayor a 0' })
+  const _cant = Number(cantidad_merma)
+  if (!_cant || !isFinite(_cant) || _cant <= 0)
+    return res.status(400).json({ ok: false, error: 'cantidad_merma debe ser mayor a 0' })
   if (!motivo?.trim()) return res.status(400).json({ ok: false, error: 'motivo requerido' })
 
   const tiposValidos = ['VENCIMIENTO','DAÑO','ROBO','AJUSTE_INVENTARIO','OTRO']
