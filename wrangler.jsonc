@@ -25,6 +25,13 @@
     "tls": "./shims/tls.js"
   },
 
+  // Ruta sobre el CNAME existente (proxied) — intercepta el tráfico antes
+  // de que llegue al túnel de la Mac Mini. Para revertir a la Mac Mini:
+  // eliminar esta ruta y redesplegar.
+  "routes": [
+    { "pattern": "disfruleg.ubicuomex.com/*", "zone_name": "ubicuomex.com" }
+  ],
+
   "observability": { "enabled": true }
 
   // Secrets (TIDB_*, JWT_SECRET, VAPID_*, NOTIF_SECRET, DASHBOARD_TOKEN, R2_PUBLIC_URL)
