@@ -1,0 +1,32 @@
+{
+  // Cloudflare Workers — disfruleg-bodega
+  // La app Express corre completa en el Worker (nodejs_compat).
+  // Los estáticos de public/ los sirve Workers Assets; solo /api/* toca el Worker.
+  "name": "disfruleg-bodega",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // 02:00 UTC = 20:00 CDMX (resumen diario) · 06:00 UTC = limpieza de sesiones
+  "triggers": {
+    "crons": ["0 2 * * *", "0 6 * * *"]
+  },
+
+  // iconv-lite real no bundlea en workerd; la app solo maneja JSON UTF-8.
+  // tls: workerd rechaza la opción checkServerIdentity que mysql2 pasa siempre.
+  "alias": {
+    "iconv-lite": "./shims/iconv-lite.js",
+    "tls": "./shims/tls.js"
+  },
+
+  "observability": { "enabled": true }
+
+  // Secrets (TIDB_*, JWT_SECRET, VAPID_*, NOTIF_SECRET, DASHBOARD_TOKEN, R2_PUBLIC_URL)
+  // se suben con: npx wrangler secret put <NOMBRE>
+}

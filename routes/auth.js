@@ -50,13 +50,17 @@ function rateLimitLogin(req, res, next) {
   next()
 }
 
-// Limpiar IPs antiguas cada 5 minutos para no acumular memoria
-setInterval(() => {
-  const now = Date.now()
-  for (const [ip, entry] of loginAttempts) {
-    if (now > entry.resetAt) loginAttempts.delete(ip)
-  }
-}, 5 * 60_000)
+// Limpiar IPs antiguas cada 5 minutos para no acumular memoria.
+// En Workers no hay timers a nivel de módulo (y la memoria es efímera por
+// aislamiento), así que solo aplica en Node.
+if (globalThis.navigator?.userAgent !== 'Cloudflare-Workers') {
+  setInterval(() => {
+    const now = Date.now()
+    for (const [ip, entry] of loginAttempts) {
+      if (now > entry.resetAt) loginAttempts.delete(ip)
+    }
+  }, 5 * 60_000)
+}
 
 // ─── POST /api/auth/login ─────────────────────────────────
 router.post('/login', rateLimitLogin, async (req, res) => {

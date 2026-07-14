@@ -5,3 +5,5 @@ node_modules/
 MEMORY.md
 context.md
 .claude/worktrees/
+.dev.vars
+.wrangler/

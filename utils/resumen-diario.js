@@ -61,7 +61,7 @@ async function enviarResumen() {
       icon:  '/assets/icon.png'
     })
 
-    console.log(`[resumen-diario] Enviado — ${pedidos} pedidos, ${entradas} compras ($${gasto.toFixed(2)}), ${critico} crítico — ${result.enviados}/${result.total} dispositivos`)
+    console.log(`[resumen-diario] Enviado — ${pedidos} pedidos, ${entradas} compras ($${gasto.toFixed(2)}), ${mermas} mermas — ${result.enviados}/${result.total} dispositivos`)
   } catch (e) {
     console.error('[resumen-diario] Error al enviar:', e.message)
   }
@@ -90,4 +90,4 @@ function agendarResumenDiario() {
   }, msHasta)
 }
 
-module.exports = { agendarResumenDiario }
+module.exports = { agendarResumenDiario, enviarResumen }
