@@ -41,6 +41,9 @@ app.use('/api/mermas',     requireAuth, requireModulo('mermas'),     require('./
 app.use('/api/compras',    requireAuth, requireModulo('compras'),    require('./routes/compras'))
 app.use('/api/analytics',  requireAuth, requireModulo('analytics'),  require('./routes/analytics'))
 
+// ─── Logística: repartidores y asignación de rutas ───────────
+app.use('/api',            requireAuth, require('./routes/rutas'))
+
 // ─── Cobranza (requiere módulo 'cobranza') ───────────────────
 app.use('/api/deudas', require('./routes/deudas'))
 app.use('/api/pagos',  require('./routes/pagos'))
