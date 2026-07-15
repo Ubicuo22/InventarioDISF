@@ -41,9 +41,6 @@ app.use('/api/mermas',     requireAuth, requireModulo('mermas'),     require('./
 app.use('/api/compras',    requireAuth, requireModulo('compras'),    require('./routes/compras'))
 app.use('/api/analytics',  requireAuth, requireModulo('analytics'),  require('./routes/analytics'))
 
-// ─── Logística: repartidores y asignación de rutas ───────────
-app.use('/api',            requireAuth, require('./routes/rutas'))
-
 // ─── Cobranza (requiere módulo 'cobranza') ───────────────────
 app.use('/api/deudas', require('./routes/deudas'))
 app.use('/api/pagos',  require('./routes/pagos'))
@@ -67,6 +64,13 @@ app.get('/api/status', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message })
   }
 })
+
+// ─── Logística: repartidores y asignación de rutas ───────────
+// Montado en /api con requireAuth a nivel de router, así que DEBE ir al
+// final de las rutas /api: cualquier request /api/* que entre aquí sin
+// token recibe 401 aunque no coincida con sus paths. Las rutas públicas
+// (status, dashboard, telemetría, notificaciones) van antes.
+app.use('/api', require('./routes/rutas'))
 
 // Fallback — debe ir al final.
 // Node: SPA (index.html). Workers: solo llegan /api/* aquí → 404 JSON.
