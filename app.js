@@ -51,9 +51,6 @@ app.use('/api/dashboard', require('./routes/dashboard'))
 // ─── Rutas de administración (solo admin) ────────────────────
 app.use('/api/admin', require('./routes/admin'))
 
-// ─── Proxy telemetría (sin auth — solo red local) ────────────
-app.use('/api/telemetria', require('./routes/telemetria'))
-
 // Health check público
 app.get('/api/status', async (req, res) => {
   try {
@@ -65,12 +62,6 @@ app.get('/api/status', async (req, res) => {
   }
 })
 
-// ─── Logística: repartidores y asignación de rutas ───────────
-// Montado en /api con requireAuth a nivel de router, así que DEBE ir al
-// final de las rutas /api: cualquier request /api/* que entre aquí sin
-// token recibe 401 aunque no coincida con sus paths. Las rutas públicas
-// (status, dashboard, telemetría, notificaciones) van antes.
-app.use('/api', require('./routes/rutas'))
 
 // Fallback — debe ir al final.
 // Node: SPA (index.html). Workers: solo llegan /api/* aquí → 404 JSON.

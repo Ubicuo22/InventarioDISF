@@ -14,8 +14,6 @@ function dashboardModule() {
     dashTs:        null,       // Date del último refresh exitoso
     dashAnimNums:  {},         // valores animados de conteo { key: number }
     _dashAnimRaf:  null,
-    dashRutas:      null,       // { total, en_ruta, en_bodega, sin_senal }
-    dashRutasOk:    false,      // true cuando el fetch terminó (éxito o fallo)
 
     // ── Carga ─────────────────────────────────────────────
     async cargarDashboard() {
@@ -29,30 +27,6 @@ function dashboardModule() {
         }
       } catch { /* silent — no romper la carga inicial */ }
       finally  { this.dashCargando = false }
-      // Cargar estado de rutas en paralelo (no bloquea)
-      this._cargarDashRutas()
-    },
-
-    async _cargarDashRutas() {
-      try {
-        const r = await fetch('/api/telemetria/unidades/live')
-        if (!r.ok) throw new Error()
-        const data = await r.json()
-        const unidades = Array.isArray(data) ? data : []
-        const now = Date.now()
-        let en_ruta = 0, en_bodega = 0, sin_senal = 0
-        for (const u of unidades) {
-          const stale = !u.ultimo_ping || (now - new Date(u.ultimo_ping).getTime() > 2 * 60 * 1000)
-          if (stale)                              sin_senal++
-          else if ((u.velocidad_kmh ?? 0) >= 3)  en_ruta++
-          else                                    en_bodega++
-        }
-        this.dashRutas  = { total: unidades.length, en_ruta, en_bodega, sin_senal }
-      } catch {
-        this.dashRutas  = { total: 0, en_ruta: 0, en_bodega: 0, sin_senal: 0, error: true }
-      } finally {
-        this.dashRutasOk = true
-      }
     },
 
     // ── Helpers de presentación ───────────────────────────

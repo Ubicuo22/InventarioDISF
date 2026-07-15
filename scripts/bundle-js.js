@@ -30,7 +30,6 @@ const FILES = [
   'public/js/modules/dashboard.js',
   'public/js/modules/pendientes.js',
   'public/js/modules/conteo.js',
-  'public/js/modules/logistics.js',
   'public/js/bodega.js',
 ]
 
