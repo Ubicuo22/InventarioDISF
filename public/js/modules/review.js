@@ -31,6 +31,8 @@ function reviewModule () {
     revisionPendingIds: [],             // ["seccion::id_producto", ...] — sigue en carrito pero flagueado
     revisionPendingNames: [],
     revisionGuardando: false,
+    // Keypad integrado — buffer de captura de peso (null = sin captura, muestra la cantidad del item)
+    revisionBuf: null,
     revisionGuardandoMensaje: '',       // mensaje de progreso visible al usuario
     revisionErrorGuardado: null,        // null | string — error del último intento de guardar
     revisionShowSidebar: false,         // collapsable en móvil
