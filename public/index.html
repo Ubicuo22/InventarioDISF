@@ -73,7 +73,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.b9da3be6.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.5b950c17.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -4027,7 +4027,7 @@
             :style="`transform:translateX(${revisionTouchTx}px); transition:${revisionTouchX0===null?'transform .2s ease':'none'}; z-index:20`">
 
             <!-- Sección badge + estado -->
-            <div class="flex items-center justify-between mb-5 sm:mb-6">
+            <div class="flex items-center justify-between mb-3">
               <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-emerald-300"
                 style="background:rgba(16,185,129,.10); border:1px solid rgba(16,185,129,.18)">
                 <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -4053,82 +4053,80 @@
             </div>
 
             <!-- Nombre del producto -->
-            <h3 class="text-[1.75rem] sm:text-[2.25rem] lg:text-[2.5rem] font-black text-white mb-4 sm:mb-6 leading-tight break-words tracking-tight"
+            <h3 class="text-[1.5rem] sm:text-[2rem] font-black text-white mb-3 leading-tight break-words tracking-tight"
               x-text="revisionCurrent().item.nombre_producto"></h3>
 
-            <!-- Cantidad — input grande táctil -->
-            <div class="flex flex-col items-center mb-5 sm:mb-7">
-              <div class="relative w-full">
-                <input
-                  type="number"
-                  inputmode="decimal"
-                  step="any"
-                  min="0.001"
-                  :value="revisionCurrent().item.cantidad"
-                  @input="revisionActualizarCantidad($event.target.value)"
-                  @focus="$event.target.select(); revisionInputFocused = true"
-                  @blur="revisionInputFocused = false"
-                  @keydown.enter.prevent="revisionGuardarYSiguiente($event)"
-                  @keydown.escape.prevent="$event.target.blur()"
-                  class="w-full py-4 sm:py-5 text-[5rem] sm:text-[6rem] font-black text-center tabular-nums bg-transparent rounded-2xl focus:outline-none transition-all cursor-text"
-                  :class="revisionCantidadModificada()
-                    ? 'text-amber-300 border-2 border-amber-500/70 focus:border-amber-400'
-                    : 'text-white border-2 border-white/10 focus:border-green-500/60'"
-                  style="appearance:textfield; -moz-appearance:textfield; -webkit-appearance:none; line-height:1.05; touch-action:manipulation; font-size:80px" />
-                <!-- Badge modificado -->
-                <div x-show="revisionCantidadModificada()"
-                  class="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
-                  style="background:rgba(245,158,11,.9); color:#1c1400">MOD</div>
-                <!-- Hint editar -->
-                <div x-show="!revisionInputFocused"
-                  class="absolute bottom-2 right-2.5 pointer-events-none">
-                  <svg class="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-                  </svg>
-                </div>
-              </div>
+            <!-- Pedido + unidad (chip con color propio de la unidad) -->
+            <div class="flex items-center gap-2.5 mb-3 flex-wrap">
+              <span x-show="revisionCurrent().item.unidad"
+                class="inline-flex items-center px-3 py-1 rounded-lg text-sm font-black uppercase tracking-wider"
+                :style="`color:${unidadColor(revisionCurrent().item.unidad)}; background:color-mix(in srgb, ${unidadColor(revisionCurrent().item.unidad)} 13%, transparent); border:1.5px solid color-mix(in srgb, ${unidadColor(revisionCurrent().item.unidad)} 42%, transparent)`"
+                x-text="revisionCurrent().item.unidad"></span>
+              <span class="text-[13px] text-slate-400">
+                Pedido: <b class="text-slate-100 tabular-nums" x-text="revisionCantidadOriginal() ?? revisionCurrent().item.cantidad"></b>
+                <template x-if="revisionCurrent().item.precio_unitario > 0">
+                  <span> · $<span class="tabular-nums" x-text="(revisionCurrent().item.precio_unitario||0).toFixed(2)"></span></span>
+                </template>
+              </span>
+            </div>
 
-              <!-- Unidad + modificación + precio -->
-              <div class="flex items-center justify-between w-full mt-3 px-1">
-                <div class="flex items-center gap-2.5 flex-wrap">
-                  <!-- Unidad — protagonismo total, pill visible -->
-                  <span x-show="revisionCurrent().item.unidad"
-                    class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold tracking-wide"
-                    :class="revisionCantidadModificada()
-                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                      : 'bg-white/8 text-slate-200 border border-white/12'"
-                    x-text="revisionCurrent().item.unidad.toUpperCase()"></span>
-                  <!-- Cantidad original si fue modificada -->
-                  <span x-show="revisionCantidadModificada()"
-                    class="text-xs text-amber-500/70 tabular-nums font-medium"
-                    x-text="`pedido: ${revisionCantidadOriginal()}`"></span>
-                </div>
-                <!-- Precio total estimado -->
-                <span x-show="revisionCurrent().item.precio_unitario > 0"
-                  class="text-sm font-semibold tabular-nums"
-                  :class="revisionCantidadModificada() ? 'text-amber-400' : 'text-slate-300'"
-                  x-text="`$${((revisionCurrent().item.cantidad||0)*(revisionCurrent().item.precio_unitario||0)).toFixed(2)}`"></span>
-              </div>
+            <!-- Display de peso real — sin <input>: el teclado de iOS no se despliega -->
+            <div class="relative w-full rounded-2xl mb-3 py-2 sm:py-3 flex items-baseline justify-center gap-2 transition-all"
+              :style="`background:rgba(255,255,255,.03); border:2px solid ${revisionBuf !== null ? unidadColor(revisionCurrent().item.unidad) : `color-mix(in srgb, ${unidadColor(revisionCurrent().item.unidad)} 30%, rgba(255,255,255,.10))`}; ${revisionBuf !== null ? `box-shadow:0 0 0 3px color-mix(in srgb, ${unidadColor(revisionCurrent().item.unidad)} 15%, transparent)` : ''}`">
+              <!-- Chip delta vs pedido -->
+              <div x-show="revisionDelta() !== 0"
+                class="absolute -top-3 right-3 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold tabular-nums"
+                :class="revisionDelta() > 0
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-500/15 text-amber-300 border border-amber-500/35'"
+                x-text="(revisionDelta() > 0 ? '+' : '') + revisionDelta() + ' ' + (revisionCurrent().item.unidad || '')"></div>
+              <span class="text-[3.5rem] sm:text-[4.25rem] font-black tabular-nums leading-none"
+                :class="revisionCantidadModificada() || revisionBuf !== null ? 'text-white' : 'text-white'"
+                x-text="revisionValorMostrado()"></span>
+              <span x-show="revisionBuf !== null" class="w-[3px] h-10 rounded-full animate-pulse -ml-1"
+                :style="`background:${unidadColor(revisionCurrent().item.unidad)}`"></span>
+              <span class="text-lg font-black uppercase tracking-wide"
+                :style="`color:${unidadColor(revisionCurrent().item.unidad)}`"
+                x-text="revisionCurrent().item.unidad || ''"></span>
+            </div>
+
+            <!-- Keypad de captura -->
+            <div class="grid grid-cols-3 gap-2 mb-4 select-none">
+              <template x-for="tecla in ['7','8','9','4','5','6','1','2','3']" :key="tecla">
+                <button type="button" @click="revisionDigito(tecla)"
+                  class="py-3 sm:py-3.5 rounded-xl text-xl sm:text-2xl font-bold tabular-nums text-white transition-all active:scale-95"
+                  style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08)"
+                  x-text="tecla"></button>
+              </template>
+              <button type="button" @click="revisionDigito('.')"
+                class="py-3 sm:py-3.5 rounded-xl text-xl font-bold text-slate-400 transition-all active:scale-95"
+                style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08)">·</button>
+              <button type="button" @click="revisionDigito('0')"
+                class="py-3 sm:py-3.5 rounded-xl text-xl sm:text-2xl font-bold tabular-nums text-white transition-all active:scale-95"
+                style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08)">0</button>
+              <button type="button" @click="revisionBorrarDigito()"
+                class="py-3 sm:py-3.5 rounded-xl text-lg font-bold text-slate-400 transition-all active:scale-95"
+                style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08)">⌫</button>
             </div>
 
             <!-- Acciones: Cambiar · Faltante · Pendiente · Agregar -->
             <div class="grid grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-5">
               <button @click="revisionAbrirCambiar()"
-                class="btn-rev-slate flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl">
+                class="btn-rev-slate flex flex-col items-center gap-1 py-2.5 sm:py-3 rounded-2xl">
                 <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
                 </svg>
                 <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide">Cambiar</span>
               </button>
               <button @click="revisionMarcarFaltante()"
-                class="btn-rev-red flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl">
+                class="btn-rev-red flex flex-col items-center gap-1 py-2.5 sm:py-3 rounded-2xl">
                 <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
                 <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide">Faltante</span>
               </button>
               <button @click="revisionMarcarPendiente()"
-                class="btn-rev-amber flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl"
+                class="btn-rev-amber flex flex-col items-center gap-1 py-2.5 sm:py-3 rounded-2xl"
                 :class="revisionIsCurrentPending() ? 'btn-rev-amber--active' : ''">
                 <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -4137,7 +4135,7 @@
                   x-text="revisionIsCurrentPending() ? 'Quitar' : 'Pendiente'"></span>
               </button>
               <button @click="revisionAbrirAgregar()"
-                class="btn-rev-green flex flex-col items-center gap-1.5 py-3.5 sm:py-5 rounded-2xl">
+                class="btn-rev-green flex flex-col items-center gap-1 py-2.5 sm:py-3 rounded-2xl">
                 <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -5656,10 +5654,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.b9da3be6.js agrupa todos los módulos en 1 request.
+     bodega-bundle.5b950c17.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.b9da3be6.js"></script>
+<script src="/js/bodega-bundle.5b950c17.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

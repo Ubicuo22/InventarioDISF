@@ -1,4 +1,4 @@
-/* bodega-bundle.b9da3be6.js — 2026-07-15T00:38:45.767Z */
+/* bodega-bundle.5b950c17.js — 2026-07-15T14:59:01.187Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1273,6 +1273,8 @@ function reviewModule () {
     revisionPendingIds: [],             // ["seccion::id_producto", ...] — sigue en carrito pero flagueado
     revisionPendingNames: [],
     revisionGuardando: false,
+    // Keypad integrado — buffer de captura de peso (null = sin captura, muestra la cantidad del item)
+    revisionBuf: null,
     revisionGuardandoMensaje: '',       // mensaje de progreso visible al usuario
     revisionErrorGuardado: null,        // null | string — error del último intento de guardar
     revisionShowSidebar: false,         // collapsable en móvil
@@ -1325,6 +1327,70 @@ function reviewModule () {
     _removeOneName (arr, nombre) {
       const idx = arr.indexOf(nombre)
       if (idx >= 0) arr.splice(idx, 1)
+    },
+
+    // ── Keypad integrado de captura de peso ────────────────────
+    // Sin <input>: el teclado de iOS nunca se despliega. El primer dígito
+    // reemplaza la cantidad pedida; ✓/swipe aplica el buffer y avanza.
+
+    /** Color distintivo por unidad de medida (kg verde, caja morado, pz azul…) */
+    unidadColor (u) {
+      const m = {
+        kg: '#34d399', g: '#34d399',
+        l: '#2dd4bf', lt: '#2dd4bf', lts: '#2dd4bf', litro: '#2dd4bf', litros: '#2dd4bf',
+        caja: '#a78bfa', cajas: '#a78bfa',
+        pz: '#60a5fa', pza: '#60a5fa', pzas: '#60a5fa', pieza: '#60a5fa', piezas: '#60a5fa',
+        manojo: '#fbbf24', manojos: '#fbbf24',
+        bolsa: '#f472b6', bolsas: '#f472b6',
+        costal: '#fb923c', costales: '#fb923c',
+        arpilla: '#fb923c',
+      }
+      return m[String(u || '').toLowerCase().trim()] || '#94a3b8'
+    },
+
+    /** Valor que muestra el display: buffer en captura, o la cantidad del item */
+    revisionValorMostrado () {
+      const c = this.revisionCurrent()
+      if (!c) return ''
+      if (this.revisionBuf !== null) return this.revisionBuf === '' ? '0' : this.revisionBuf
+      return String(c.item.cantidad)
+    },
+
+    revisionDigito (d) {
+      if (this.revisionBuf === null) this.revisionBuf = ''   // primer dígito: reemplaza
+      if (d === '.') {
+        if (this.revisionBuf.includes('.')) return
+        this.revisionBuf = this.revisionBuf === '' ? '0.' : this.revisionBuf + '.'
+        return
+      }
+      if (this.revisionBuf.replace('.', '').length >= 6) return
+      this.revisionBuf += d
+    },
+
+    revisionBorrarDigito () {
+      if (this.revisionBuf === null || this.revisionBuf === '') {
+        this.revisionBuf = null
+        return
+      }
+      this.revisionBuf = this.revisionBuf.slice(0, -1)
+    },
+
+    /** Aplica el buffer del keypad a la cantidad del item actual (si es válido). */
+    revisionAplicarBuf () {
+      if (this.revisionBuf === null) return
+      const n = parseFloat(this.revisionBuf)
+      if (!isNaN(n) && n > 0) this.revisionActualizarCantidad(n)
+      this.revisionBuf = null
+    },
+
+    /** Delta entre lo mostrado y lo pedido originalmente (para el chip ±). */
+    revisionDelta () {
+      const c = this.revisionCurrent()
+      if (!c) return 0
+      const orig = parseFloat(this.revisionCantidadOriginal() ?? c.item.cantidad)
+      const val  = parseFloat(this.revisionValorMostrado()) || 0
+      if (isNaN(orig)) return 0
+      return Math.round((val - orig) * 100) / 100
     },
 
     /** Asigna un _revId estable y único a cada item del carrito al abrir revisión. */
@@ -1453,6 +1519,7 @@ function reviewModule () {
         this.revisionReviewedIds = []
         this.revisionMissingNames = []
       this.revisionMissingDetalle = []
+      this.revisionBuf = null
         this.revisionPendingIds = []
         this.revisionPendingNames = []
         this.revisionUndo = null
@@ -1500,6 +1567,7 @@ function reviewModule () {
       this.revisionReviewedIds = []
       this.revisionMissingNames = []
       this.revisionMissingDetalle = []
+      this.revisionBuf = null
       this.revisionPendingIds = []
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
@@ -1533,6 +1601,7 @@ function reviewModule () {
       const now = Date.now()
       if (now - this._revisionLastNext < 350) return
       this._revisionLastNext = now
+      this.revisionAplicarBuf()
       this.revisionMarcarRevisado()
       const total = this.revisionTotal()
       if (this.revisionCurrentIdx < total - 1) {
@@ -1541,6 +1610,7 @@ function reviewModule () {
     },
 
     revisionAnterior () {
+      this.revisionBuf = null   // navegar hacia atrás descarta la captura en curso
       if (this.revisionCurrentIdx > 0) {
         this.revisionCurrentIdx--
       }
@@ -1554,6 +1624,7 @@ function reviewModule () {
       this.revisionReviewedIds    = []
       this.revisionMissingNames   = []
       this.revisionMissingDetalle = []
+      this.revisionBuf = null
       this.revisionPendingIds     = []
       this.revisionPendingNames   = []
       this.revisionCurrentIdx     = 0
@@ -1577,6 +1648,7 @@ function reviewModule () {
     revisionSaltarA (idx) {
       const total = this.revisionTotal()
       if (idx >= 0 && idx < total) {
+        this.revisionBuf = null
         this.revisionCurrentIdx = idx
         this.revisionShowSidebar = false  // cierra sidebar en móvil tras seleccionar
       }
@@ -1600,6 +1672,7 @@ function reviewModule () {
     revisionMarcarFaltante () {
       const c = this.revisionCurrent()
       if (!c) return
+      this.revisionBuf = null   // faltante descarta la captura en curso
       const snapshot = JSON.parse(JSON.stringify(c.item))
       const section  = c.section
       const key      = this.revisionItemKey(c.item)
@@ -1675,6 +1748,7 @@ function reviewModule () {
     revisionMarcarPendiente () {
       const c = this.revisionCurrent()
       if (!c) return
+      this.revisionAplicarBuf()   // conservar el peso capturado antes de flaguear
       const key = this.revisionItemKey(c.item)
 
       if (this.revisionPendingIds.includes(key)) {
