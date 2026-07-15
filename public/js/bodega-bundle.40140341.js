@@ -1,4 +1,4 @@
-/* bodega-bundle.57d79802.js — 2026-07-15T00:01:29.931Z */
+/* bodega-bundle.40140341.js — 2026-07-15T00:17:05.666Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1123,20 +1123,16 @@ function ordersModule() {
 
       const sec = this.seccionActual || 'General'
       if (!this.ordenCarrito[sec]) this.ordenCarrito[sec] = []
-      const existing = this.ordenCarrito[sec].find(i => i.id_producto === prod.id_producto)
-      if (existing) {
-        existing.cantidad        += cantidad
-        existing.precio_unitario  = precio
-      } else {
-        this.ordenCarrito[sec].push({
-          id_producto:     prod.id_producto,
-          nombre_producto: prod.nombre_producto,
-          unidad:          prod.unidad_producto,
-          cantidad,
-          precio_unitario: precio,
-          seccion:         sec
-        })
-      }
+      // Siempre agrega un renglón nuevo — se permite el mismo producto varias
+      // veces en la misma sección (requerimiento de logística).
+      this.ordenCarrito[sec].push({
+        id_producto:     prod.id_producto,
+        nombre_producto: prod.nombre_producto,
+        unidad:          prod.unidad_producto,
+        cantidad,
+        precio_unitario: precio,
+        seccion:         sec
+      })
       this.agregarModal = { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true }
     },
 
@@ -1147,19 +1143,16 @@ function ordersModule() {
     agregarAlCarrito(producto) {
       const sec = this.seccionActual || 'General'
       if (!this.ordenCarrito[sec]) this.ordenCarrito[sec] = []
-      const existing = this.ordenCarrito[sec].find(i => i.id_producto === producto.id_producto)
-      if (existing) {
-        existing.cantidad += 1
-      } else {
-        this.ordenCarrito[sec].push({
-          id_producto:     producto.id_producto,
-          nombre_producto: producto.nombre_producto,
-          unidad:          producto.unidad_producto,
-          cantidad:        1,
-          precio_unitario: parseFloat(producto.precio_base) || 0,
-          seccion:         sec
-        })
-      }
+      // Siempre agrega un renglón nuevo — se permite el mismo producto varias
+      // veces en la misma sección (requerimiento de logística).
+      this.ordenCarrito[sec].push({
+        id_producto:     producto.id_producto,
+        nombre_producto: producto.nombre_producto,
+        unidad:          producto.unidad_producto,
+        cantidad:        1,
+        precio_unitario: parseFloat(producto.precio_base) || 0,
+        seccion:         sec
+      })
       this.ordenBusqueda   = ''
       this.ordenResultados = []
     },
@@ -1321,6 +1314,16 @@ function reviewModule () {
     // ── Helpers ────────────────────────────────────────────────
     _revisionFilteredKeys () {
       return Object.keys(this.revisionCart).filter(k => !k.startsWith('__'))
+    },
+
+    /**
+     * Quita UNA sola ocurrencia de un nombre en la lista (no todas).
+     * Necesario porque el mismo producto puede estar varias veces en la nota
+     * y cada renglón se maneja por separado.
+     */
+    _removeOneName (arr, nombre) {
+      const idx = arr.indexOf(nombre)
+      if (idx >= 0) arr.splice(idx, 1)
     },
 
     /** Asigna un _revId estable y único a cada item del carrito al abrir revisión. */
@@ -1606,8 +1609,8 @@ function reviewModule () {
 
       // Limpiar de pendientes por si estaba flagueado antes de marcarse faltante
       if (this.revisionPendingIds.includes(key)) {
-        this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== key)
-        this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== snapshot.nombre_producto)
+        this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
+        this._removeOneName(this.revisionPendingNames, snapshot.nombre_producto)
       }
       // Limpiar de revisados también
       this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
@@ -1638,7 +1641,7 @@ function reviewModule () {
       const arr = this.revisionCart[section]
       const insertAt = (originalIdx != null && originalIdx <= arr.length) ? originalIdx : arr.length
       arr.splice(insertAt, 0, item)
-      this.revisionMissingNames = this.revisionMissingNames.filter(n => n !== item.nombre_producto)
+      this._removeOneName(this.revisionMissingNames, item.nombre_producto)
       if (window.sounds) window.sounds.undo()
       this.revisionUndo = null
       if (this._revisionUndoTimer) {
@@ -1656,7 +1659,7 @@ function reviewModule () {
       if (this.revisionPendingIds.includes(key)) {
         // Toggle: si ya estaba pendiente, quitarlo sin avanzar
         this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
-        this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== c.item.nombre_producto)
+        this._removeOneName(this.revisionPendingNames, c.item.nombre_producto)
         return
       }
 
@@ -1684,8 +1687,8 @@ function reviewModule () {
       if (!c) return
       const key = this.revisionItemKey(c.item)
 
-      this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== key)
-      this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== c.item.nombre_producto)
+      this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
+      this._removeOneName(this.revisionPendingNames, c.item.nombre_producto)
 
       if (!this.revisionReviewedIds.includes(key)) {
         this.revisionReviewedIds.push(key)
@@ -1835,13 +1838,15 @@ function reviewModule () {
       this.revisionActualizarCantidad(nueva)
     },
 
-    // Indica si la cantidad del producto actual fue modificada respecto al original
+    // Indica si la cantidad del producto actual fue modificada respecto al original.
+    // Se compara por _revId (no id_producto) para distinguir renglones duplicados
+    // del mismo producto; el snapshot original se toma DESPUÉS de asignar _revIds.
     revisionCantidadModificada () {
       const c = this.revisionCurrent()
       if (!c || !this._revisionOriginalCart) return false
       const origSection = this._revisionOriginalCart[c.section]
       if (!origSection) return false
-      const origItem = origSection.find(i => i.id_producto === c.item.id_producto)
+      const origItem = origSection.find(i => i._revId === c.item._revId)
       if (!origItem) return false
       return parseFloat(origItem.cantidad) !== parseFloat(c.item.cantidad)
     },
@@ -1851,7 +1856,7 @@ function reviewModule () {
       if (!c || !this._revisionOriginalCart) return null
       const origSection = this._revisionOriginalCart[c.section]
       if (!origSection) return null
-      const origItem = origSection.find(i => i.id_producto === c.item.id_producto)
+      const origItem = origSection.find(i => i._revId === c.item._revId)
       return origItem ? origItem.cantidad : null
     },
 
@@ -1907,7 +1912,8 @@ function reviewModule () {
       if (!c || !prod) return
       const items = this.revisionCart[c.section]
       if (!items) return
-      const idx = items.findIndex(i => i.id_producto === c.item.id_producto)
+      // Por _revId: con duplicados, findIndex por id_producto cambiaría el primero
+      const idx = items.findIndex(i => i._revId === c.item._revId)
       if (idx < 0) return
 
       const oldNombre  = c.item.nombre_producto
@@ -1926,8 +1932,8 @@ function reviewModule () {
       // Limpiar estado anterior y marcar como revisado
       this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
       if (this.revisionPendingIds.includes(key)) {
-        this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== key)
-        this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== oldNombre)
+        this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
+        this._removeOneName(this.revisionPendingNames, oldNombre)
       }
 
       if (!this.revisionReviewedIds.includes(key)) {
@@ -1982,29 +1988,22 @@ function reviewModule () {
       const section = keys.includes('General') ? 'General' : (keys[0] || 'General')
       if (!this.revisionCart[section]) this.revisionCart[section] = []
 
-      // Evitar duplicados — si ya está en el carrito, solo actualizar cantidad
-      const existing = this.revisionCart[section].find(i => i.id_producto === prod.id_producto)
-      if (existing) {
-        existing.cantidad = cant
-        this.mostrarToast(`${prod.nombre_producto} actualizado`)
-      } else {
-        this.revisionCart[section].push({
-          id_producto:     prod.id_producto,
-          nombre_producto: prod.nombre_producto,
-          unidad:          prod.unidad_producto,
-          precio_unitario: parseFloat(prod.precio_base) || 0,
-          cantidad:        cant,
-          _revId:          ++this._revIdCounter
-        })
-        this.mostrarToast(`${prod.nombre_producto} agregado`)
+      // Siempre agrega un renglón nuevo — se permite el mismo producto varias
+      // veces en la misma sección (requerimiento de logística).
+      const nuevo = {
+        id_producto:     prod.id_producto,
+        nombre_producto: prod.nombre_producto,
+        unidad:          prod.unidad_producto,
+        precio_unitario: parseFloat(prod.precio_base) || 0,
+        cantidad:        cant,
+        _revId:          ++this._revIdCounter
       }
+      this.revisionCart[section].push(nuevo)
+      this.mostrarToast(`${prod.nombre_producto} agregado`)
 
-      // Marcar como revisado automáticamente
-      const target = this.revisionCart[section].find(i => i.id_producto === prod.id_producto)
-      if (target) {
-        const key = this.revisionItemKey(target)
-        if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
-      }
+      // Marcar como revisado automáticamente (esta instancia exacta)
+      const key = this.revisionItemKey(nuevo)
+      if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
 
       this.revisionCerrarAgregar()
     },

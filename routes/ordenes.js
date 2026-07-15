@@ -27,20 +27,23 @@ function computarDiffCarrito (viejo, nuevo) {
   const oldItems = new Map()
   const newItems = new Map()
 
-  for (const [sec, items] of Object.entries(viejo || {})) {
-    if (sec.startsWith('__')) continue
-    if (!Array.isArray(items)) continue
-    for (const item of items) {
-      oldItems.set(`${sec}::${item.id_producto}`, { ...item, seccion: sec })
+  // La llave incluye un índice de ocurrencia (sec::id::n) porque el mismo
+  // producto puede aparecer varias veces en la misma sección (logística);
+  // sin el índice, los renglones duplicados se colapsarían en el diff.
+  const llenar = (carrito, mapa) => {
+    for (const [sec, items] of Object.entries(carrito || {})) {
+      if (sec.startsWith('__')) continue
+      if (!Array.isArray(items)) continue
+      const vistos = {}
+      for (const item of items) {
+        const base = `${sec}::${item.id_producto}`
+        const n = vistos[base] = (vistos[base] || 0) + 1
+        mapa.set(`${base}::${n}`, { ...item, seccion: sec })
+      }
     }
   }
-  for (const [sec, items] of Object.entries(nuevo || {})) {
-    if (sec.startsWith('__')) continue
-    if (!Array.isArray(items)) continue
-    for (const item of items) {
-      newItems.set(`${sec}::${item.id_producto}`, { ...item, seccion: sec })
-    }
-  }
+  llenar(viejo, oldItems)
+  llenar(nuevo, newItems)
 
   for (const [key, oldItem] of oldItems) {
     const newItem = newItems.get(key)

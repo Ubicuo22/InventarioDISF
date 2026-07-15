@@ -227,20 +227,16 @@ function ordersModule() {
 
       const sec = this.seccionActual || 'General'
       if (!this.ordenCarrito[sec]) this.ordenCarrito[sec] = []
-      const existing = this.ordenCarrito[sec].find(i => i.id_producto === prod.id_producto)
-      if (existing) {
-        existing.cantidad        += cantidad
-        existing.precio_unitario  = precio
-      } else {
-        this.ordenCarrito[sec].push({
-          id_producto:     prod.id_producto,
-          nombre_producto: prod.nombre_producto,
-          unidad:          prod.unidad_producto,
-          cantidad,
-          precio_unitario: precio,
-          seccion:         sec
-        })
-      }
+      // Siempre agrega un renglón nuevo — se permite el mismo producto varias
+      // veces en la misma sección (requerimiento de logística).
+      this.ordenCarrito[sec].push({
+        id_producto:     prod.id_producto,
+        nombre_producto: prod.nombre_producto,
+        unidad:          prod.unidad_producto,
+        cantidad,
+        precio_unitario: precio,
+        seccion:         sec
+      })
       this.agregarModal = { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true }
     },
 
@@ -251,19 +247,16 @@ function ordersModule() {
     agregarAlCarrito(producto) {
       const sec = this.seccionActual || 'General'
       if (!this.ordenCarrito[sec]) this.ordenCarrito[sec] = []
-      const existing = this.ordenCarrito[sec].find(i => i.id_producto === producto.id_producto)
-      if (existing) {
-        existing.cantidad += 1
-      } else {
-        this.ordenCarrito[sec].push({
-          id_producto:     producto.id_producto,
-          nombre_producto: producto.nombre_producto,
-          unidad:          producto.unidad_producto,
-          cantidad:        1,
-          precio_unitario: parseFloat(producto.precio_base) || 0,
-          seccion:         sec
-        })
-      }
+      // Siempre agrega un renglón nuevo — se permite el mismo producto varias
+      // veces en la misma sección (requerimiento de logística).
+      this.ordenCarrito[sec].push({
+        id_producto:     producto.id_producto,
+        nombre_producto: producto.nombre_producto,
+        unidad:          producto.unidad_producto,
+        cantidad:        1,
+        precio_unitario: parseFloat(producto.precio_base) || 0,
+        seccion:         sec
+      })
       this.ordenBusqueda   = ''
       this.ordenResultados = []
     },

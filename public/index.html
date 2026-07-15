@@ -73,7 +73,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.57d79802.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.40140341.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -1465,7 +1465,7 @@
                     </div>
                     <!-- Items de la sección -->
                     <div class="ml-[26px]">
-                      <template x-for="item in grupo.items" :key="item.nombre + '-' + item.tipo">
+                      <template x-for="(item, _i) in grupo.items" :key="item.nombre + '-' + item.tipo + '-' + _i">
                         <div class="border-t border-slate-800/40 first:border-0">
                           <!-- Fila principal -->
                           <div class="flex items-center gap-2 px-4 py-2.5">
@@ -5643,10 +5643,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.57d79802.js agrupa todos los módulos en 1 request.
+     bodega-bundle.40140341.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.57d79802.js"></script>
+<script src="/js/bodega-bundle.40140341.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>
