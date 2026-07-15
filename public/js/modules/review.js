@@ -27,6 +27,7 @@ function reviewModule () {
     revisionCurrentIdx: 0,
     revisionReviewedIds: [],            // ["seccion::id_producto", ...]
     revisionMissingNames: [],
+    revisionMissingDetalle: [],         // [{nombre,id_producto,cantidad,unidad,precio_unitario,seccion}] para reintegrar si llega
     revisionPendingIds: [],             // ["seccion::id_producto", ...] — sigue en carrito pero flagueado
     revisionPendingNames: [],
     revisionGuardando: false,
@@ -209,6 +210,7 @@ function reviewModule () {
         this.revisionCurrentIdx = 0
         this.revisionReviewedIds = []
         this.revisionMissingNames = []
+      this.revisionMissingDetalle = []
         this.revisionPendingIds = []
         this.revisionPendingNames = []
         this.revisionUndo = null
@@ -255,6 +257,7 @@ function reviewModule () {
       this.revisionIdGrupo = null
       this.revisionReviewedIds = []
       this.revisionMissingNames = []
+      this.revisionMissingDetalle = []
       this.revisionPendingIds = []
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
@@ -308,6 +311,7 @@ function reviewModule () {
       }
       this.revisionReviewedIds    = []
       this.revisionMissingNames   = []
+      this.revisionMissingDetalle = []
       this.revisionPendingIds     = []
       this.revisionPendingNames   = []
       this.revisionCurrentIdx     = 0
@@ -374,6 +378,14 @@ function reviewModule () {
       this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
 
       this.revisionMissingNames.push(snapshot.nombre_producto)
+      this.revisionMissingDetalle.push({
+        nombre:          snapshot.nombre_producto,
+        id_producto:     snapshot.id_producto ?? null,
+        cantidad:        parseFloat(snapshot.cantidad) || 0,
+        unidad:          snapshot.unidad || '',
+        precio_unitario: parseFloat(snapshot.precio_unitario) || 0,
+        seccion:         section
+      })
       if (window.sounds) window.sounds.missing()
 
       // Toast undo — guarda posición original para restaurar en su lugar
@@ -400,6 +412,15 @@ function reviewModule () {
       const insertAt = (originalIdx != null && originalIdx <= arr.length) ? originalIdx : arr.length
       arr.splice(insertAt, 0, item)
       this._removeOneName(this.revisionMissingNames, item.nombre_producto)
+      // Quitar el detalle de ESTA instancia (con duplicados, matchear también
+      // cantidad y sección; si no, la primera ocurrencia del nombre)
+      let dIdx = this.revisionMissingDetalle.findIndex(d =>
+        d.nombre === item.nombre_producto &&
+        d.cantidad === (parseFloat(item.cantidad) || 0) &&
+        d.seccion === section
+      )
+      if (dIdx < 0) dIdx = this.revisionMissingDetalle.findIndex(d => d.nombre === item.nombre_producto)
+      if (dIdx >= 0) this.revisionMissingDetalle.splice(dIdx, 1)
       if (window.sounds) window.sounds.undo()
       this.revisionUndo = null
       if (this._revisionUndoTimer) {
@@ -557,9 +578,10 @@ function reviewModule () {
         // Paso 2 — registrar revisión en historial
         this.revisionGuardandoMensaje = 'Registrando revisión…'
         const rev = await tryFetch(() => API.post(`/api/ordenes/${this.revisionFolio}/revision`, {
-          totalProductos: this.revisionTotal() + this.revisionMissingNames.length,
-          faltantes:      this.revisionMissingNames,
-          pendientes:     this.revisionPendingNames
+          totalProductos:   this.revisionTotal() + this.revisionMissingNames.length,
+          faltantes:        this.revisionMissingNames,
+          pendientes:       this.revisionPendingNames,
+          faltantesDetalle: this.revisionMissingDetalle
         }))
         if (!rev.ok) throw new Error(rev.error || 'Error al registrar la revisión')
 

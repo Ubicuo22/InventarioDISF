@@ -1,4 +1,4 @@
-/* bodega-bundle.40140341.js — 2026-07-15T00:17:05.666Z */
+/* bodega-bundle.b9da3be6.js — 2026-07-15T00:38:45.767Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1269,6 +1269,7 @@ function reviewModule () {
     revisionCurrentIdx: 0,
     revisionReviewedIds: [],            // ["seccion::id_producto", ...]
     revisionMissingNames: [],
+    revisionMissingDetalle: [],         // [{nombre,id_producto,cantidad,unidad,precio_unitario,seccion}] para reintegrar si llega
     revisionPendingIds: [],             // ["seccion::id_producto", ...] — sigue en carrito pero flagueado
     revisionPendingNames: [],
     revisionGuardando: false,
@@ -1451,6 +1452,7 @@ function reviewModule () {
         this.revisionCurrentIdx = 0
         this.revisionReviewedIds = []
         this.revisionMissingNames = []
+      this.revisionMissingDetalle = []
         this.revisionPendingIds = []
         this.revisionPendingNames = []
         this.revisionUndo = null
@@ -1497,6 +1499,7 @@ function reviewModule () {
       this.revisionIdGrupo = null
       this.revisionReviewedIds = []
       this.revisionMissingNames = []
+      this.revisionMissingDetalle = []
       this.revisionPendingIds = []
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
@@ -1550,6 +1553,7 @@ function reviewModule () {
       }
       this.revisionReviewedIds    = []
       this.revisionMissingNames   = []
+      this.revisionMissingDetalle = []
       this.revisionPendingIds     = []
       this.revisionPendingNames   = []
       this.revisionCurrentIdx     = 0
@@ -1616,6 +1620,14 @@ function reviewModule () {
       this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
 
       this.revisionMissingNames.push(snapshot.nombre_producto)
+      this.revisionMissingDetalle.push({
+        nombre:          snapshot.nombre_producto,
+        id_producto:     snapshot.id_producto ?? null,
+        cantidad:        parseFloat(snapshot.cantidad) || 0,
+        unidad:          snapshot.unidad || '',
+        precio_unitario: parseFloat(snapshot.precio_unitario) || 0,
+        seccion:         section
+      })
       if (window.sounds) window.sounds.missing()
 
       // Toast undo — guarda posición original para restaurar en su lugar
@@ -1642,6 +1654,15 @@ function reviewModule () {
       const insertAt = (originalIdx != null && originalIdx <= arr.length) ? originalIdx : arr.length
       arr.splice(insertAt, 0, item)
       this._removeOneName(this.revisionMissingNames, item.nombre_producto)
+      // Quitar el detalle de ESTA instancia (con duplicados, matchear también
+      // cantidad y sección; si no, la primera ocurrencia del nombre)
+      let dIdx = this.revisionMissingDetalle.findIndex(d =>
+        d.nombre === item.nombre_producto &&
+        d.cantidad === (parseFloat(item.cantidad) || 0) &&
+        d.seccion === section
+      )
+      if (dIdx < 0) dIdx = this.revisionMissingDetalle.findIndex(d => d.nombre === item.nombre_producto)
+      if (dIdx >= 0) this.revisionMissingDetalle.splice(dIdx, 1)
       if (window.sounds) window.sounds.undo()
       this.revisionUndo = null
       if (this._revisionUndoTimer) {
@@ -1799,9 +1820,10 @@ function reviewModule () {
         // Paso 2 — registrar revisión en historial
         this.revisionGuardandoMensaje = 'Registrando revisión…'
         const rev = await tryFetch(() => API.post(`/api/ordenes/${this.revisionFolio}/revision`, {
-          totalProductos: this.revisionTotal() + this.revisionMissingNames.length,
-          faltantes:      this.revisionMissingNames,
-          pendientes:     this.revisionPendingNames
+          totalProductos:   this.revisionTotal() + this.revisionMissingNames.length,
+          faltantes:        this.revisionMissingNames,
+          pendientes:       this.revisionPendingNames,
+          faltantesDetalle: this.revisionMissingDetalle
         }))
         if (!rev.ok) throw new Error(rev.error || 'Error al registrar la revisión')
 
@@ -3542,6 +3564,9 @@ function pendientesModule() {
     cambioResultados:   [],
     cambioBuscando:     false,
 
+    // Resolución de faltante — pregunta llegó/no llegó
+    pendienteResolviendo: null,   // { folio, nombre } | null
+
     async cargarPendientesHoy() {
       this.cargandoPendientes = true
       this.pendienteEditando  = null
@@ -3709,22 +3734,58 @@ function pendientesModule() {
     },
 
     // ── Resolver / resolver todos ────────────────────────────
+    // Para pendientes resuelve directo. Para faltantes abre la pregunta
+    // llegó / no llegó (resolverFaltanteCon).
     async resolverPendiente(folio, tipo, nombre_producto) {
+      if (tipo === 'faltante') {
+        // Toggle de la pregunta llegó/no llegó
+        if (this.pendienteResolviendo?.folio === folio && this.pendienteResolviendo?.nombre === nombre_producto) {
+          this.pendienteResolviendo = null
+        } else {
+          this.pendienteResolviendo = { folio, nombre: nombre_producto }
+          this.pendienteEditando = null
+          this.pendienteCambiando = null
+        }
+        return
+      }
+      await this._resolverItem(folio, tipo, nombre_producto, undefined)
+    },
+
+    /** Resuelve un faltante indicando si llegó (true → se reintegra a la nota). */
+    async resolverFaltanteCon(llego) {
+      if (!this.pendienteResolviendo) return
+      const { folio, nombre } = this.pendienteResolviendo
+      this.pendienteResolviendo = null
+      await this._resolverItem(folio, 'faltante', nombre, llego)
+    },
+
+    async _resolverItem(folio, tipo, nombre_producto, llego) {
       const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
       if (!orden) return
       if (this.pendienteEditando?.nombre === nombre_producto) this.pendienteEditando = null
       if (this.pendienteCambiando?.nombre === nombre_producto) this.pendienteCambiando = null
 
       const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
-      orden[campo] = orden[campo].filter(i => i.nombre !== nombre_producto)
+      // Quitar UNA ocurrencia (puede haber duplicados del mismo nombre)
+      const rIdx = orden[campo].findIndex(i => i.nombre === nombre_producto)
+      if (rIdx >= 0) orden[campo].splice(rIdx, 1)
       if (orden.pendientes.length === 0 && orden.faltantes.length === 0) {
         this.pendientesHoy     = this.pendientesHoy.filter(o => o.folio_numero !== folio)
         this.pendientesAbiertos = this.pendientesAbiertos.filter(f => f !== folio)
       }
 
       try {
-        const r = await API.patch(`/api/ordenes/${folio}/pendiente`, { tipo, nombre_producto })
+        const body = { tipo, nombre_producto }
+        if (llego !== undefined) body.llego = llego
+        const r = await API.patch(`/api/ordenes/${folio}/pendiente`, body)
         if (!r.ok) throw new Error(r.error || 'Error')
+        if (llego === true) {
+          this.mostrarToast(r.reintegrado
+            ? `${nombre_producto} reintegrado a la nota`
+            : `${nombre_producto} resuelto — agrégalo a la nota a mano (faltante sin datos de cantidad)`, !r.reintegrado)
+        } else if (llego === false) {
+          this.mostrarToast(`${nombre_producto} marcado como no llegó`)
+        }
       } catch (e) {
         await this.cargarPendientesHoy()
         this.mostrarToast(e.message || 'Error al resolver', true)

@@ -73,7 +73,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.40140341.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.b9da3be6.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -1512,6 +1512,19 @@
                                 </svg>
                               </button>
                             </div>
+                          </div>
+                          <!-- Pregunta llegó / no llegó (solo faltantes) -->
+                          <div x-show="item.tipo === 'faltante' && pendienteResolviendo?.folio === orden.folio_numero && pendienteResolviendo?.nombre === item.nombre"
+                            class="flex items-center gap-2 px-4 pb-3 ml-[26px]">
+                            <span class="text-[11px] text-slate-400">¿Llegó el producto?</span>
+                            <button @click="resolverFaltanteCon(true)"
+                              class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-all active:scale-95">
+                              Sí, llegó — reintegrar
+                            </button>
+                            <button @click="resolverFaltanteCon(false)"
+                              class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-all active:scale-95">
+                              No llegó
+                            </button>
                           </div>
                           <!-- Editor de cantidad -->
                           <div x-show="pendienteEditando?.folio === orden.folio_numero && pendienteEditando?.nombre === item.nombre"
@@ -5643,10 +5656,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.40140341.js agrupa todos los módulos en 1 request.
+     bodega-bundle.b9da3be6.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.40140341.js"></script>
+<script src="/js/bodega-bundle.b9da3be6.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

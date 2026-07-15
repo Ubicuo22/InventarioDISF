@@ -14,6 +14,9 @@ function pendientesModule() {
     cambioResultados:   [],
     cambioBuscando:     false,
 
+    // Resolución de faltante — pregunta llegó/no llegó
+    pendienteResolviendo: null,   // { folio, nombre } | null
+
     async cargarPendientesHoy() {
       this.cargandoPendientes = true
       this.pendienteEditando  = null
@@ -181,22 +184,58 @@ function pendientesModule() {
     },
 
     // ── Resolver / resolver todos ────────────────────────────
+    // Para pendientes resuelve directo. Para faltantes abre la pregunta
+    // llegó / no llegó (resolverFaltanteCon).
     async resolverPendiente(folio, tipo, nombre_producto) {
+      if (tipo === 'faltante') {
+        // Toggle de la pregunta llegó/no llegó
+        if (this.pendienteResolviendo?.folio === folio && this.pendienteResolviendo?.nombre === nombre_producto) {
+          this.pendienteResolviendo = null
+        } else {
+          this.pendienteResolviendo = { folio, nombre: nombre_producto }
+          this.pendienteEditando = null
+          this.pendienteCambiando = null
+        }
+        return
+      }
+      await this._resolverItem(folio, tipo, nombre_producto, undefined)
+    },
+
+    /** Resuelve un faltante indicando si llegó (true → se reintegra a la nota). */
+    async resolverFaltanteCon(llego) {
+      if (!this.pendienteResolviendo) return
+      const { folio, nombre } = this.pendienteResolviendo
+      this.pendienteResolviendo = null
+      await this._resolverItem(folio, 'faltante', nombre, llego)
+    },
+
+    async _resolverItem(folio, tipo, nombre_producto, llego) {
       const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
       if (!orden) return
       if (this.pendienteEditando?.nombre === nombre_producto) this.pendienteEditando = null
       if (this.pendienteCambiando?.nombre === nombre_producto) this.pendienteCambiando = null
 
       const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
-      orden[campo] = orden[campo].filter(i => i.nombre !== nombre_producto)
+      // Quitar UNA ocurrencia (puede haber duplicados del mismo nombre)
+      const rIdx = orden[campo].findIndex(i => i.nombre === nombre_producto)
+      if (rIdx >= 0) orden[campo].splice(rIdx, 1)
       if (orden.pendientes.length === 0 && orden.faltantes.length === 0) {
         this.pendientesHoy     = this.pendientesHoy.filter(o => o.folio_numero !== folio)
         this.pendientesAbiertos = this.pendientesAbiertos.filter(f => f !== folio)
       }
 
       try {
-        const r = await API.patch(`/api/ordenes/${folio}/pendiente`, { tipo, nombre_producto })
+        const body = { tipo, nombre_producto }
+        if (llego !== undefined) body.llego = llego
+        const r = await API.patch(`/api/ordenes/${folio}/pendiente`, body)
         if (!r.ok) throw new Error(r.error || 'Error')
+        if (llego === true) {
+          this.mostrarToast(r.reintegrado
+            ? `${nombre_producto} reintegrado a la nota`
+            : `${nombre_producto} resuelto — agrégalo a la nota a mano (faltante sin datos de cantidad)`, !r.reintegrado)
+        } else if (llego === false) {
+          this.mostrarToast(`${nombre_producto} marcado como no llegó`)
+        }
       } catch (e) {
         await this.cargarPendientesHoy()
         this.mostrarToast(e.message || 'Error al resolver', true)

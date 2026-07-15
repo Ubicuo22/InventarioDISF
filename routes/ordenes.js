@@ -141,7 +141,7 @@ router.get('/pendientes-hoy', async (req, res) => {
         for (const item of items) {
           prodMap[item.nombre_producto] = {
             cantidad: parseFloat(item.cantidad) || 0,
-            unidad:   item.unidad_producto || '',
+            unidad:   item.unidad || item.unidad_producto || '',
             seccion:  sec
           }
         }
@@ -154,13 +154,26 @@ router.get('/pendientes-hoy', async (req, res) => {
         seccion:  prodMap[nombre]?.seccion  ?? ''
       })
 
+      // Los faltantes ya no están en el carrito — su cantidad/sección sale del
+      // detalle guardado al marcarlos (faltantesDetalle). Consume ocurrencias
+      // en orden por si hay nombres duplicados.
+      const detalles = Array.isArray(lastRevision.faltantesDetalle) ? [...lastRevision.faltantesDetalle] : []
+      const enriquecerFaltante = (nombre) => {
+        const dIdx = detalles.findIndex(d => d.nombre === nombre)
+        if (dIdx >= 0) {
+          const [d] = detalles.splice(dIdx, 1)
+          return { nombre, cantidad: d.cantidad, unidad: d.unidad, seccion: d.seccion || '' }
+        }
+        return enriquecer(nombre)  // faltantes viejos sin detalle
+      }
+
       result.push({
         folio_numero:     row.folio_numero,
         nombre_cliente:   row.nombre_cliente,
         nombre_grupo:     row.nombre_grupo,
         observacion,
         pendientes:       pendientes.map(enriquecer),
-        faltantes:        faltantes.map(enriquecer),
+        faltantes:        faltantes.map(enriquecerFaltante),
         fecha_revision:   lastRevision.fecha,
         usuario_revision: lastRevision.usuario
       })
@@ -198,16 +211,47 @@ router.patch('/:folio/pendiente', requireModulo('pedidos'), async (req, res) => 
     }
     if (lastRevIdx === -1) return res.status(400).json({ ok: false, error: 'No hay revisión registrada' })
 
+    const rev   = historial[lastRevIdx]
     const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
-    const arr   = Array.isArray(historial[lastRevIdx][campo]) ? historial[lastRevIdx][campo] : []
-    historial[lastRevIdx][campo] = arr.filter(n => n !== nombre_producto)
+    const arr   = Array.isArray(rev[campo]) ? rev[campo] : []
+    // Quitar UNA ocurrencia (puede haber duplicados del mismo nombre)
+    const nIdx = arr.indexOf(nombre_producto)
+    if (nIdx >= 0) arr.splice(nIdx, 1)
+    rev[campo] = arr
+
+    // Faltante resuelto con "llegó" → reintegrar el renglón a la nota usando
+    // el detalle guardado al marcarlo (cantidad/sección/precio originales).
+    let reintegrado = false
+    if (tipo === 'faltante') {
+      const detalles = Array.isArray(rev.faltantesDetalle) ? rev.faltantesDetalle : []
+      const dIdx = detalles.findIndex(d => d.nombre === nombre_producto)
+      const llego = req.body.llego === true
+      if (dIdx >= 0) {
+        const [d] = detalles.splice(dIdx, 1)
+        if (llego) {
+          const sec = d.seccion || 'General'
+          if (!Array.isArray(carrito[sec])) carrito[sec] = []
+          carrito[sec].push({
+            id_producto:     d.id_producto,
+            nombre_producto: d.nombre,
+            unidad:          d.unidad,
+            cantidad:        d.cantidad,
+            precio_unitario: d.precio_unitario,
+            seccion:         sec
+          })
+          reintegrado = true
+        }
+      }
+      // Sin detalle (faltantes viejos, previos a este cambio): si llegó, no hay
+      // datos para reintegrar — el frontend avisa que se agregue a mano.
+    }
     carrito.__historial__ = historial
 
-    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
-      [JSON.stringify(carrito), folio])
+    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, total_estimado = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), calcTotal(carrito), folio])
 
-    registrar(req, 'pedidos', 'pendiente_resuelto', { folio, tipo, producto: nombre_producto })
-    res.json({ ok: true })
+    registrar(req, 'pedidos', 'pendiente_resuelto', { folio, tipo, producto: nombre_producto, llego: req.body.llego === true, reintegrado })
+    res.json({ ok: true, reintegrado })
   } catch (e) {
     console.error('[ordenes] PATCH /:folio/pendiente', e.message)
     res.status(500).json({ ok: false, error: 'Error al resolver pendiente' })
@@ -241,6 +285,19 @@ router.patch('/:folio/item-cantidad', requireModulo('pedidos'), async (req, res)
           item.cantidad = cant
           actualizado = true
         }
+      }
+    }
+
+    // Los faltantes ya no viven en el carrito — su cantidad se edita en el
+    // detalle guardado en la última revisión (se usa al reintegrar si llega).
+    if (!actualizado) {
+      const historial = carrito.__historial__ || []
+      for (let i = historial.length - 1; i >= 0; i--) {
+        if (historial[i].tipoEvento !== 'revision') continue
+        const detalles = Array.isArray(historial[i].faltantesDetalle) ? historial[i].faltantesDetalle : []
+        const d = detalles.find(x => x.nombre === nombre_producto)
+        if (d) { d.cantidad = cant; actualizado = true; carrito.__historial__ = historial }
+        break
       }
     }
     if (!actualizado) return res.status(404).json({ ok: false, error: 'Producto no encontrado en el carrito' })
@@ -279,13 +336,43 @@ router.patch('/:folio/mover-a-faltante', requireModulo('pedidos'), async (req, r
     if (lastRevIdx === -1) return res.status(400).json({ ok: false, error: 'No hay revisión registrada' })
 
     const rev = historial[lastRevIdx]
-    rev.pendientes = (rev.pendientes || []).filter(n => n !== nombre_producto)
+    // Quitar UNA ocurrencia de pendientes (puede haber duplicados del mismo nombre)
+    const pendArr = rev.pendientes || []
+    const pIdx = pendArr.indexOf(nombre_producto)
+    if (pIdx >= 0) pendArr.splice(pIdx, 1)
+    rev.pendientes = pendArr
+
     if (!rev.faltantes) rev.faltantes = []
-    if (!rev.faltantes.includes(nombre_producto)) rev.faltantes.push(nombre_producto)
+    rev.faltantes.push(nombre_producto)
+
+    // Quitar el renglón de la nota (una ocurrencia) — un faltante no debe seguir
+    // sumando al total. Se guarda su detalle para poder reintegrarlo si llega.
+    let detalle = null
+    for (const [sec, items] of Object.entries(carrito)) {
+      if (sec.startsWith('__') || !Array.isArray(items)) continue
+      const iIdx = items.findIndex(i => i.nombre_producto === nombre_producto)
+      if (iIdx >= 0) {
+        const it = items[iIdx]
+        detalle = {
+          nombre:          it.nombre_producto,
+          id_producto:     it.id_producto ?? null,
+          cantidad:        parseFloat(it.cantidad) || 0,
+          unidad:          it.unidad || it.unidad_producto || '',
+          precio_unitario: parseFloat(it.precio_unitario) || 0,
+          seccion:         sec
+        }
+        items.splice(iIdx, 1)
+        break
+      }
+    }
+    if (detalle) {
+      if (!Array.isArray(rev.faltantesDetalle)) rev.faltantesDetalle = []
+      rev.faltantesDetalle.push(detalle)
+    }
     carrito.__historial__ = historial
 
-    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
-      [JSON.stringify(carrito), folio])
+    await q('UPDATE ordenes_guardadas SET datos_carrito = ?, total_estimado = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), calcTotal(carrito), folio])
 
     registrar(req, 'pedidos', 'item_movido_a_faltante', { folio, producto: nombre_producto })
     res.json({ ok: true })
@@ -322,9 +409,9 @@ router.patch('/:folio/cambiar-item', requireModulo('pedidos'), async (req, res) 
         }
       }
     }
-    if (!reemplazado) return res.status(404).json({ ok: false, error: 'Producto no encontrado en el carrito' })
-
-    // Actualizar nombre en pendientes/faltantes del último historial de revisión
+    // Actualizar nombre en pendientes/faltantes del último historial de revisión.
+    // Un faltante puede NO estar en el carrito (se quita al marcarse) — en ese
+    // caso el cambio aplica solo en el historial y su detalle.
     const historial = carrito.__historial__ || []
     let lastRevIdx = -1
     for (let i = historial.length - 1; i >= 0; i--) {
@@ -333,10 +420,22 @@ router.patch('/:folio/cambiar-item', requireModulo('pedidos'), async (req, res) 
     if (lastRevIdx !== -1) {
       const rev = historial[lastRevIdx]
       const sustituir = (arr) => Array.isArray(arr) ? arr.map(n => n === nombre_viejo ? nombre_nuevo : n) : arr
+      const enFaltantes = Array.isArray(rev.faltantes) && rev.faltantes.includes(nombre_viejo)
       rev.pendientes = sustituir(rev.pendientes)
       rev.faltantes  = sustituir(rev.faltantes)
+      if (Array.isArray(rev.faltantesDetalle)) {
+        for (const d of rev.faltantesDetalle) {
+          if (d.nombre === nombre_viejo) {
+            d.nombre      = nombre_nuevo
+            d.id_producto = id_nuevo
+            if (unidad_nueva) d.unidad = unidad_nueva
+          }
+        }
+      }
+      if (enFaltantes) reemplazado = true
       carrito.__historial__ = historial
     }
+    if (!reemplazado) return res.status(404).json({ ok: false, error: 'Producto no encontrado en el carrito' })
 
     const total = calcTotal(carrito)
     await q('UPDATE ordenes_guardadas SET datos_carrito = ?, total_estimado = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
@@ -374,6 +473,7 @@ router.patch('/:folio/resolver-todos', requireModulo('pedidos'), async (req, res
 
     historial[lastRevIdx].pendientes = []
     historial[lastRevIdx].faltantes  = []
+    historial[lastRevIdx].faltantesDetalle = []  // resolver todos = "no llegaron"; no se reintegra nada
     carrito.__historial__ = historial
 
     await q('UPDATE ordenes_guardadas SET datos_carrito = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
@@ -479,7 +579,7 @@ router.post('/:folio/revision', requireModulo('pedidos'), async (req, res) => {
     if (!folio || isNaN(folio)) {
       return res.status(400).json({ ok: false, error: 'folio inválido' })
     }
-    const { totalProductos, faltantes, pendientes } = req.body || {}
+    const { totalProductos, faltantes, pendientes, faltantesDetalle } = req.body || {}
     const usuario = req.user.username
 
     const [row] = await q(
@@ -503,7 +603,20 @@ router.post('/:folio/revision', requireModulo('pedidos'), async (req, res) => {
       tipoEvento: 'revision',
       totalProductos: parseInt(totalProductos, 10) || 0,
       faltantes: Array.isArray(faltantes) ? faltantes : [],
-      pendientes: pendientesArr
+      pendientes: pendientesArr,
+      // Detalle de cada faltante (cantidad/unidad/sección/precio) para poder
+      // reintegrarlo a la nota si después sí llega. Electron ignora esta clave;
+      // `faltantes` sigue siendo el array de nombres de siempre.
+      faltantesDetalle: Array.isArray(faltantesDetalle)
+        ? faltantesDetalle.map(d => ({
+            nombre:          String(d.nombre || ''),
+            id_producto:     d.id_producto ?? null,
+            cantidad:        parseFloat(d.cantidad) || 0,
+            unidad:          String(d.unidad || ''),
+            precio_unitario: parseFloat(d.precio_unitario) || 0,
+            seccion:         String(d.seccion || 'General')
+          }))
+        : []
     }
     carrito.__historial__ = [...historialPrevio, nuevaEntrada]
 
