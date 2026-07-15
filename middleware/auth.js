@@ -49,7 +49,11 @@ async function isSessionActive(jti) {
     }
     return activo
   } catch {
-    return true // fail open — si la BD no está disponible, no bloqueamos
+    // Si la BD no responde cachear como activo por 30s (mismo tiempo que jti sin fila)
+    // para absorber cold-starts de TiDB sin bloquear al usuario, pero sin ignorar
+    // indefinidamente una posible revocación.
+    sessionCache.set(jti, { activo: true, expiresAt: Date.now() + 30_000 })
+    return true
   }
 }
 

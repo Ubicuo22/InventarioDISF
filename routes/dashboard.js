@@ -11,6 +11,7 @@
  *   - Mermas del día (count, monto)
  */
 
+const crypto = require('crypto')
 const router = require('express').Router()
 const { q }  = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
@@ -18,7 +19,14 @@ const { fechaMexico } = require('../utils/fecha')
 
 function requireDashboardToken(req, res, next) {
   const token = req.query.token
-  if (!token || token !== process.env.DASHBOARD_TOKEN) {
+  const expected = process.env.DASHBOARD_TOKEN
+  if (!token || !expected) {
+    return res.status(401).json({ ok: false, error: 'Token inválido' })
+  }
+  // timingSafeEqual evita ataques de timing — ambos buffers deben tener el mismo largo
+  const a = Buffer.from(token)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return res.status(401).json({ ok: false, error: 'Token inválido' })
   }
   next()
@@ -80,12 +88,24 @@ router.get('/data', requireDashboardToken, async (req, res) => {
 
       // ── Stock crítico (≤ 5 unidades) ────────────────────
       q(`
-        SELECT
-          nombre_producto,
-          stock,
-          unidad_producto
-        FROM producto
-        WHERE activo = 1 AND stock <= 5
+        SELECT p.nombre_producto, CASE
+            WHEN cp2.id_conversion IS NOT NULL AND pb2.stock IS NOT NULL AND pb2.id_producto != p.id_producto
+            THEN ROUND(pb2.stock / (cp.factor * cp2.factor) + pb.stock / cp.factor + p.stock, 4)
+            WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+            THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+            ELSE p.stock
+          END AS stock, p.unidad_producto
+        FROM producto p
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp_min
+          ON p.id_producto = cp_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
+        LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp2_min
+          ON pb.id_producto = cp2_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp2 ON cp2.id_conversion = cp2_min.min_id
+        LEFT JOIN producto pb2 ON cp2.id_producto_base = pb2.id_producto
+        WHERE p.activo = 1
+        HAVING stock <= 5
         ORDER BY stock ASC
         LIMIT 10
       `),
@@ -172,29 +192,79 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
              AND NOT (notas LIKE 'BOOTSTRAP:%' AND precio_unitario_compra <= 0.01)
            ))`, [ayer]),
 
-      // Stock crítico (≤ 5 unidades)
+      // Stock crítico (≤ 5 unidades) — con equivalencias
       q(`SELECT
-           COUNT(*)                                          AS criticos,
-           SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END)       AS sin_stock,
-           SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS bajo_stock
-         FROM producto
-         WHERE activo = 1 AND stock <= 5`),
+           COUNT(*) AS criticos,
+           SUM(CASE WHEN sv.stock_v = 0 THEN 1 ELSE 0 END) AS sin_stock,
+           SUM(CASE WHEN sv.stock_v > 0 AND sv.stock_v <= 5 THEN 1 ELSE 0 END) AS bajo_stock
+         FROM (
+           SELECT CASE
+            WHEN cp2.id_conversion IS NOT NULL AND pb2.stock IS NOT NULL AND pb2.id_producto != p.id_producto
+            THEN ROUND(pb2.stock / (cp.factor * cp2.factor) + pb.stock / cp.factor + p.stock, 4)
+            WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+            THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+            ELSE p.stock
+          END AS stock_v
+           FROM producto p
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp_min
+          ON p.id_producto = cp_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
+        LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp2_min
+          ON pb.id_producto = cp2_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp2 ON cp2.id_conversion = cp2_min.min_id
+        LEFT JOIN producto pb2 ON cp2.id_producto_base = pb2.id_producto
+           WHERE p.activo = 1
+           HAVING stock_v <= 5
+         ) sv`),
 
-      // Top 5 productos con menos stock
-      q(`SELECT nombre_producto, stock, unidad_producto
-         FROM producto
-         WHERE activo = 1 AND stock <= 5
+      // Top 5 productos con menos stock — con equivalencias
+      q(`SELECT p.nombre_producto, CASE
+            WHEN cp2.id_conversion IS NOT NULL AND pb2.stock IS NOT NULL AND pb2.id_producto != p.id_producto
+            THEN ROUND(pb2.stock / (cp.factor * cp2.factor) + pb.stock / cp.factor + p.stock, 4)
+            WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+            THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+            ELSE p.stock
+          END AS stock, p.unidad_producto
+         FROM producto p
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp_min
+          ON p.id_producto = cp_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
+        LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp2_min
+          ON pb.id_producto = cp2_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp2 ON cp2.id_conversion = cp2_min.min_id
+        LEFT JOIN producto pb2 ON cp2.id_producto_base = pb2.id_producto
+         WHERE p.activo = 1
+         HAVING stock <= 5
          ORDER BY stock ASC
          LIMIT 5`),
 
-      // Totales de inventario para el tile del dashboard
+      // Totales de inventario para el tile del dashboard — con equivalencias
       q(`SELECT
-           COUNT(*)                                             AS total_productos,
-           SUM(CASE WHEN stock > 0 THEN 1 ELSE 0 END)         AS con_stock,
-           SUM(CASE WHEN stock = 0 THEN 1 ELSE 0 END)         AS sin_stock,
-           SUM(CASE WHEN stock > 0 AND stock <= 5 THEN 1 ELSE 0 END) AS stock_bajo
-         FROM producto
-         WHERE activo = 1`),
+           COUNT(*) AS total_productos,
+           SUM(CASE WHEN sv.stock_v > 0 THEN 1 ELSE 0 END) AS con_stock,
+           SUM(CASE WHEN sv.stock_v = 0 THEN 1 ELSE 0 END) AS sin_stock,
+           SUM(CASE WHEN sv.stock_v > 0 AND sv.stock_v <= 5 THEN 1 ELSE 0 END) AS stock_bajo
+         FROM (
+           SELECT CASE
+            WHEN cp2.id_conversion IS NOT NULL AND pb2.stock IS NOT NULL AND pb2.id_producto != p.id_producto
+            THEN ROUND(pb2.stock / (cp.factor * cp2.factor) + pb.stock / cp.factor + p.stock, 4)
+            WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
+            THEN ROUND(pb.stock / cp.factor + p.stock, 4)
+            ELSE p.stock
+          END AS stock_v
+           FROM producto p
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp_min
+          ON p.id_producto = cp_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
+        LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
+        LEFT JOIN (SELECT id_producto_derivado, MIN(id_conversion) AS min_id FROM producto_conversion_peps WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base GROUP BY id_producto_derivado) cp2_min
+          ON pb.id_producto = cp2_min.id_producto_derivado
+        LEFT JOIN producto_conversion_peps cp2 ON cp2.id_conversion = cp2_min.min_id
+        LEFT JOIN producto pb2 ON cp2.id_producto_base = pb2.id_producto
+           WHERE p.activo = 1
+         ) sv`),
 
       // Pedidos atrasados (activos creados hace >24h)
       q(`SELECT COUNT(*) AS total

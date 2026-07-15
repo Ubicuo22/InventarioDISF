@@ -1,6 +1,6 @@
 const router = require('express').Router()
 const { q }   = require('../db/pool')
-const { requireAuth } = require('../middleware/auth')
+const { requireAuth, requireModulo } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
 const { fechaMexico } = require('../utils/fecha')
 
@@ -132,7 +132,7 @@ router.post('/', async (req, res) => {
 })
 
 /* ─── GET /api/mermas/recientes — últimas 30 ─── */
-router.get('/recientes', async (req, res) => {
+router.get('/recientes', requireModulo('mermas'), async (req, res) => {
   try {
     const rows = await q(`
       SELECT m.id_merma, m.tipo_merma, m.cantidad_merma, m.motivo,

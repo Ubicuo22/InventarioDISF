@@ -1,4 +1,4 @@
-/* bodega-bundle.54ff8dd0.js — 2026-06-25T23:28:18.548Z */
+/* bodega-bundle.57d79802.js — 2026-07-15T00:01:29.931Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1265,6 +1265,7 @@ function reviewModule () {
     _lockRenewInterval: null,
 
     // ── Estado del modo Revisión ───────────────────────────────
+    _revIdCounter: 0,                   // contador para IDs estables por item en sesión de revisión
     revisionModalOpen: false,
     revisionCart: { General: [] },      // copia mutable del carrito durante revisión
     revisionFolio: null,
@@ -1322,8 +1323,18 @@ function reviewModule () {
       return Object.keys(this.revisionCart).filter(k => !k.startsWith('__'))
     },
 
-    /** Lista plana de items, respetando orden de secciones (General primero si existe).
-     *  Cada entrada incluye flatIdx para diferenciar duplicados del mismo producto. */
+    /** Asigna un _revId estable y único a cada item del carrito al abrir revisión. */
+    _assignRevIds () {
+      this._revIdCounter = 0
+      for (const sec of Object.keys(this.revisionCart)) {
+        if (sec.startsWith('__') || !Array.isArray(this.revisionCart[sec])) continue
+        for (const item of this.revisionCart[sec]) {
+          item._revId = ++this._revIdCounter
+        }
+      }
+    },
+
+    /** Lista plana de items, respetando orden de secciones (General primero si existe). */
     revisionFlatItems () {
       const keys = this._revisionFilteredKeys()
       const ordered = keys.includes('General')
@@ -1349,26 +1360,26 @@ function reviewModule () {
       return flat[this.revisionCurrentIdx] || null
     },
 
-    revisionItemKey (section, productId) {
-      return `${section}::${productId}`
+    revisionItemKey (item) {
+      return String(item._revId)
     },
 
-    revisionIsReviewed (section, productId) {
-      return this.revisionReviewedIds.includes(this.revisionItemKey(section, productId))
+    revisionIsReviewed (item) {
+      return this.revisionReviewedIds.includes(this.revisionItemKey(item))
     },
 
     revisionIsCurrentReviewed () {
       const c = this.revisionCurrent()
-      return c ? this.revisionIsReviewed(c.section, c.item.id_producto) : false
+      return c ? this.revisionIsReviewed(c.item) : false
     },
 
-    revisionIsPending (section, productId) {
-      return this.revisionPendingIds.includes(this.revisionItemKey(section, productId))
+    revisionIsPending (item) {
+      return this.revisionPendingIds.includes(this.revisionItemKey(item))
     },
 
     revisionIsCurrentPending () {
       const c = this.revisionCurrent()
-      return c ? this.revisionIsPending(c.section, c.item.id_producto) : false
+      return c ? this.revisionIsPending(c.item) : false
     },
 
     revisionReviewedCount () {
@@ -1381,8 +1392,8 @@ function reviewModule () {
     },
 
     revisionProgressPct () {
-      const originalTotal = this.revisionTotal() + this.revisionMissingNames.length
-      return originalTotal === 0 ? 0 : Math.round((this.revisionReviewedCount() / originalTotal) * 100)
+      const total = this.revisionTotal()
+      return total === 0 ? 0 : Math.round((this.revisionReviewedCount() / total) * 100)
     },
 
     /** Agrupa items por sección para el sidebar. */
@@ -1397,7 +1408,7 @@ function reviewModule () {
 
     revisionSectionStats (section) {
       const items = this.revisionItemsBySection()[section] || []
-      const done = items.filter(fi => this.revisionIsReviewed(fi.section, fi.item.id_producto)).length
+      const done = items.filter(fi => this.revisionIsReviewed(fi.item)).length
       return { done, total: items.length }
     },
 
@@ -1426,16 +1437,8 @@ function reviewModule () {
           ? JSON.parse(o.datos_carrito)
           : (o.datos_carrito || {})
 
-        // Normalizar campo: el Electron guarda unidad_producto, el modal usa item.unidad
-        const normCart = {}
-        for (const [k, v] of Object.entries(cart)) {
-          if (k.startsWith('__') || !Array.isArray(v)) { normCart[k] = v; continue }
-          normCart[k] = v.map(item => ({
-            ...item,
-            unidad: item.unidad || item.unidad_producto || ''
-          }))
-        }
-        this.revisionCart = Object.keys(normCart).length ? normCart : { General: [] }
+        this.revisionCart = Object.keys(cart).length ? cart : { General: [] }
+        this._assignRevIds()
         this._revisionOriginalCart = JSON.parse(JSON.stringify(this.revisionCart))
         this.revisionFolio = o.folio_numero
         this.revisionIdCliente = o.id_cliente || null
@@ -1513,7 +1516,7 @@ function reviewModule () {
     revisionMarcarRevisado () {
       const c = this.revisionCurrent()
       if (!c) return
-      const key = this.revisionItemKey(c.section, c.item.id_producto)
+      const key = this.revisionItemKey(c.item)
       if (!this.revisionReviewedIds.includes(key)) {
         this.revisionReviewedIds.push(key)
         if (window.sounds) window.sounds.reviewed()
@@ -1578,10 +1581,9 @@ function reviewModule () {
       if (!c) return
       const num = parseFloat(valor)
       if (isNaN(num) || num <= 0) return
-      // Mutación en el cart directamente
       const items = this.revisionCart[c.section]
       if (!items) return
-      const idx = items.findIndex(i => i.id_producto === c.item.id_producto)
+      const idx = items.findIndex(i => i._revId === c.item._revId)
       if (idx >= 0) {
         items[idx].cantidad = num
       }
@@ -1593,12 +1595,12 @@ function reviewModule () {
       if (!c) return
       const snapshot = JSON.parse(JSON.stringify(c.item))
       const section  = c.section
-      const key      = this.revisionItemKey(section, c.item.id_producto)
+      const key      = this.revisionItemKey(c.item)
 
       // Eliminar del carrito
       const items = this.revisionCart[section]
       if (!items) return
-      const originalIdx = items.findIndex(i => i.id_producto === c.item.id_producto)
+      const originalIdx = items.findIndex(i => i._revId === c.item._revId)
       if (originalIdx < 0) return
       items.splice(originalIdx, 1)
 
@@ -1649,7 +1651,7 @@ function reviewModule () {
     revisionMarcarPendiente () {
       const c = this.revisionCurrent()
       if (!c) return
-      const key = this.revisionItemKey(c.section, c.item.id_producto)
+      const key = this.revisionItemKey(c.item)
 
       if (this.revisionPendingIds.includes(key)) {
         // Toggle: si ya estaba pendiente, quitarlo sin avanzar
@@ -1680,7 +1682,7 @@ function reviewModule () {
     revisionConfirmarPendiente () {
       const c = this.revisionCurrent()
       if (!c) return
-      const key = this.revisionItemKey(c.section, c.item.id_producto)
+      const key = this.revisionItemKey(c.item)
 
       this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== key)
       this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== c.item.nombre_producto)
@@ -1778,6 +1780,11 @@ function reviewModule () {
         const cartParaGuardar = JSON.parse(JSON.stringify(this.revisionCart))
         delete cartParaGuardar.__historial__
         delete cartParaGuardar.__orden__
+        // Quitar _revId (campo interno de sesión, no pertenece al carrito persistido)
+        for (const [sec, items] of Object.entries(cartParaGuardar)) {
+          if (sec.startsWith('__') || !Array.isArray(items)) continue
+          for (const item of items) delete item._revId
+        }
 
         const saved = await tryFetch(() => API.post('/api/ordenes', {
           folio_numero:  this.revisionFolio,
@@ -1903,32 +1910,28 @@ function reviewModule () {
       const idx = items.findIndex(i => i.id_producto === c.item.id_producto)
       if (idx < 0) return
 
-      const oldId      = c.item.id_producto
       const oldNombre  = c.item.nombre_producto
-      const oldKey     = this.revisionItemKey(c.section, oldId)
-      const newKey     = this.revisionItemKey(c.section, prod.id_producto)
+      const key        = this.revisionItemKey(c.item)   // _revId no cambia al sustituir
 
-      // Sustituir el item en el carrito
+      // Sustituir el item en el carrito conservando _revId
       items[idx] = {
         ...items[idx],
         id_producto:     prod.id_producto,
         nombre_producto: prod.nombre_producto,
         unidad:          prod.unidad_producto,
-        unidad_producto: prod.unidad_producto,
         precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
         cantidad:        items[idx].cantidad   // conservar cantidad pedida
       }
 
-      // Limpiar IDs huérfanos del producto viejo
-      this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== oldKey)
-      if (this.revisionPendingIds.includes(oldKey)) {
-        this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== oldKey)
+      // Limpiar estado anterior y marcar como revisado
+      this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
+      if (this.revisionPendingIds.includes(key)) {
+        this.revisionPendingIds   = this.revisionPendingIds.filter(k => k !== key)
         this.revisionPendingNames = this.revisionPendingNames.filter(n => n !== oldNombre)
       }
 
-      // Marcar el producto nuevo como revisado (el usuario eligió activamente el reemplazo)
-      if (!this.revisionReviewedIds.includes(newKey)) {
-        this.revisionReviewedIds.push(newKey)
+      if (!this.revisionReviewedIds.includes(key)) {
+        this.revisionReviewedIds.push(key)
         if (window.sounds) window.sounds.reviewed?.()
       }
 
@@ -1989,16 +1992,19 @@ function reviewModule () {
           id_producto:     prod.id_producto,
           nombre_producto: prod.nombre_producto,
           unidad:          prod.unidad_producto,
-          unidad_producto: prod.unidad_producto,
           precio_unitario: parseFloat(prod.precio_base) || 0,
-          cantidad:        cant
+          cantidad:        cant,
+          _revId:          ++this._revIdCounter
         })
         this.mostrarToast(`${prod.nombre_producto} agregado`)
       }
 
       // Marcar como revisado automáticamente
-      const key = this.revisionItemKey(section, prod.id_producto)
-      if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
+      const target = this.revisionCart[section].find(i => i.id_producto === prod.id_producto)
+      if (target) {
+        const key = this.revisionItemKey(target)
+        if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
+      }
 
       this.revisionCerrarAgregar()
     },
@@ -2051,31 +2057,23 @@ function reviewModule () {
           ? JSON.parse(orden.datos_carrito)
           : (orden.datos_carrito || {})
         const hist = cart.__historial__ || []
-        if (hist.length === 0) return null
-
-        // Buscar la última entrada de revisión
-        let lastRevIdx = -1
+        if (hist.length === 0) return null  // null = no info
         for (let i = hist.length - 1; i >= 0; i--) {
-          if (hist[i].tipoEvento === 'revision') { lastRevIdx = i; break }
+          const e = hist[i]
+          if (e.tipoEvento === 'revision') {
+            if (i !== hist.length - 1) return null  // hubo cambios después de la revisión
+            const pendientes = e.pendientes || []
+            return {
+              reviewed: pendientes.length === 0,  // solo "revisada" si no hay pendientes
+              conPendientes: pendientes.length > 0,
+              usuario: e.usuario,
+              fecha: e.fecha,
+              faltantes: e.faltantes || [],
+              pendientes
+            }
+          }
         }
-        if (lastRevIdx === -1) return null
-
-        // Invalidar solo si hay entradas de diff (sin tipoEvento) DESPUÉS de la revisión
-        // Eventos tipados como 'impresion' no invalidan el estado de revisión
-        for (let i = lastRevIdx + 1; i < hist.length; i++) {
-          if (!hist[i].tipoEvento) return null
-        }
-
-        const e = hist[lastRevIdx]
-        const pendientes = e.pendientes || []
-        return {
-          reviewed: pendientes.length === 0,
-          conPendientes: pendientes.length > 0,
-          usuario: e.usuario,
-          fecha: e.fecha,
-          faltantes: e.faltantes || [],
-          pendientes
-        }
+        return null
       } catch { return null }
     }
   }

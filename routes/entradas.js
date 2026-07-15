@@ -148,6 +148,15 @@ router.post('/', requireAuth, async (req, res) => {
     if (isNaN(cantidadNum) || cantidadNum <= 0)  return res.status(400).json({ ok: false, error: 'Cantidad inválida' })
     if (isNaN(precioConIVA) || precioConIVA < 0) return res.status(400).json({ ok: false, error: 'Precio inválido' })
 
+    // Verificar que el producto existe y está activo
+    const [prodRows] = await conn.execute(
+      'SELECT id_producto FROM producto WHERE id_producto = ? AND activo = 1',
+      [idProducto]
+    )
+    if (!prodRows.length) {
+      return res.status(400).json({ ok: false, error: 'Producto no encontrado o inactivo' })
+    }
+
     // Peso del lote — calcula peso_por_pieza y factor_conversion del lote
     const pesoLoteNum = pesoLote != null ? parseFloat(pesoLote) : NaN
     const pesoPorPieza      = (!isNaN(pesoLoteNum) && pesoLoteNum > 0 && cantidadNum > 0)
@@ -219,7 +228,8 @@ router.post('/', requireAuth, async (req, res) => {
         WHERE id_producto = ?
           AND notas LIKE 'PHANTOM:%'
           AND fecha_registro > '2026-06-01 23:59:59'
-        ORDER BY fecha_registro ASC, id_compra ASC`,
+        ORDER BY fecha_registro ASC, id_compra ASC
+        FOR UPDATE`,
       [idProducto]
     )
 

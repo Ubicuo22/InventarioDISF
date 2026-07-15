@@ -19,37 +19,6 @@
   <!-- Leaflet — mapa en vivo -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    /* ── Leaflet dark mode forzado ── */
-    .leaflet-container { background: #0d0f14; color-scheme: dark; }
-    .leaflet-bar a, .leaflet-bar a:hover {
-      background: rgba(13,15,20,0.92);
-      border-color: rgba(148,163,184,0.15);
-      color: #f1f5f9;
-    }
-    .leaflet-bar a:hover { background: rgba(30,35,48,0.95); color: #fff; }
-    .leaflet-bar { border: 1px solid rgba(148,163,184,0.15) !important; box-shadow: none; }
-    .leaflet-control-zoom-in, .leaflet-control-zoom-out { font-size: 18px !important; }
-    .leaflet-control-attribution {
-      background: rgba(13,15,20,0.75) !important;
-      color: #475569 !important;
-      backdrop-filter: blur(4px);
-    }
-    .leaflet-control-attribution a { color: #64748b !important; }
-    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-      background: rgba(13,15,20,0.95);
-      color: #f1f5f9;
-      border: 1px solid rgba(148,163,184,0.15);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-    }
-    .leaflet-tooltip {
-      background: rgba(13,15,20,0.9);
-      color: #f1f5f9;
-      border: 1px solid rgba(148,163,184,0.2);
-      box-shadow: none;
-    }
-    .leaflet-tooltip::before { border-top-color: rgba(148,163,184,0.2); }
-  </style>
 
   <!-- Anti-flash: resuelve y aplica el tema ANTES de la primera pintura.
        Lee localStorage; si no hay valor guardado usa prefers-color-scheme.
@@ -73,7 +42,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.57d79802.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.e4a6c374.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -2511,17 +2480,17 @@
         <button @click="seleccionarLogisticsUnidad(u.unidad_id)"
           class="flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all flex-shrink-0"
           :style="logisticsSelectedId === u.unidad_id
-            ? `background:${_logColor(logisticsUnidadEstado(u))}22;border:1.5px solid ${_logColor(logisticsUnidadEstado(u))};backdrop-filter:blur(10px)`
+            ? `background:${_logColor(u.ruta_estado)}22;border:1.5px solid ${_logColor(u.ruta_estado)};backdrop-filter:blur(10px)`
             : 'background:rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.15);backdrop-filter:blur(10px)'">
           <!-- Status dot -->
           <span class="w-2 h-2 rounded-full flex-shrink-0"
-            :style="`background:${_logColor(logisticsUnidadEstado(u))};box-shadow:0 0 5px ${_logColor(logisticsUnidadEstado(u))}99`"></span>
+            :style="`background:${_logColor(u.ruta_estado)};box-shadow:0 0 5px ${_logColor(u.ruta_estado)}99`"></span>
           <!-- Nombre repartidor -->
           <span class="text-white" x-text="logisticsConductor(u) || logisticsNombreUnidad(u)"></span>
           <!-- Velocidad si está en movimiento -->
           <span x-show="u.velocidad_kmh > 0"
             class="text-[11px] font-normal"
-            :style="`color:${_logColor(logisticsUnidadEstado(u))}`"
+            :style="`color:${_logColor(u.ruta_estado)}`"
             x-text="`${Math.round(u.velocidad_kmh)} km/h`"></span>
           <!-- Batería baja -->
           <span x-show="u.bateria_actual != null && u.bateria_actual < 20"
@@ -2543,18 +2512,8 @@
           <p class="text-sm font-semibold text-white truncate" x-text="logisticsNombreUnidad(logisticsUnidadActual())"></p>
           <p class="text-xs text-slate-400 truncate" x-text="logisticsConductor(logisticsUnidadActual())"></p>
           <p class="text-xs mt-0.5 font-medium"
-            :style="`color:${_logColor(logisticsUnidadActual()?._estado)}`"
-            x-text="logisticsEstadoLabel(logisticsUnidadActual()?._estado)"></p>
-          <!-- Geocerca actual -->
-          <p x-show="logisticsUnidadActual()?._estado === 'en_cliente' && logisticsUnidadActual()?.geocerca_actual_nombre"
-            class="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block"
-            style="background:rgba(245,158,11,0.12);color:#fbbf24;border:1px solid rgba(245,158,11,0.2)"
-            x-text="'📍 ' + (logisticsUnidadActual()?.geocerca_actual_nombre || '')"></p>
-          <!-- Alerta activa -->
-          <p x-show="logisticsUnidadActual()?.alerta_tipo"
-            class="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block"
-            style="background:rgba(249,115,22,0.12);color:#fb923c;border:1px solid rgba(249,115,22,0.2)"
-            x-text="'⚠️ ' + (logisticsUnidadActual()?.alerta_tipo === 'parada_extraordinaria' ? 'Parada prolongada' : 'Sin señal')"></p>
+            :style="`color:${_logColor(logisticsUnidadActual()?.ruta_estado)}`"
+            x-text="logisticsEstadoLabel(logisticsUnidadActual()?.ruta_estado)"></p>
         </div>
         <button @click="seleccionarLogisticsUnidad(logisticsSelectedId)"
           class="text-slate-500 hover:text-white p-1 -mr-1 flex-shrink-0 transition-colors">
@@ -3306,6 +3265,7 @@
         <button
           type="submit"
           class="btn-primary flex-1 transition-colors duration-200"
+          :class="guardadoOk ? '!bg-emerald-500' : ''"
           :disabled="guardando || guardadoOk || !form.idProducto"
         >
           <span x-show="!guardando && !guardadoOk">Registrar</span>
@@ -3610,6 +3570,7 @@
         <button type="button" @click="cerrarOrden()" class="btn-ghost flex-1">Cancelar</button>
         <button type="button" @click="abrirConfirmarGuardado()"
           class="btn-primary flex-1 transition-colors duration-200"
+          :class="ordenGuardadaOk ? '!bg-emerald-500' : ''"
           :disabled="guardandoOrden || ordenGuardadaOk || (!ordenForm.id_cliente && !ordenForm.folio_numero) || cartItems().length === 0">
           <span x-show="!guardandoOrden && !ordenGuardadaOk">Guardar pedido</span>
           <span x-show="guardandoOrden && !ordenGuardadaOk" class="flex items-center justify-center gap-2">
@@ -3925,24 +3886,24 @@
                   :class="
                     revisionCurrentIdx === fi.flatIdx
                       ? 'rev-list-row--active'
-                      : revisionIsPending(fi.item)
+                      : revisionIsPending(fi.section, fi.item.id_producto)
                         ? 'rev-list-row--pending'
-                        : revisionIsReviewed(fi.item)
+                        : revisionIsReviewed(fi.section, fi.item.id_producto)
                           ? 'rev-list-row--done'
                           : 'rev-list-row--default'
                   ">
 
                   <!-- Estado circular -->
                   <div class="rev-status-dot"
-                    :class="revisionIsPending(fi.item)
+                    :class="revisionIsPending(fi.section, fi.item.id_producto)
                       ? 'rev-status-dot--pending'
-                      : revisionIsReviewed(fi.item)
+                      : revisionIsReviewed(fi.section, fi.item.id_producto)
                         ? 'rev-status-dot--done'
                         : 'rev-status-dot--empty'">
-                    <svg x-show="revisionIsPending(fi.item)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <svg x-show="revisionIsPending(fi.section, fi.item.id_producto)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <svg x-show="!revisionIsPending(fi.item) && revisionIsReviewed(fi.item)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <svg x-show="!revisionIsPending(fi.section, fi.item.id_producto) && revisionIsReviewed(fi.section, fi.item.id_producto)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                     </svg>
                   </div>
@@ -3950,9 +3911,9 @@
                   <!-- Nombre + cantidad -->
                   <div class="flex-1 min-w-0">
                     <p class="text-[13px] font-semibold leading-snug truncate"
-                      :class="revisionIsPending(fi.item)
+                      :class="revisionIsPending(fi.section, fi.item.id_producto)
                         ? 'text-amber-300'
-                        : revisionIsReviewed(fi.item)
+                        : revisionIsReviewed(fi.section, fi.item.id_producto)
                           ? 'text-slate-500 line-through decoration-slate-600/60'
                           : revisionCurrentIdx === fi.flatIdx
                             ? 'text-white'
@@ -5643,10 +5604,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.57d79802.js agrupa todos los módulos en 1 request.
+     bodega-bundle.e4a6c374.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.57d79802.js"></script>
+<script src="/js/bodega-bundle.e4a6c374.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

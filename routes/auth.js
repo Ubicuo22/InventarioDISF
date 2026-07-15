@@ -143,31 +143,14 @@ router.post('/login', rateLimitLogin, async (req, res) => {
       { expiresIn: '12h' }
     )
 
-    // Registrar en historial de actividad
-    req.user = { username: user.username, nombre: user.nombre_completo }
-    registrar(req, 'auth', 'login', { rol: user.rol })
-
-    // Responder YA — el guardado de sesión es no crítico y se hace después
-    res.json({
-      ok: true,
-      token,
-      user: {
-        id:               user.id_usuario,
-        username:         user.username,
-        nombre:           user.nombre_completo,
-        rol:              user.rol,
-        color:            user.avatar_color,
-        avatar:           user.avatar_url_publica,
-        modulosPermitidos
-      }
-    })
-
-    // Guardar sesión en BD en segundo plano (no bloquea la respuesta)
+    // Guardar sesión antes de responder — garantiza que el jti existe en BD
+    // cuando el cliente lo use en la siguiente petición
     const ip = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '').slice(0, 45)
     const ua = (req.headers['user-agent'] || '').slice(0, 255)
-    setImmediate(async () => {
-      try {
-        await pool.execute(
+    try {
+      // Limpiar sesiones viejas y registrar la nueva en paralelo
+      await Promise.all([
+        pool.execute(
           `UPDATE bodega_sesiones
            SET activo = 0
            WHERE id_usuario = ?
@@ -183,13 +166,33 @@ router.post('/login', rateLimitLogin, async (req, res) => {
                )
              )`,
           [user.id_usuario, user.id_usuario]
-        )
-        await pool.execute(
+        ),
+        pool.execute(
           `INSERT INTO bodega_sesiones (jti, id_usuario, ip, user_agent) VALUES (?, ?, ?, ?)`,
           [jti, user.id_usuario, ip, ua]
         )
-      } catch (e) {
-        console.warn('[auth] No se pudo guardar sesión:', e.message)
+      ])
+    } catch (e) {
+      console.warn('[auth] No se pudo guardar sesión:', e.message)
+      // No abortamos el login — el JWT sigue siendo válido y el middleware
+      // acepta jti sin fila por replication lag (fail-open intencional)
+    }
+
+    // Registrar en historial de actividad
+    req.user = { username: user.username, nombre: user.nombre_completo }
+    registrar(req, 'auth', 'login', { rol: user.rol })
+
+    res.json({
+      ok: true,
+      token,
+      user: {
+        id:               user.id_usuario,
+        username:         user.username,
+        nombre:           user.nombre_completo,
+        rol:              user.rol,
+        color:            user.avatar_color,
+        avatar:           user.avatar_url_publica,
+        modulosPermitidos
       }
     })
   } catch (err) {
