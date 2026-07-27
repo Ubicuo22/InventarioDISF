@@ -217,7 +217,7 @@ function authModule() {
      */
     tienePermiso(modulo) {
       const rol = this.session?.rol
-      if (rol === 'admin') return true
+      if (rol === 'admin' || rol === 'ceo') return true
       if (rol === 'supervisor') {
         const permisos = this.session?.modulosPermitidos
         return Array.isArray(permisos) && permisos.includes(modulo)

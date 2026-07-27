@@ -1,4 +1,4 @@
-/* bodega-bundle.1fddc8cd.js — 2026-07-15T16:09:50.637Z */
+/* bodega-bundle.70d416e0.js — 2026-07-27T17:02:54.808Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -533,7 +533,7 @@ function authModule() {
      */
     tienePermiso(modulo) {
       const rol = this.session?.rol
-      if (rol === 'admin') return true
+      if (rol === 'admin' || rol === 'ceo') return true
       if (rol === 'supervisor') {
         const permisos = this.session?.modulosPermitidos
         return Array.isArray(permisos) && permisos.includes(modulo)
