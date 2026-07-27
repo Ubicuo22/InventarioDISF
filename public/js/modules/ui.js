@@ -18,6 +18,8 @@ function uiModule() {
     // Compat: algunos módulos antiguos pueden seguir leyendo darkMode
     get darkMode() { return this.theme === 'dark' },
 
+    navMas: false,
+
     // Pull-to-refresh
     ptrStartY:   0,
     ptrDy:       0,

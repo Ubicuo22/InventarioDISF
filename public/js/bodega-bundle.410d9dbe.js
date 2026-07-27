@@ -1,4 +1,4 @@
-/* bodega-bundle.70d416e0.js — 2026-07-27T17:02:54.808Z */
+/* bodega-bundle.410d9dbe.js — 2026-07-27T17:38:04.330Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -228,6 +228,8 @@ function uiModule() {
 
     // Compat: algunos módulos antiguos pueden seguir leyendo darkMode
     get darkMode() { return this.theme === 'dark' },
+
+    navMas: false,
 
     // Pull-to-refresh
     ptrStartY:   0,

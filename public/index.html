@@ -41,7 +41,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.70d416e0.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.410d9dbe.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -229,7 +229,7 @@
           class="sidebar-badge"></span>
       </button>
 
-      <button x-show="tienePermiso('historial')" @click="tab = 'entradas'; cargarEntradasRecientes()"
+      <button x-show="tienePermiso('compras')" @click="tab = 'entradas'; cargarEntradasRecientes()"
         class="sidebar-item" :class="tab === 'entradas' ? 'active' : ''">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -251,6 +251,22 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
         </svg>
         <span>Compras</span>
+      </button>
+
+      <button x-show="tienePermiso('cobranza')" @click="tab = 'cobranza'; cargarDeudas()"
+        class="sidebar-item" :class="tab === 'cobranza' ? 'active' : ''">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
+        <span>Cobranza</span>
+      </button>
+
+      <button x-show="tienePermiso('mermas')" @click="tab = 'mermas'; cargarMermasRecientes()"
+        class="sidebar-item" :class="tab === 'mermas' ? 'active' : ''">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span>Mermas</span>
       </button>
 
     </div>
@@ -701,7 +717,7 @@
         </button>
 
         <!-- ▸ HISTORIAL — ahora con última entrada visible -->
-        <button x-show="tienePermiso('historial')" @click="tab = 'entradas'; cargarEntradasRecientes()"
+        <button x-show="tienePermiso('compras')" @click="tab = 'entradas'; cargarEntradasRecientes()"
           class="bento-tile bento-tile--purple bento-col-2 tap">
           <div class="flex items-center justify-between mb-3">
             <div class="icon-bubble">
@@ -727,8 +743,8 @@
           </template>
         </button>
 
-        <!-- ▸ ADMIN (admin-only) -->
-        <button x-show="session?.rol === 'admin'" @click="abrirAdminPanel()"
+        <!-- ▸ ADMIN (admin + ceo) -->
+        <button x-show="session?.rol === 'admin' || session?.rol === 'ceo'" @click="abrirAdminPanel()"
           class="bento-tile bento-col-4 tap">
           <div class="flex items-center gap-3">
             <div class="icon-bubble" style="background: rgba(100,116,139,0.15);">
@@ -738,8 +754,8 @@
               </svg>
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-white font-semibold text-sm">Administración</p>
-              <p class="text-slate-500 text-xs mt-0.5">Sesiones · permisos · usuarios</p>
+              <p class="font-semibold text-sm" style="color: var(--text)">Administración</p>
+              <p class="text-xs mt-0.5" style="color: var(--text-faint)">Sesiones · permisos · usuarios</p>
             </div>
             <svg class="w-4 h-4 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
@@ -2405,7 +2421,7 @@
 
     <!-- Inventario -->
     <button x-show="tienePermiso('inventario')" @click="tab = 'inventario'"
-      :class="tab === 'inventario' ? 'nav-active' : ''"
+      :class="tab === 'inventario' || tab === 'conteo' ? 'nav-active' : ''"
       class="relative">
       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
@@ -2425,16 +2441,6 @@
       <span>Pedidos</span>
     </button>
 
-    <!-- Historial -->
-    <button x-show="tienePermiso('historial')" @click="tab = 'entradas'; cargarEntradasRecientes()"
-      :class="tab === 'entradas' ? 'nav-active' : ''"
-      class="relative">
-      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-      </svg>
-      <span>Historial</span>
-    </button>
-
     <!-- Ventas -->
     <button x-show="tienePermiso('analytics')" @click="tab = 'analytics'; cargarVentasHoy()"
       :class="tab === 'analytics' ? 'nav-active' : ''"
@@ -2445,23 +2451,64 @@
       <span>Ventas</span>
     </button>
 
-    <!-- Compras -->
-    <button x-show="tienePermiso('compras')" @click="tab = 'compras'; cargarCompras()"
-      :class="tab === 'compras' ? 'nav-active' : ''"
+    <!-- Más -->
+    <button @click="navMas = !navMas"
+      :class="['entradas','compras','cobranza','mermas','conteo'].includes(tab) ? 'nav-active' : ''"
       class="relative">
-      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+      <svg class="w-5 h-5 transition-transform" :class="navMas ? 'rotate-45' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
       </svg>
-      <span>Compras</span>
+      <span>Más</span>
     </button>
-
-    <!-- Reparto -->
 
   </nav>
 
-  <!-- FAB liquid glass — solo en inventario y pedidos -->
-  <button x-show="tab === 'inventario' || tab === 'pedidos'" x-cloak
-    @click="tab === 'pedidos' ? abrirNuevaOrden() : abrirModal()"
+  <!-- Menú overflow "Más" -->
+  <div x-show="navMas && tab !== 'home'" x-cloak
+    @click.self="navMas = false"
+    class="nav-mas-overlay">
+    <div class="nav-mas-sheet" @click.outside="navMas = false">
+      <button x-show="tienePermiso('compras')" @click="tab = 'entradas'; cargarEntradasRecientes(); navMas = false"
+        :class="tab === 'entradas' ? 'nav-mas-active' : ''">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span>Historial</span>
+      </button>
+      <button x-show="tienePermiso('compras')" @click="tab = 'compras'; cargarCompras(); navMas = false"
+        :class="tab === 'compras' ? 'nav-mas-active' : ''">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <span>Compras</span>
+      </button>
+      <button x-show="tienePermiso('cobranza')" @click="tab = 'cobranza'; cargarDeudas(); navMas = false"
+        :class="tab === 'cobranza' ? 'nav-mas-active' : ''">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
+        <span>Cobranza</span>
+      </button>
+      <button x-show="tienePermiso('mermas')" @click="tab = 'mermas'; cargarMermasRecientes(); navMas = false"
+        :class="tab === 'mermas' ? 'nav-mas-active' : ''">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span>Mermas</span>
+      </button>
+      <button x-show="tienePermiso('inventario')" @click="tab = 'conteo'; cargarConteoLista(); navMas = false"
+        :class="tab === 'conteo' ? 'nav-mas-active' : ''">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        <span>Corte físico</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- FAB liquid glass -->
+  <button x-show="tab === 'inventario' || tab === 'pedidos' || tab === 'mermas' || tab === 'compras'" x-cloak
+    @click="tab === 'pedidos' ? abrirNuevaOrden() : tab === 'mermas' ? abrirNuevaMerma?.() : tab === 'compras' ? abrirNuevaCompra?.() : abrirModal()"
     class="sm:hidden fab-glass">
     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
       <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
@@ -5317,10 +5364,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.70d416e0.js agrupa todos los módulos en 1 request.
+     bodega-bundle.410d9dbe.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.70d416e0.js"></script>
+<script src="/js/bodega-bundle.410d9dbe.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>
