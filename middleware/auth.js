@@ -89,7 +89,8 @@ async function requireAuth(req, res, next) {
 
 // ── requireAdmin ──────────────────────────────────────────
 function requireAdmin(req, res, next) {
-  if (req.user?.rol !== 'admin') {
+  const rol = req.user?.rol
+  if (rol !== 'admin' && rol !== 'ceo') {
     return res.status(403).json({ ok: false, error: 'Acceso restringido a administradores' })
   }
   next()
@@ -100,7 +101,7 @@ function requireAdmin(req, res, next) {
 function requireModulo(modulo) {
   return (req, res, next) => {
     const { rol, modulosPermitidos } = req.user || {}
-    if (rol === 'admin') return next()
+    if (rol === 'admin' || rol === 'ceo') return next()
     if (rol === 'supervisor' && Array.isArray(modulosPermitidos) && modulosPermitidos.includes(modulo)) {
       return next()
     }
