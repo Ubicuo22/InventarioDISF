@@ -41,7 +41,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.410d9dbe.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.3ddd4411.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -4249,19 +4249,28 @@
             style="border-bottom:1px solid var(--border)">
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-white truncate" x-text="prod.nombre_producto.toUpperCase()"></p>
-              <p class="text-[11px] text-slate-500 mt-0.5"
-                x-text="(prod.precio_base > 0 ? '$' + parseFloat(prod.precio_base).toFixed(2) + ' · ' : '') + prod.unidad_producto + (prod.stock != null ? ' · stock: ' + prod.stock : '')"></p>
+              <p class="text-[11px] mt-0.5"
+                :class="prod.precio_final > 0 ? 'text-slate-500' : 'text-amber-400 font-medium'"
+                x-text="(prod.precio_final > 0 ? '$' + parseFloat(prod.precio_final).toFixed(2) + ' · ' : 'Sin precio · ') + prod.unidad_producto + (prod.stock != null ? ' · stock: ' + prod.stock : '')"></p>
             </div>
-            <!-- Input cantidad + botón añadir -->
-            <div class="flex items-center gap-2 flex-shrink-0">
+            <!-- Inputs + botón añadir -->
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <!-- Precio manual — visible solo cuando el producto no tiene precio en este grupo -->
+              <input x-show="!prod.precio_final || prod.precio_final <= 0"
+                type="number" min="0.01" step="0.01"
+                x-model="revisionAgregarModal.precios[prod.id_producto]"
+                placeholder="$ precio"
+                class="w-20 bg-slate-800/80 border border-amber-500/50 rounded-lg px-2 py-1.5 text-sm text-amber-200 text-center focus:outline-none focus:border-amber-400"
+                @keydown.enter="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1, revisionAgregarModal.precios[prod.id_producto])">
               <input type="number" min="0.01" step="0.01"
                 :id="`rev-cant-${prod.id_producto}`"
                 x-model="revisionAgregarModal.cantidades[prod.id_producto]"
                 :placeholder="prod.unidad_producto === 'kg' ? '0.00' : '1'"
                 class="w-16 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none focus:border-green-500/60"
-                @keydown.enter="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1)">
-              <button @click="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1)"
-                class="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all">
+                @keydown.enter="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1, revisionAgregarModal.precios[prod.id_producto])">
+              <button @click="revisionAgregarProductoAlCarrito(prod, revisionAgregarModal.cantidades[prod.id_producto] || 1, revisionAgregarModal.precios[prod.id_producto])"
+                :disabled="prod.precio_final <= 0 && !(parseFloat(revisionAgregarModal.precios[prod.id_producto]) > 0)"
+                class="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -5364,10 +5373,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.410d9dbe.js agrupa todos los módulos en 1 request.
+     bodega-bundle.3ddd4411.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.410d9dbe.js"></script>
+<script src="/js/bodega-bundle.3ddd4411.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 </body>

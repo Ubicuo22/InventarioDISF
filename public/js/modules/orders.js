@@ -193,7 +193,7 @@ function ordersModule() {
     },
 
     abrirAgregarModal(producto) {
-      const precio = parseFloat(producto.precio_base)
+      const precio = parseFloat(producto.precio_final ?? producto.precio_base)
       const sinPrecio = !precio || precio <= 0
       this.agregarModal = {
         visible:      true,

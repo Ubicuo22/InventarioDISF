@@ -1,4 +1,4 @@
-/* bodega-bundle.410d9dbe.js — 2026-07-27T17:38:04.330Z */
+/* bodega-bundle.3ddd4411.js — 2026-08-03T23:45:48.948Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1091,7 +1091,7 @@ function ordersModule() {
     },
 
     abrirAgregarModal(producto) {
-      const precio = parseFloat(producto.precio_base)
+      const precio = parseFloat(producto.precio_final ?? producto.precio_base)
       const sinPrecio = !precio || precio <= 0
       this.agregarModal = {
         visible:      true,
@@ -1311,6 +1311,7 @@ function reviewModule () {
       nuevaUnidad:   '',
       nuevoPrecio:   '',
       cantidades:    {},         // { id_producto: cantidad } para productos encontrados
+      precios:       {},         // { id_producto: precio } para productos sin precio en el grupo
       guardandoNuevo: false,
       error:         null
     },
@@ -2048,7 +2049,7 @@ function reviewModule () {
       this.revisionAgregarModal = {
         visible: true, busqueda: '', resultados: [], buscando: false,
         modo: 'buscar', nuevaUnidad: '', nuevoPrecio: '',
-        cantidades: {}, guardandoNuevo: false, error: null
+        cantidades: {}, precios: {}, guardandoNuevo: false, error: null
       }
       this.$nextTick(() => document.getElementById('rev-agregar-input')?.focus())
     },
@@ -2079,8 +2080,17 @@ function reviewModule () {
       }
     },
 
-    revisionAgregarProductoAlCarrito (prod, cantidad) {
-      const cant = parseFloat(cantidad) || 1
+    revisionAgregarProductoAlCarrito (prod, cantidad, precioOverride) {
+      const cant           = parseFloat(cantidad) || 1
+      const precioExistente = parseFloat(prod.precio_final ?? prod.precio_base) || 0
+      const precioManual   = parseFloat(precioOverride) || 0
+      const precio         = precioExistente > 0 ? precioExistente : precioManual
+
+      if (precio <= 0) {
+        this.revisionAgregarModal.error = 'Ingresa el precio para este producto antes de agregarlo'
+        return
+      }
+
       // Buscar la sección donde insertar (General primero, si no la primera)
       const keys = this._revisionFilteredKeys()
       const section = keys.includes('General') ? 'General' : (keys[0] || 'General')
@@ -2092,7 +2102,7 @@ function reviewModule () {
         id_producto:     prod.id_producto,
         nombre_producto: prod.nombre_producto,
         unidad:          prod.unidad_producto,
-        precio_unitario: parseFloat(prod.precio_base) || 0,
+        precio_unitario: precio,
         cantidad:        cant,
         _revId:          ++this._revIdCounter
       }
@@ -2102,6 +2112,21 @@ function reviewModule () {
       // Marcar como revisado automáticamente (esta instancia exacta)
       const key = this.revisionItemKey(nuevo)
       if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
+
+      // Persistir el precio en la DB cuando el usuario lo ingresó manualmente.
+      // Se guarda como precio_base = precioManual / (1 - descuento/100) para que
+      // Electron calcule el mismo precio_final al leer la cotización del grupo.
+      if (precioManual > 0 && precioExistente <= 0 && this.revisionIdGrupo) {
+        const descuento  = parseFloat(prod.descuento ?? 0)
+        const precioBase = descuento > 0
+          ? Math.round(precioManual / (1 - descuento / 100) * 100) / 100
+          : precioManual
+        API.post('/api/productos/precio-rapido', {
+          id_producto: prod.id_producto,
+          id_grupo:    this.revisionIdGrupo,
+          precio_base: precioBase
+        }).catch(e => console.warn('No se pudo guardar el precio:', e.message))
+      }
 
       this.revisionCerrarAgregar()
     },

@@ -97,10 +97,14 @@ router.get('/buscar', requireAuth, async (req, res) => {
       rows = await q(`
         SELECT p.id_producto, p.numero_producto, p.nombre_producto,
                p.unidad_producto, p.stock,
-               COALESCE(pg.precio_base, 0) AS precio_base
+               COALESCE(pg.precio_base, 0) AS precio_base,
+               COALESCE(tc.descuento, 0) AS descuento,
+               ROUND(COALESCE(pg.precio_base, 0) * (1 - COALESCE(tc.descuento, 0) / 100), 2) AS precio_final
         FROM   producto p
         LEFT   JOIN precio_por_grupo pg
                ON p.id_producto = pg.id_producto AND pg.id_grupo = ?
+        LEFT   JOIN grupo g ON g.id_grupo = pg.id_grupo
+        LEFT   JOIN tipo_cliente tc ON tc.id_tipo_cliente = g.id_tipo_cliente
         WHERE  p.activo = 1
           AND  p.nombre_producto LIKE ?
         ORDER  BY p.nombre_producto
