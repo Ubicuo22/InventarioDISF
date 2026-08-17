@@ -75,7 +75,10 @@ function cobranzaModule() {
       const saldo    = this.fmtMoney(deuda.saldo_pendiente)
       const folio    = deuda.id_factura ? `#${String(deuda.id_factura).padStart(4, '0')}` : ''
       const vence    = deuda.fecha_vencimiento
-        ? new Date(deuda.fecha_vencimiento).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+        ? (() => {
+            const ymd = typeof deuda.fecha_vencimiento === 'string' ? deuda.fecha_vencimiento.slice(0, 10) : new Date(deuda.fecha_vencimiento).toISOString().slice(0, 10)
+            return new Date(ymd + 'T12:00:00Z').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit', timeZone: 'America/Mexico_City' })
+          })()
         : ''
 
       let msg = `Hola ${deuda.nombre_cliente}, le recordamos que tiene un saldo pendiente de ${saldo}`
@@ -210,7 +213,11 @@ function cobranzaModule() {
 
     fmtFechaPago(f) {
       if (!f) return '—'
-      return new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+      const ymd = typeof f === 'string' ? f.slice(0, 10) : new Date(f).toISOString().slice(0, 10)
+      return new Date(ymd + 'T12:00:00Z').toLocaleDateString('es-MX', {
+        day: '2-digit', month: 'short', year: '2-digit',
+        timeZone: 'America/Mexico_City'
+      })
     }
   }
 }

@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════
    DISFRULEG PORTAL BODEGA — Design System
-   Bento Minimal Glass + Liquid Glass hero
-   Soporte de temas: data-theme="dark" (default) | "light"
+   Mercado Fresco — light-dominant, dark disponible
+   Soporte de temas: data-theme="light" (default) | "dark"
 ══════════════════════════════════════════════════════════ */
 
 /* ── Fuentes ── */
@@ -17,47 +17,52 @@
    TOKENS — INVARIANTES (no cambian entre temas)
 ══════════════════════════════ */
 :root {
-  /* Acentos (mismos en ambos temas) */
-  --accent:      #22c55e;
-  --accent-h:    #16a34a;
-  --accent-glow: rgba(34,197,94,0.35);
-  --violet:      #8b5cf6;
+  /* ── Acento principal: verde mercado profundo ── */
+  --accent:      #1E5C3A;
+  --accent-h:    #2E7D52;
+  --accent-glow: rgba(30,92,58,0.28);
+  /* Acento secundario (dark mode necesita verde más claro) */
+  --accent-dark:      #4CAF72;
+  --accent-dark-h:    #66CC8C;
+  --accent-dark-glow: rgba(76,175,114,0.30);
+
+  /* Colores semánticos UI — independientes del tema */
+  --violet:      #7c3aed;
   --violet-2:    #a78bfa;
-  --violet-glow: rgba(139,92,246,0.40);
-  --blue:        #60a5fa;
-  --amber:       #fbbf24;
-  --cyan:        #22d3ee;
-  --rose:        #fb7185;
-  --danger:      #f87171;
+  --violet-glow: rgba(124,58,237,0.35);
+  --blue:        #2563eb;
+  --amber:       #d97706;
+  --cyan:        #0891b2;
+  --rose:        #e11d48;
+  --danger:      #dc2626;
 
-  /* Radios */
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
-  --r-xl: 28px;
-  --r-2xl: 36px;
+  /* Radios — más contenidos, mercado ≠ SaaS inflado */
+  --r-sm:  5px;
+  --r-md:  6px;
+  --r-lg:  8px;
+  --r-xl: 12px;
+  --r-2xl: 16px;
 
-  /* Blurs — refinados para liquid glass iOS 18 */
-  --blur-1: 18px;
-  --blur-2: 30px;
-  --blur-3: 48px;
+  /* Blurs — solo para modales/nav, no para cards */
+  --blur-1: 16px;
+  --blur-2: 24px;
+  --blur-3: 36px;
 
   /* Easings */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-snap:   cubic-bezier(0.5, 0, 0.2, 1);
 
-  /* ── Design System Fase 1 ──────────────────────────── */
-  /* Color primario: rojo desaturado (inspirado en Linear) */
-  --color-primary:       #2D9B6C;
-  --color-primary-hover: #248c5f;
-  --color-primary-soft:  rgba(45, 155, 108, 0.12);
+  /* ── Color primario de marca ── */
+  --color-primary:       #1E5C3A;
+  --color-primary-hover: #2E7D52;
+  --color-primary-soft:  rgba(30,92,58,0.10);
 
   /* Colores funcionales de inventario */
-  --color-accent:   #2ECC71;   /* verde GitHub — stock OK */
-  --color-warning:  #F5A623;   /* ámbar — bajo, por vencer */
-  --color-danger:   #E5534B;   /* rojo — sin stock, caducado */
-  --color-neutral:  #6E7781;   /* gris — desconocido */
+  --color-accent:   #1E5C3A;   /* verde mercado — stock OK */
+  --color-warning:  #B87018;   /* ámbar cosecha — bajo, por vencer */
+  --color-danger:   #C43C3C;   /* rojo — sin stock, caducado */
+  --color-neutral:  #6B7280;   /* slate neutral */
 
   /* Alias semánticos de inventario */
   --inv-ok:      var(--color-accent);
@@ -65,11 +70,11 @@
   --inv-danger:  var(--color-danger);
   --inv-unknown: var(--color-neutral);
 
-  /* Sombras de elevación (data-dense UI) */
-  --shadow-sm:  0 1px 2px rgba(0,0,0,0.05);
-  --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.06);
-  --shadow-lg:  0 10px 15px rgba(0,0,0,0.10), 0 4px 6px rgba(0,0,0,0.05);
-  --shadow-xl:  0 20px 25px rgba(0,0,0,0.10), 0 10px 10px rgba(0,0,0,0.04);
+  /* Sombras de elevación */
+  --shadow-sm:  0 1px 2px rgba(10,12,20,0.06);
+  --shadow-md:  0 3px 6px rgba(10,12,20,0.07), 0 1px 3px rgba(10,12,20,0.05);
+  --shadow-lg:  0 8px 14px rgba(10,12,20,0.09), 0 3px 6px rgba(10,12,20,0.05);
+  --shadow-xl:  0 16px 24px rgba(10,12,20,0.10), 0 8px 10px rgba(10,12,20,0.04);
 
   /* Transiciones */
   --t-fast:   100ms ease;
@@ -83,38 +88,87 @@
 }
 
 /* ══════════════════════════════
-   TEMA OSCURO (default)
+   TEMA CLARO — Slate (default)
+   Gris azulado profesional, neutro, sin sesgo de marca del desarrollador.
+   Sin glassmorphism: superficies sólidas.
 ══════════════════════════════ */
 :root,
+[data-theme="light"] {
+  /* Canvas — slate gris-azulado */
+  --bg-0: #E6E8EC;   /* fondo elevado: sidebar, raised panels */
+  --bg-1: #F1F2F4;   /* fondo principal de la app */
+  --bg-2: #FFFFFF;   /* cards, tablas, inputs — blanco sobre slate */
+
+  /* Superficies sólidas — tinte neutro-azulado */
+  --glass-1: rgba(10,12,20,0.04);
+  --glass-2: rgba(10,12,20,0.07);
+  --glass-3: rgba(10,12,20,0.11);
+  --glass-4: rgba(10,12,20,0.16);
+  --glass-border:    rgba(10,12,20,0.10);
+  --glass-border-hi: rgba(10,12,20,0.18);
+  --glass-highlight: rgba(255,255,255,0.88);
+
+  /* Texto — escala neutro oscuro sin sesgo verde */
+  --text:       #14161E;
+  --text-muted: #484C5E;
+  --text-dim:   #686C80;
+  --text-faint: #8A8F9E;
+
+  /* Sombras */
+  --shadow-glass: 0 1px 0 rgba(255,255,255,.82) inset, 0 -1px 0 rgba(10,12,20,.04) inset, 0 2px 6px rgba(10,12,20,.05), 0 8px 18px -6px rgba(10,12,20,.07);
+  --shadow-pop:   0 1px 0 rgba(255,255,255,.88) inset, 0 14px 36px -10px rgba(10,12,20,.13), 0 5px 14px -4px rgba(10,12,20,.07);
+  --shadow-fab:   0 10px 28px -5px rgba(181,32,32,.38), 0 3px 10px rgba(181,32,32,.18), inset 0 1px 0 rgba(255,255,255,.4);
+  --shadow-nav:   0 -1px 0 rgba(10,12,20,.06), 0 -4px 16px rgba(10,12,20,.04);
+
+  /* Backdrops */
+  --modal-bg:        rgba(241,242,244,0.97);
+  --modal-backdrop:  rgba(10,12,20,0.45);
+  --dropdown-bg:     rgba(248,249,251,0.99);
+  --nav-bg:          rgba(230,232,236,0.92);
+  --header-bg:       rgba(230,232,236,0.92);
+
+  /* Compat */
+  --bg:         var(--bg-1);
+  --bg-card:    var(--bg-2);
+  --bg-raised:  var(--bg-0);
+  --border:     var(--glass-border);
+  --scrollbar:  rgba(10,12,20,0.12);
+
+  color-scheme: light;
+}
+
+/* ══════════════════════════════
+   TEMA OSCURO
+   Verde claro sobre profundo, sin cambiar la estructura.
+══════════════════════════════ */
 [data-theme="dark"] {
   /* Canvas */
   --bg-0: #060608;
   --bg-1: #0a0a0c;
   --bg-2: #101014;
 
-  /* Glass layers — opacidad subida para legibilidad sin perder translucidez */
+  /* Glass layers */
   --glass-1: rgba(255,255,255,0.05);
   --glass-2: rgba(255,255,255,0.085);
   --glass-3: rgba(255,255,255,0.13);
   --glass-4: rgba(255,255,255,0.18);
   --glass-border:    rgba(255,255,255,0.10);
   --glass-border-hi: rgba(255,255,255,0.22);
-  /* Highlight superior tipo iOS 18 — borde brillante sutil en la parte alta */
   --glass-highlight: rgba(255,255,255,0.12);
 
   /* Texto */
-  --text:       #f5f5f7;
-  --text-muted: #a1a1aa;
-  --text-dim:   #71717a;
-  --text-faint: #52525b;
+  --text:       #E8E4D8;
+  --text-muted: #8A9278;
+  --text-dim:   #5E6654;
+  --text-faint: #3E4836;
 
-  /* Sombras — dual layer + highlight superior tipo Apple liquid glass */
+  /* Sombras */
   --shadow-glass: 0 1px 0 rgba(255,255,255,0.10) inset, 0 -1px 0 rgba(0,0,0,0.20) inset, 0 4px 16px rgba(0,0,0,0.35), 0 16px 40px -12px rgba(0,0,0,0.55);
   --shadow-pop:   0 1px 0 rgba(255,255,255,0.12) inset, 0 20px 60px -15px rgba(0,0,0,0.75), 0 8px 24px -8px rgba(0,0,0,0.5);
-  --shadow-fab:   0 14px 40px -6px rgba(22,163,74,.55), 0 4px 14px rgba(22,163,74,.28), inset 0 1px 0 rgba(255,255,255,0.15);
+  --shadow-fab:   0 14px 40px -6px rgba(76,175,114,.50), 0 4px 14px rgba(76,175,114,.25), inset 0 1px 0 rgba(255,255,255,0.15);
   --shadow-nav:   0 -4px 24px rgba(0,0,0,0.45), 0 10px 32px -8px rgba(0,0,0,0.5);
 
-  /* Backdrops específicos — más opacos para asegurar legibilidad de modales/nav */
+  /* Backdrops */
   --modal-bg:        rgba(18,18,22,0.92);
   --modal-backdrop:  rgba(0,0,0,0.65);
   --dropdown-bg:     rgba(20,20,24,0.95);
@@ -128,55 +182,18 @@
   --border:     var(--glass-border);
   --scrollbar:  rgba(255,255,255,0.08);
 
+  /* Acentos adaptados para dark — usar verde más claro */
+  --accent:            var(--accent-dark);
+  --accent-h:          var(--accent-dark-h);
+  --accent-glow:       var(--accent-dark-glow);
+  --color-primary:     var(--accent-dark);
+  --color-primary-hover: var(--accent-dark-h);
+  --color-primary-soft:  rgba(76,175,114,0.14);
+  --color-accent:      var(--accent-dark);
+  --color-warning:     #E09030;
+  --color-danger:      #E06868;
+
   color-scheme: dark;
-}
-
-/* ══════════════════════════════
-   TEMA CLARO
-══════════════════════════════ */
-[data-theme="light"] {
-  /* Canvas — grises Apple, no blanco puro */
-  --bg-0: #f2f2f7;
-  --bg-1: #ffffff;
-  --bg-2: #f7f7fa;
-
-  /* Glass layers — opacidad subida para legibilidad sin perder translucidez */
-  --glass-1: rgba(0,0,0,0.04);
-  --glass-2: rgba(0,0,0,0.065);
-  --glass-3: rgba(0,0,0,0.10);
-  --glass-4: rgba(0,0,0,0.14);
-  --glass-border:    rgba(0,0,0,0.10);
-  --glass-border-hi: rgba(0,0,0,0.20);
-  /* Highlight blanco para iOS liquid feel en light mode */
-  --glass-highlight: rgba(255,255,255,0.70);
-
-  /* Texto — gradiente de oscuros */
-  --text:       #0a0a0c;
-  --text-muted: #3f3f46;
-  --text-dim:   #52525b;
-  --text-faint: #71717a;
-
-  /* Sombras — dual layer + highlight superior tipo iOS liquid glass */
-  --shadow-glass: 0 1px 0 rgba(255,255,255,0.70) inset, 0 -1px 0 rgba(0,0,0,0.06) inset, 0 2px 8px rgba(0,0,0,0.04), 0 12px 32px -8px rgba(0,0,0,0.10);
-  --shadow-pop:   0 1px 0 rgba(255,255,255,0.80) inset, 0 20px 50px -12px rgba(0,0,0,0.18), 0 8px 20px -6px rgba(0,0,0,0.10);
-  --shadow-fab:   0 14px 40px -6px rgba(22,163,74,.45), 0 4px 14px rgba(22,163,74,.22), inset 0 1px 0 rgba(255,255,255,0.4);
-  --shadow-nav:   0 -4px 24px rgba(0,0,0,0.06), 0 10px 32px -8px rgba(0,0,0,0.10);
-
-  /* Backdrops específicos */
-  --modal-bg:        rgba(255,255,255,0.92);
-  --modal-backdrop:  rgba(0,0,0,0.35);
-  --dropdown-bg:     rgba(255,255,255,0.96);
-  --nav-bg:          rgba(255,255,255,0.78);
-  --header-bg:       rgba(255,255,255,0.78);
-
-  /* Compat */
-  --bg:         var(--bg-1);
-  --bg-card:    var(--glass-2);
-  --bg-raised:  var(--glass-1);
-  --border:     var(--glass-border);
-  --scrollbar:  rgba(0,0,0,0.10);
-
-  color-scheme: light;
 }
 
 /* Transición suave al alternar tema */
@@ -463,16 +480,15 @@ body {
   border-color: rgba(217,119,6,0.30);
 }
 
-/* Gradiente ambiental + noise sutil como fondo vivo */
+/* Gradiente ambiental — sutil, del mundo del mercado */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -2;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(199,59,59,0.07), transparent 60%),
-    radial-gradient(ellipse 60% 60% at 100% 100%, rgba(139,92,246,0.07), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 0% 80%, rgba(59,130,246,0.05), transparent 50%),
+    radial-gradient(ellipse 60% 35% at 50% -5%, rgba(181,32,32,0.04), transparent 55%),
+    radial-gradient(ellipse 50% 50% at 100% 100%, rgba(10,12,20,0.03), transparent 50%),
     var(--bg-0);
   pointer-events: none;
 }
@@ -482,23 +498,21 @@ body::after {
   inset: 0;
   z-index: -1;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.03 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  opacity: .55;
+  opacity: .20;
   pointer-events: none;
-  mix-blend-mode: overlay;
+  mix-blend-mode: multiply;
 }
 
-/* En modo claro: ambient glow más suave (los radiales con saturación alta
-   sobre blanco se ven sucios) y el grain mucho más tenue. */
-[data-theme="light"] body::before {
+/* En modo oscuro: gradient más intenso, grain en overlay */
+[data-theme="dark"] body::before {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(199,59,59,0.05), transparent 60%),
-    radial-gradient(ellipse 60% 60% at 100% 100%, rgba(139,92,246,0.04), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 0% 80%, rgba(59,130,246,0.03), transparent 50%),
+    radial-gradient(ellipse 70% 40% at 50% -5%, rgba(76,175,114,0.08), transparent 55%),
+    radial-gradient(ellipse 50% 50% at 100% 100%, rgba(184,112,24,0.06), transparent 50%),
     var(--bg-0);
 }
-[data-theme="light"] body::after {
-  opacity: .15;
-  mix-blend-mode: multiply;
+[data-theme="dark"] body::after {
+  opacity: .55;
+  mix-blend-mode: overlay;
 }
 
 .font-behmer { font-family: 'Behmer', sans-serif; letter-spacing: .02em; }
@@ -545,7 +559,7 @@ body::after {
   -webkit-backdrop-filter: blur(var(--blur-2)) saturate(180%);
   border-radius: var(--r-lg);
 }
-.glow-accent { box-shadow: 0 0 0 1px rgba(34,197,94,.25), 0 10px 30px -10px var(--accent-glow); }
+.glow-accent { box-shadow: 0 0 0 1px rgba(76,175,114,.25), 0 10px 30px -10px var(--accent-glow); }
 .glow-violet { box-shadow: 0 0 0 1px rgba(139,92,246,.3), 0 10px 30px -10px var(--violet-glow); }
 
 /* ══════════════════════════════
@@ -600,9 +614,9 @@ body::after {
 .input-dark::placeholder { color: var(--text-faint); }
 .input-dark:focus {
   outline: none;
-  border-color: rgba(199,59,59,.50);
+  border-color: rgba(76,175,114,.55);
   background: rgba(255,255,255,0.06);
-  box-shadow: 0 0 0 3px rgba(199,59,59,.15);
+  box-shadow: 0 0 0 3px rgba(76,175,114,.18);
 }
 
 .btn-primary {
@@ -615,11 +629,22 @@ body::after {
   border: 1px solid rgba(255,255,255,0.1);
   cursor: pointer;
   transition: transform .15s var(--ease-spring), filter .15s, box-shadow .2s;
-  box-shadow: 0 6px 20px -4px rgba(199,59,59,.40), inset 0 1px 0 rgba(255,255,255,0.15);
+  box-shadow: 0 4px 14px -3px rgba(30,92,58,.35), inset 0 1px 0 rgba(255,255,255,0.15);
 }
 .btn-primary:hover    { filter: brightness(1.08); }
 .btn-primary:active   { transform: scale(0.97); }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; filter: grayscale(.3); }
+
+/* Botón de login — rojo en ambos temas */
+#login-screen .btn-primary {
+  background: #B52020;
+  box-shadow: 0 4px 14px -3px rgba(181,32,32,.35), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+#login-screen .btn-primary:hover { filter: brightness(1.10); }
+[data-theme="dark"] #login-screen .btn-primary {
+  background: #C43030;
+  box-shadow: 0 4px 14px -3px rgba(196,48,48,.40), inset 0 1px 0 rgba(255,255,255,0.12);
+}
 
 .btn-ghost {
   background: var(--glass-1);
@@ -738,8 +763,8 @@ body::after {
 }
 
 /* Variantes de tile por color */
-.bento-tile--accent { border-color: rgba(34,197,94,.25); }
-.bento-tile--accent:hover { border-color: rgba(34,197,94,.5); }
+.bento-tile--accent { border-color: rgba(76,175,114,.25); }
+.bento-tile--accent:hover { border-color: rgba(76,175,114,.5); }
 .bento-tile--violet {
   background: linear-gradient(135deg, rgba(139,92,246,0.14), rgba(109,40,217,0.06));
   border-color: rgba(139,92,246,0.28);
@@ -762,10 +787,10 @@ body::after {
 
 /* Light mode: tiles con fondo sutil tintado para diferenciarse */
 [data-theme="light"] .bento-tile--accent {
-  border-color: rgba(21,128,61,.35);
-  background: linear-gradient(135deg, rgba(34,197,94,.07), rgba(255,255,255,.6));
+  border-color: rgba(30,92,58,.30);
+  background: linear-gradient(135deg, rgba(30,92,58,.08), rgba(253,250,245,.7));
 }
-[data-theme="light"] .bento-tile--accent:hover { border-color: rgba(21,128,61,.6); }
+[data-theme="light"] .bento-tile--accent:hover { border-color: rgba(30,92,58,.55); }
 [data-theme="light"] .bento-tile--blue {
   border-color: rgba(37,99,235,.3);
   background: linear-gradient(135deg, rgba(96,165,250,.07), rgba(255,255,255,.6));
@@ -802,7 +827,7 @@ body::after {
 .icon-bubble--lg { width: 56px; height: 56px; border-radius: 16px; }
 
 /* Colores de icon-bubble por variante de bento-tile */
-.bento-tile--accent .icon-bubble { background: rgba(34,197,94,0.14); }
+.bento-tile--accent .icon-bubble { background: rgba(76,175,114,0.14); }
 .bento-tile--blue   .icon-bubble { background: rgba(96,165,250,0.14); }
 .bento-tile--amber  .icon-bubble { background: rgba(251,191,36,0.14); }
 .bento-tile--cyan   .icon-bubble { background: rgba(34,211,238,0.14); }
@@ -908,6 +933,11 @@ nav.bottom-nav-glass {
   z-index: 30;
   display: flex;
   gap: 2px;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+nav.bottom-nav-glass.nav-hidden {
+  transform: translateX(-50%) translateY(calc(100% + env(safe-area-inset-bottom) + 20px));
 }
 @media (min-width: 768px) {
   nav.bottom-nav-glass {
@@ -1009,8 +1039,8 @@ nav.bottom-nav-glass {
   width: 58px; height: 58px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(180deg, #22c55e, #15803d);
-  border: 1px solid rgba(255,255,255,0.18);
+  background: linear-gradient(180deg, #2E7D52, #1E5C3A);
+  border: 1px solid rgba(255,255,255,0.15);
   color: #fff;
   box-shadow: var(--shadow-fab);
   z-index: 30;
@@ -1018,13 +1048,16 @@ nav.bottom-nav-glass {
 }
 .fab-glass:hover  { filter: brightness(1.1); }
 .fab-glass:active { transform: scale(0.92); }
+[data-theme="dark"] .fab-glass {
+  background: linear-gradient(180deg, #4CAF72, #2E7D52);
+}
 
 /* ══════════════════════════════
    BADGES DE STOCK / ESTADO (legacy — retrocompat)
 ══════════════════════════════ */
-.badge-ok   { background: rgba(34,197,94,0.14);  color: #86efac; border: 1px solid rgba(34,197,94,0.28); }
-.badge-low  { background: rgba(251,191,36,0.14); color: #fde68a; border: 1px solid rgba(251,191,36,0.28); }
-.badge-zero { background: rgba(248,113,113,0.15); color: #fca5a5; border: 1px solid rgba(248,113,113,0.30); }
+.badge-ok   { background: rgba(76,175,114,0.15);  color: #9EDBB8; border: 1px solid rgba(76,175,114,0.28); }
+.badge-low  { background: rgba(184,112,24,0.16); color: #F5C87A; border: 1px solid rgba(184,112,24,0.32); }
+.badge-zero { background: rgba(196,60,60,0.16); color: #F09090; border: 1px solid rgba(196,60,60,0.30); }
 
 /* ══════════════════════════════
    BADGES SEMÁNTICOS DE INVENTARIO
@@ -1314,7 +1347,7 @@ select option { background: #141418; }
 
 /* ── Badges de stock (badge-ok/low/zero) ── */
 /* En dark usan texto pastel claro; en light necesitan texto oscuro sobre fondo tintado */
-[data-theme="light"] .badge-ok   { background: #dcfce7; color: #15803d; border-color: rgba(21,128,61,0.28); }
+[data-theme="light"] .badge-ok   { background: rgba(30,92,58,0.08); color: #1E5C3A; border-color: rgba(30,92,58,0.22); }
 [data-theme="light"] .badge-low  { background: #fef9c3; color: #854d0e; border-color: rgba(161,98,7,0.28); }
 [data-theme="light"] .badge-zero { background: #fee2e2; color: #991b1b; border-color: rgba(185,28,28,0.25); }
 
@@ -1325,9 +1358,9 @@ select option { background: #141418; }
   color: var(--text);
 }
 [data-theme="light"] .input-dark:focus {
-  border-color: rgba(199,59,59,0.50);
+  border-color: rgba(30,92,58,0.55);
   background: var(--bg-1);
-  box-shadow: 0 0 0 3px rgba(199,59,59,0.10);
+  box-shadow: 0 0 0 3px rgba(30,92,58,0.12);
 }
 [data-theme="light"] .input-dark::placeholder { color: #9ca3af; }
 
@@ -1374,30 +1407,31 @@ select option { background: #141418; }
 
 /* ── Bento tiles en claro — elevación real (blanco sobre gris) ── */
 [data-theme="light"] .bento-tile {
-  background: var(--bg-1);
-  border-color: rgba(0,0,0,0.07);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.03);
+  background: var(--bg-2);
+  border-color: rgba(0,0,0,0.09);
+  box-shadow: 0 1px 3px rgba(10,12,20,0.07), 0 3px 10px rgba(10,12,20,0.05);
 }
 [data-theme="light"] .bento-tile:hover {
-  background: var(--bg-1);
-  border-color: rgba(0,0,0,0.12);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.09), 0 4px 16px rgba(0,0,0,0.05);
+  background: var(--bg-2);
+  border-color: rgba(0,0,0,0.14);
+  box-shadow: 0 2px 8px rgba(10,12,20,0.10), 0 6px 20px rgba(10,12,20,0.06);
 }
 
-/* ── Cards y glass en claro — sombra ligera para separación ── */
+/* ── Cards y glass en claro — blanco sobre slate, sombra real ── */
 [data-theme="light"] .card {
-  background: var(--bg-1);
-  border-color: rgba(0,0,0,0.07);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03);
+  background: var(--bg-2);
+  border-color: rgba(0,0,0,0.09);
+  box-shadow: 0 1px 3px rgba(10,12,20,0.07), 0 3px 10px rgba(10,12,20,0.05);
 }
 [data-theme="light"] .card:hover {
-  background: var(--bg-1);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  background: var(--bg-2);
+  box-shadow: 0 2px 8px rgba(10,12,20,0.10), 0 6px 20px rgba(10,12,20,0.06);
 }
 [data-theme="light"] .glass,
 [data-theme="light"] .glass-2 {
-  border-color: rgba(0,0,0,0.08);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  background: var(--bg-2);
+  border-color: rgba(0,0,0,0.09);
+  box-shadow: 0 1px 3px rgba(10,12,20,0.06);
 }
 
 /* ── Glass-btn / glass-chip en claro ── */
@@ -1416,7 +1450,7 @@ select option { background: #141418; }
   background: var(--bg-1);
   border-color: rgba(0,0,0,0.12);
 }
-[data-theme="light"] .glass-input:focus { border-color: rgba(199,59,59,0.40); }
+[data-theme="light"] .glass-input:focus { border-color: rgba(30,92,58,0.45); box-shadow: 0 0 0 3px rgba(30,92,58,0.10); }
 
 /* ── Glass-card en claro ── */
 [data-theme="light"] .glass-card {
@@ -1441,11 +1475,11 @@ select option { background: #141418; }
 [data-theme="light"] .text-slate-300  { color: #374151 !important; }
 
 /* ── Los verde-neutro globales usan !important — necesitamos ganarles en light ── */
-[data-theme="light"] .text-emerald-400 { color: #15803d !important; }
-[data-theme="light"] .text-emerald-300 { color: #065f46 !important; }
-[data-theme="light"] .text-emerald-500 { color: #166534 !important; }
-[data-theme="light"] .text-emerald-600 { color: #047857 !important; }
-[data-theme="light"] .text-emerald-700 { color: #065f46 !important; }
+[data-theme="light"] .text-emerald-400 { color: #2E7D52 !important; }
+[data-theme="light"] .text-emerald-300 { color: #4A9E6A !important; }
+[data-theme="light"] .text-emerald-500 { color: #1E5C3A !important; }
+[data-theme="light"] .text-emerald-600 { color: #1E5C3A !important; }
+[data-theme="light"] .text-emerald-700 { color: #143D28 !important; }
 [data-theme="light"] .text-rose-400    { color: #be123c !important; }
 [data-theme="light"] .text-yellow-400  { color: #854d0e !important; }
 
@@ -1539,13 +1573,13 @@ select option { background: #141418; }
 /* ══════════════════════════════
    VERDE NEUTRO — reemplaza emerald chillón
 ══════════════════════════════ */
-.text-emerald-400 { color: #4ade80 !important; }
-.text-emerald-300 { color: #86efac !important; }
-.text-emerald-500 { color: #22c55e !important; }
-[class*="bg-emerald-500\/"] { background-color: rgba(34,197,94,var(--tw-bg-opacity,1)) !important; }
-[class*="bg-emerald-400\/"] { background-color: rgba(74,222,128,var(--tw-bg-opacity,1)) !important; }
-[class*="border-emerald-500\/"] { border-color: rgba(34,197,94,var(--tw-border-opacity,1)) !important; }
-[class*="border-emerald-400\/"] { border-color: rgba(74,222,128,var(--tw-border-opacity,1)) !important; }
+.text-emerald-400 { color: #66CC8C !important; }
+.text-emerald-300 { color: #9EDBB8 !important; }
+.text-emerald-500 { color: #4CAF72 !important; }
+[class*="bg-emerald-500\/"] { background-color: rgba(76,175,114,var(--tw-bg-opacity,1)) !important; }
+[class*="bg-emerald-400\/"] { background-color: rgba(102,204,140,var(--tw-bg-opacity,1)) !important; }
+[class*="border-emerald-500\/"] { border-color: rgba(76,175,114,var(--tw-border-opacity,1)) !important; }
+[class*="border-emerald-400\/"] { border-color: rgba(102,204,140,var(--tw-border-opacity,1)) !important; }
 
 /* ══════════════════════════════
    FALLBACK — sin backdrop-filter
@@ -1554,13 +1588,13 @@ select option { background: #141418; }
   .glass,
   .glass-2,
   .card,
-  .bento-tile        { background: #141418; }
+  .bento-tile        { background: var(--bg-2); }
   .glass-strong,
   .sheet,
   [class*="bg-modal"],
-  .bg-modal          { background: #17171c !important; }
-  nav.bottom-nav-glass { background: rgba(20,20,24,0.96); }
-.modal-backdrop    { background: rgba(0,0,0,0.75); }
+  .bg-modal          { background: var(--bg-1) !important; }
+  nav.bottom-nav-glass { background: var(--nav-bg); }
+  .modal-backdrop    { background: var(--modal-backdrop); }
 }
 
 /* ══════════════════════════════
@@ -1605,20 +1639,20 @@ select option { background: #141418; }
 }
 
 .btn-rev-green {
-  background: rgba(34,197,94,.12);
-  border: 1px solid rgba(34,197,94,.35);
-  color: #86efac;
+  background: rgba(76,175,114,.13);
+  border: 1px solid rgba(76,175,114,.36);
+  color: #9EDBB8;
   transition: background 130ms ease, border-color 130ms ease, transform 80ms ease;
 }
-.btn-rev-green:hover  { background: rgba(34,197,94,.22); border-color: rgba(34,197,94,.60); color: #bbf7d0; }
+.btn-rev-green:hover  { background: rgba(76,175,114,.22); border-color: rgba(76,175,114,.60); color: #BDE8CE; }
 .btn-rev-green:active { transform: scale(0.96); }
 
 [data-theme="light"] .btn-rev-green {
-  background: rgba(22,163,74,.07);
-  border-color: rgba(22,163,74,.25);
-  color: #15803d;
+  background: rgba(30,92,58,.07);
+  border-color: rgba(30,92,58,.25);
+  color: #1E5C3A;
 }
-[data-theme="light"] .btn-rev-green:hover { background: rgba(22,163,74,.14); border-color: rgba(22,163,74,.45); }
+[data-theme="light"] .btn-rev-green:hover { background: rgba(30,92,58,.13); border-color: rgba(30,92,58,.45); }
 
 [data-theme="light"] .btn-rev-slate {
   background: rgba(71,85,105,.07);
@@ -1645,25 +1679,57 @@ select option { background: #141418; }
 
 /* ── Botón principal de revisión "Marcar y sig." ─────────────────── */
 .btn-marcar-sig {
-  background: linear-gradient(160deg, #4ade80 0%, #22c55e 48%, #15803d 100%);
+  background: #3A9966;
   box-shadow:
-    0 1px 0 rgba(255,255,255,0.28) inset,
-    0 -1px 0 rgba(0,0,0,0.22) inset,
-    0 0 0 1px rgba(34,197,94,0.40),
-    0 4px 18px rgba(34,197,94,0.42),
-    0 14px 40px -10px rgba(21,128,61,0.40);
-  border-radius: 14px;
-  letter-spacing: 0.015em;
-  transition: box-shadow 150ms ease, transform 80ms ease, opacity 150ms ease;
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    0 0 0 1px rgba(0,0,0,0.22),
+    0 2px 0 #1A5C36,
+    0 4px 12px rgba(30,92,58,0.22);
+  border-radius: var(--r-md);
+  letter-spacing: 0.02em;
+  transition: box-shadow 80ms ease, transform 80ms ease, opacity 150ms ease;
+}
+.btn-marcar-sig:hover {
+  background: #44A870;
 }
 .btn-marcar-sig:active {
-  transform: scale(0.97);
+  transform: translateY(1px);
   box-shadow:
-    0 1px 0 rgba(255,255,255,0.15) inset,
-    0 0 0 1px rgba(34,197,94,.30),
-    0 2px 8px rgba(34,197,94,0.25);
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 1px rgba(0,0,0,0.22),
+    0 1px 0 #1A5C36,
+    0 2px 6px rgba(30,92,58,0.14);
 }
-.btn-marcar-sig:disabled { opacity: 0.40; }
+.btn-marcar-sig:disabled { opacity: 0.40; pointer-events: none; }
+
+/* Counter badge dentro del botón */
+.btn-marcar-sig .tabular-nums {
+  background: rgba(0,0,0,0.18);
+  padding: 1px 7px 2px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  opacity: 1;
+}
+
+[data-theme="light"] .btn-marcar-sig {
+  background: #1E5C3A;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    0 0 0 1px rgba(0,0,0,0.18),
+    0 2px 0 #0F3020,
+    0 4px 12px rgba(30,92,58,0.20);
+}
+[data-theme="light"] .btn-marcar-sig:hover { background: #2A7048; }
+[data-theme="light"] .btn-marcar-sig:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 1px rgba(0,0,0,0.18),
+    0 1px 0 #0F3020,
+    0 2px 6px rgba(30,92,58,0.12);
+}
 
 /* ── Lista lateral de productos (sidebar de revisión) ────────────── */
 .rev-list-row {
@@ -1680,11 +1746,11 @@ select option { background: #141418; }
   -webkit-tap-highlight-color: transparent;
 }
 .rev-list-row--active {
-  background: linear-gradient(90deg, rgba(34,197,94,.14) 0%, rgba(34,197,94,.03) 100%);
-  border-left-color: #22c55e;
-  box-shadow: inset 0 0 0 1px rgba(34,197,94,.07);
+  background: linear-gradient(90deg, rgba(76,175,114,.14) 0%, rgba(76,175,114,.03) 100%);
+  border-left-color: #4CAF72;
+  box-shadow: inset 0 0 0 1px rgba(76,175,114,.07);
 }
-.rev-list-row--active:hover { background: linear-gradient(90deg, rgba(34,197,94,.19) 0%, rgba(34,197,94,.05) 100%); }
+.rev-list-row--active:hover { background: linear-gradient(90deg, rgba(76,175,114,.19) 0%, rgba(76,175,114,.05) 100%); }
 .rev-list-row--pending {
   border-left-color: rgba(245,158,11,.65);
 }
@@ -1818,14 +1884,14 @@ select option { background: #141418; }
 
 /* Badge "▶ Próximo" — primer lote PEPS */
 .lote-badge-next {
-  background: rgba(34, 197, 94, 0.18);
-  color: #86efac;
-  border: 1px solid rgba(34, 197, 94, 0.28);
+  background: rgba(76, 175, 114, 0.16);
+  color: #9EDBB8;
+  border: 1px solid rgba(76, 175, 114, 0.28);
 }
 [data-theme="light"] .lote-badge-next {
-  background: #dcfce7;
-  color: #15803d;
-  border-color: rgba(21, 128, 61, 0.20);
+  background: rgba(30,92,58,0.09);
+  color: #1E5C3A;
+  border-color: rgba(30, 92, 58, 0.22);
 }
 
 /* Días desde entrada del lote — amarillo/ámbar en oscuro, naranja en claro */
@@ -1861,17 +1927,17 @@ select option { background: #141418; }
 }
 
 /* Dark mode (default) */
-.toast-n--success { background: rgba(12,28,16,0.93);  border: 1px solid rgba(34,197,94,0.40); }
+.toast-n--success { background: rgba(12,28,16,0.93);  border: 1px solid rgba(76,175,114,0.40); }
 .toast-n--error   { background: rgba(30,10,10,0.93);  border: 1px solid rgba(239,68,68,0.40); }
 .toast-n--warning { background: rgba(30,22,6,0.93);   border: 1px solid rgba(245,158,11,0.40); }
 .toast-n--info    { background: rgba(10,18,32,0.93);  border: 1px solid rgba(96,165,250,0.40); }
 
-.toast-n__icon--success { background: rgba(34,197,94,0.18); }
+.toast-n__icon--success { background: rgba(76,175,114,0.18); }
 .toast-n__icon--error   { background: rgba(239,68,68,0.18); }
 .toast-n__icon--warning { background: rgba(245,158,11,0.18); }
 .toast-n__icon--info    { background: rgba(96,165,250,0.18); }
 
-.toast-n__track--success { background: rgba(34,197,94,0.20); }
+.toast-n__track--success { background: rgba(76,175,114,0.20); }
 .toast-n__track--error   { background: rgba(239,68,68,0.20); }
 .toast-n__track--warning { background: rgba(245,158,11,0.20); }
 .toast-n__track--info    { background: rgba(96,165,250,0.20); }

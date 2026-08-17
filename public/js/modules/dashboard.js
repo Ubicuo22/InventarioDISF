@@ -9,11 +9,13 @@
 function dashboardModule() {
   return {
     // ── Estado ────────────────────────────────────────────
-    dashMetricas:  null,       // respuesta completa del endpoint
-    dashCargando:  false,
-    dashTs:        null,       // Date del último refresh exitoso
-    dashAnimNums:  {},         // valores animados de conteo { key: number }
-    _dashAnimRaf:  null,
+    dashMetricas:   null,       // respuesta completa del endpoint
+    dashCargando:   false,
+    dashTs:         null,       // Date del último refresh exitoso
+    dashAnimNums:   {},         // valores animados de conteo { key: number }
+    _dashAnimRaf:   null,
+    ceoDatos:       null,       // CEO insights (semana)
+    ceoCargando:    false,
 
     // ── Carga ─────────────────────────────────────────────
     async cargarDashboard() {
@@ -27,6 +29,24 @@ function dashboardModule() {
         }
       } catch { /* silent — no romper la carga inicial */ }
       finally  { this.dashCargando = false }
+      // Cargar CEO insights en paralelo si aplica
+      if (this.session?.rol === 'ceo') this.cargarCeoInsights()
+    },
+
+    async cargarCeoInsights() {
+      this.ceoCargando = true
+      try {
+        const r = await API.get('/api/dashboard/ceo-insights')
+        if (r.ok) this.ceoDatos = r
+      } catch { /* silent */ }
+      finally { this.ceoCargando = false }
+    },
+
+    ceoFmt(n) {
+      if (!n && n !== 0) return '—'
+      return new Intl.NumberFormat('es-MX', {
+        style: 'currency', currency: 'MXN', maximumFractionDigits: 0
+      }).format(n)
     },
 
     // ── Helpers de presentación ───────────────────────────

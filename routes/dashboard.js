@@ -470,4 +470,125 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
   }
 })
 
+// ─── GET /api/dashboard/ceo-insights — solo CEO ─────────────────────────────
+router.get('/ceo-insights', requireAuth, async (req, res) => {
+  if (req.user?.rol !== 'ceo') {
+    return res.status(403).json({ ok: false, error: 'Acceso exclusivo CEO' })
+  }
+  try {
+    const hoy  = fechaMexico()
+    // Últimos 7 días (hoy inclusive)
+    const d7 = new Date(hoy + 'T00:00:00')
+    d7.setDate(d7.getDate() - 6)
+    const desde = d7.toISOString().slice(0, 10)
+
+    const [ganancia, mejorCliente, topProducto, estancados] = await Promise.all([
+
+      // Ganancia real PEPS de la semana
+      q(`SELECT
+           COALESCE(SUM(dvl.utilidad_total), 0)                                        AS ganancia,
+           COALESCE(SUM(df.cantidad_factura * df.precio_unitario_venta), 0)            AS ventas,
+           COUNT(DISTINCT df.id_factura)                                                AS notas
+         FROM detalle_venta_lote dvl
+         INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
+         INNER JOIN factura f          ON f.id_factura  = df.id_factura
+         WHERE DATE(f.fecha_factura) >= ?`, [desde]),
+
+      // Mejor cliente de la semana — subquery evita only_full_group_by
+      q(`SELECT c.nombre_cliente,
+                COALESCE(g.nombre_grupo, 'Sin grupo') AS nombre_grupo,
+                t.total_vendido,
+                t.notas
+         FROM (
+           SELECT f.id_cliente,
+                  SUM(df.cantidad_factura * df.precio_unitario_venta) AS total_vendido,
+                  COUNT(DISTINCT f.id_factura)                        AS notas
+           FROM factura f
+           INNER JOIN detalle_factura df ON f.id_factura = df.id_factura
+           WHERE DATE(f.fecha_factura) >= ?
+           GROUP BY f.id_cliente
+           ORDER BY total_vendido DESC
+           LIMIT 1
+         ) t
+         INNER JOIN cliente c ON c.id_cliente = t.id_cliente
+         LEFT  JOIN grupo g   ON c.id_grupo   = g.id_grupo`, [desde]),
+
+      // Producto más rentable de la semana — subquery evita only_full_group_by
+      q(`SELECT p.nombre_producto,
+                t.ganancia,
+                t.venta,
+                CASE WHEN t.venta > 0
+                     THEN ROUND(t.ganancia / t.venta * 100, 1)
+                     ELSE 0 END AS margen_pct
+         FROM (
+           SELECT df.id_producto,
+                  SUM(dvl.utilidad_total)                              AS ganancia,
+                  SUM(df.cantidad_factura * df.precio_unitario_venta) AS venta
+           FROM detalle_venta_lote dvl
+           INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
+           INNER JOIN factura f          ON f.id_factura  = df.id_factura
+           WHERE DATE(f.fecha_factura) >= ?
+             AND df.precio_unitario_venta > 0
+           GROUP BY df.id_producto
+           HAVING ganancia > 0
+           ORDER BY ganancia DESC
+           LIMIT 1
+         ) t
+         INNER JOIN producto p ON p.id_producto = t.id_producto`, [desde]),
+
+      // Lotes PEPS con stock pero sin movimiento de venta en 60+ días
+      q(`SELECT
+           COUNT(DISTINCT ip.id_producto)                         AS productos,
+           COALESCE(SUM(ip.cantidad_restante * ip.costo_unitario), 0) AS monto_inmovilizado
+         FROM inventario_peps ip
+         WHERE ip.activo = 1
+           AND ip.cantidad_restante > 0
+           AND ip.fecha_movimiento < DATE_SUB(?, INTERVAL 60 DAY)
+           AND NOT EXISTS (
+             SELECT 1 FROM detalle_venta_lote dvl
+             INNER JOIN detalle_factura df ON df.id_detalle = dvl.id_detalle_factura
+             INNER JOIN factura f ON f.id_factura = df.id_factura
+             WHERE dvl.id_inventario_peps = ip.id_inventario_peps
+               AND DATE(f.fecha_factura) >= DATE_SUB(?, INTERVAL 60 DAY)
+           )`, [hoy, hoy])
+    ])
+
+    res.json({
+      ok:            true,
+      semana_desde:  desde,
+      ganancia: {
+        total:  parseFloat(ganancia[0]?.ganancia || 0),
+        ventas: parseFloat(ganancia[0]?.ventas   || 0),
+        notas:  parseInt(ganancia[0]?.notas      || 0),
+        margen: ganancia[0]?.ventas > 0
+          ? Math.round(parseFloat(ganancia[0].ganancia) / parseFloat(ganancia[0].ventas) * 100)
+          : 0
+      },
+      mejor_cliente: mejorCliente[0]
+        ? {
+            nombre:        mejorCliente[0].nombre_cliente,
+            grupo:         mejorCliente[0].nombre_grupo,
+            total_vendido: parseFloat(mejorCliente[0].total_vendido || 0),
+            notas:         parseInt(mejorCliente[0].notas || 0)
+          }
+        : null,
+      top_producto: topProducto[0]
+        ? {
+            nombre:     topProducto[0].nombre_producto,
+            ganancia:   parseFloat(topProducto[0].ganancia   || 0),
+            venta:      parseFloat(topProducto[0].venta      || 0),
+            margen_pct: parseFloat(topProducto[0].margen_pct || 0)
+          }
+        : null,
+      estancados: {
+        productos:          parseInt(estancados[0]?.productos          || 0),
+        monto_inmovilizado: parseFloat(estancados[0]?.monto_inmovilizado || 0)
+      }
+    })
+  } catch (e) {
+    console.error('[dashboard] GET /ceo-insights:', e.message)
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
 module.exports = router

@@ -140,7 +140,7 @@ router.post('/login', rateLimitLogin, async (req, res) => {
         ...(modulosPermitidos !== null ? { modulosPermitidos } : {})
       },
       process.env.JWT_SECRET,
-      { expiresIn: '12h' }
+      { expiresIn: '30d' }
     )
 
     // Guardar sesión antes de responder — garantiza que el jti existe en BD

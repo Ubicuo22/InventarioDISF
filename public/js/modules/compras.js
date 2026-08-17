@@ -66,10 +66,11 @@ function comprasModule() {
     // ── Helpers de formato ────────────────────────────────────
     fmtFechaCompra(f) {
       if (!f) return '—'
-      const [y, m, d] = f.split('-').map(Number)
-      const utc = new Date(Date.UTC(y, m - 1, d))
-      return utc.toLocaleDateString('es-MX', {
-        weekday: 'short', day: 'numeric', month: 'short'
+      const ymd = typeof f === 'string' ? f.slice(0, 10) : new Date(f).toISOString().slice(0, 10)
+      const d = new Date(ymd + 'T12:00:00Z')
+      return d.toLocaleDateString('es-MX', {
+        weekday: 'short', day: 'numeric', month: 'short',
+        timeZone: 'America/Mexico_City'
       })
     },
 

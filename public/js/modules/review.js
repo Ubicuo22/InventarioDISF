@@ -15,6 +15,10 @@ function reviewModule () {
     lockMessage: null,
     _lockRenewInterval: null,
 
+    // ── Orden de revisión ─────────────────────────────────────
+    // true = de abajo a arriba (último producto primero)
+    revisionReverso: localStorage.getItem('rev_reverso') === '1',
+
     // ── Estado del modo Revisión ───────────────────────────────
     _revIdCounter: 0,                   // contador para IDs estables por item en sesión de revisión
     revisionModalOpen: false,
@@ -54,7 +58,14 @@ function reviewModule () {
     // Ref al handler de teclado registrado
     _revisionKeyHandler: null,
     // Modal buscar/cambiar producto desde revisión
-    revisionCambiarModal: { visible: false, busqueda: '', resultados: [], buscando: false, error: null },
+    revisionCambiarModal: {
+      visible: false, busqueda: '', resultados: [], buscando: false, error: null,
+      paso: 'buscar',          // 'buscar' | 'precio'
+      productoSinPrecio: null, // prod cuando requiere precio manual
+      precioManual: '',
+      preciosGrupos: [],       // precios de otros grupos como referencia
+      cargandoPrecios: false,
+    },
     _revisionSearchId: null,            // anti-race: solo procesa el resultado de la última búsqueda
 
     // Modal agregar producto a la orden desde revisión
@@ -163,7 +174,8 @@ function reviewModule () {
       }
     },
 
-    /** Lista plana de items, respetando orden de secciones (General primero si existe). */
+    /** Lista plana de items, respetando orden de secciones (General primero si existe).
+     *  Con revisionReverso=true se invierte el orden para revisar de abajo a arriba. */
     revisionFlatItems () {
       const keys = this._revisionFilteredKeys()
       const ordered = keys.includes('General')
@@ -177,7 +189,17 @@ function reviewModule () {
           out.push({ item, section: sec, flatIdx: out.length })
         }
       }
+      if (this.revisionReverso) {
+        out.reverse()
+        out.forEach((fi, i) => { fi.flatIdx = i })
+      }
       return out
+    },
+
+    toggleRevisionReverso () {
+      this.revisionReverso = !this.revisionReverso
+      localStorage.setItem('rev_reverso', this.revisionReverso ? '1' : '0')
+      this.revisionCurrentIdx = 0
     },
 
     revisionTotal () {
@@ -331,7 +353,7 @@ function reviewModule () {
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
       this.revisionUndo = null
-      this.revisionCambiarModal   = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
+      this.revisionCambiarModal   = { visible: false, busqueda: '', resultados: [], buscando: false, error: null, paso: 'buscar', productoSinPrecio: null, precioManual: '', preciosGrupos: [], cargandoPrecios: false }
       this._revisionSearchId      = null
       this.revisionGuardandoMensaje = ''
       this.revisionErrorGuardado  = null
@@ -762,41 +784,75 @@ function reviewModule () {
       }
     },
 
-    revisionConfirmarCambio (prod) {
+    // Punto de entrada al seleccionar un producto en la búsqueda de cambio.
+    // Si tiene precio para este grupo → aplica directo.
+    // Si no → pasa al paso 2 para pedir precio con referencia de otros grupos.
+    async revisionSeleccionarProductoCambio (prod) {
+      const precio = parseFloat(prod.precio_final ?? prod.precio_base) || 0
+      if (precio > 0) {
+        this.revisionAplicarCambio(prod, precio)
+        return
+      }
+      this.revisionCambiarModal.paso            = 'precio'
+      this.revisionCambiarModal.productoSinPrecio = prod
+      this.revisionCambiarModal.precioManual    = ''
+      this.revisionCambiarModal.preciosGrupos   = []
+      this.revisionCambiarModal.cargandoPrecios = true
+      try {
+        const r = await API.get(`/api/productos/${prod.id_producto}/precios-grupos`)
+        this.revisionCambiarModal.preciosGrupos = r.ok ? (r.data || []) : []
+      } catch { /* silent */ }
+      finally { this.revisionCambiarModal.cargandoPrecios = false }
+      this.$nextTick(() => document.getElementById('rev-cambiar-precio-input')?.focus())
+    },
+
+    // Confirmar cambio con precio manual (paso 2).
+    revisionConfirmarCambioConPrecio () {
+      const prod   = this.revisionCambiarModal.productoSinPrecio
+      const precio = parseFloat(this.revisionCambiarModal.precioManual)
+      if (!prod || !precio || precio <= 0) return
+      if (this.revisionIdGrupo) {
+        API.post('/api/productos/precio-rapido', {
+          id_producto: prod.id_producto,
+          id_grupo:    this.revisionIdGrupo,
+          precio_base: precio
+        }).catch(e => console.warn('No se pudo guardar el precio:', e.message))
+      }
+      this.revisionAplicarCambio(prod, precio)
+    },
+
+    // Aplica el cambio en el carrito y cierra el modal.
+    revisionAplicarCambio (prod, precio) {
       const c = this.revisionCurrent()
       if (!c || !prod) return
       const items = this.revisionCart[c.section]
       if (!items) return
-      // Por _revId: con duplicados, findIndex por id_producto cambiaría el primero
       const idx = items.findIndex(i => i._revId === c.item._revId)
       if (idx < 0) return
 
-      const oldNombre  = c.item.nombre_producto
-      const key        = this.revisionItemKey(c.item)   // _revId no cambia al sustituir
+      const oldNombre = c.item.nombre_producto
+      const key       = this.revisionItemKey(c.item)
 
-      // Sustituir el item en el carrito conservando _revId
       items[idx] = {
         ...items[idx],
         id_producto:     prod.id_producto,
         nombre_producto: prod.nombre_producto,
         unidad:          prod.unidad_producto,
-        precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
-        cantidad:        items[idx].cantidad   // conservar cantidad pedida
+        precio_unitario: precio || items[idx].precio_unitario || 0,
+        cantidad:        items[idx].cantidad
       }
 
-      // Limpiar estado anterior y marcar como revisado
       this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
       if (this.revisionPendingIds.includes(key)) {
         this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
         this._removeOneName(this.revisionPendingNames, oldNombre)
       }
-
       if (!this.revisionReviewedIds.includes(key)) {
         this.revisionReviewedIds.push(key)
         if (window.sounds) window.sounds.reviewed?.()
       }
 
-      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
+      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null, paso: 'buscar', productoSinPrecio: null, precioManual: '', preciosGrupos: [], cargandoPrecios: false }
       this.mostrarToast(`Cambiado a ${prod.nombre_producto}`)
     },
 

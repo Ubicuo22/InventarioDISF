@@ -111,4 +111,18 @@ async function q(sql, params = []) {
   }
 }
 
+// Heartbeat: pinga TiDB cada 90s para mantener conexiones vivas dentro
+// del idle timeout de MySQL (~300s en TiDB Cloud Serverless). El TCP keepAlive
+// del config solo previene cierres a nivel de socket, no el idle timeout
+// de la capa MySQL. En Workers no hay timers persistentes, se omite.
+if (!esWorkers) {
+  setInterval(async () => {
+    try {
+      await pool.query('SELECT 1')
+    } catch {
+      // Si el ping falla, el pool creará conexiones nuevas en el siguiente request.
+    }
+  }, 90_000)
+}
+
 module.exports = { pool, q, conContextoDb }

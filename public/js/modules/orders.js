@@ -1,9 +1,21 @@
+function _semanaActual() {
+  const hoy = new Date()
+  const dom = new Date(hoy); dom.setDate(hoy.getDate() - hoy.getDay())
+  const sab = new Date(dom); sab.setDate(dom.getDate() + 6)
+  return {
+    desde: dom.toISOString().slice(0, 10),
+    hasta: sab.toISOString().slice(0, 10)
+  }
+}
+
 function ordersModule() {
+  const _sem = _semanaActual()
   return {
     ordenes: [],
     cargandoOrdenes: false,
     ordenesFiltroRevision: 'todas',  // 'todas' | 'pendientes' | 'revisadas'
-    filtroFechaPedidos: '',
+    filtroDesde: _sem.desde,
+    filtroHasta: _sem.hasta,
     filtroClientePedidos: '',
     grupos: [],
     clientesGrupo: [],
@@ -32,25 +44,36 @@ function ordersModule() {
             || (o.nombre_grupo || '').toLowerCase().includes(txt)
           if (!coincide) return false
         }
-        if (this.filtroFechaPedidos) {
-          const fecha = o.fecha_creacion ? o.fecha_creacion.slice(0, 10) : ''
-          if (fecha !== this.filtroFechaPedidos) return false
-        }
         return true
       })
     },
 
     limpiarFiltrosPedidos() {
-      this.filtroFechaPedidos = ''
+      const sem = _semanaActual()
+      this.filtroDesde = sem.desde
+      this.filtroHasta = sem.hasta
       this.filtroClientePedidos = ''
+    },
+
+    filtroEsSemanaActual() {
+      const sem = _semanaActual()
+      return this.filtroDesde === sem.desde && this.filtroHasta === sem.hasta
+    },
+
+    async verTodosLosPedidos() {
+      this.filtroDesde = ''
+      this.filtroHasta = ''
+      await this.cargarOrdenes()
     },
 
     async cargarOrdenes() {
       this.cargandoOrdenes = true
       try {
         const estado = this.pedidosTab === 'registrados' ? 'registrada' : 'guardada'
-        // 'activos' y 'revisadas' son vistas del mismo estado=guardada (filtro client-side)
-        const r = await API.get(`/api/ordenes?estado=${estado}`)
+        let url = `/api/ordenes?estado=${estado}`
+        if (this.filtroDesde) url += `&desde=${this.filtroDesde}`
+        if (this.filtroHasta) url += `&hasta=${this.filtroHasta}`
+        const r = await API.get(url)
         this.ordenes = r.data || []
       } catch (err) {
         this.ordenes = []

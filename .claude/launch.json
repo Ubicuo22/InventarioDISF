@@ -2,11 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "bodega-main",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js"],
-      "port": 3030,
-      "autoPort": false
+      "name": "disfruleg-bodega",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3030
     }
   ]
 }

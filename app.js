@@ -51,6 +51,9 @@ app.use('/api/dashboard', require('./routes/dashboard'))
 // ─── Rutas de administración (solo admin) ────────────────────
 app.use('/api/admin', require('./routes/admin'))
 
+// ─── Precios por grupo (solo CEO) ────────────────────────────
+app.use('/api/precios', require('./routes/precios'))
+
 // Health check público
 app.get('/api/status', async (req, res) => {
   try {

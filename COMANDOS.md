@@ -6,7 +6,9 @@
 npm run deploy
 ```
 
-Hace todo en un paso: compila el CSS, reinicia el servidor. Listo.
+Hace todo en un paso: compila CSS + JS y despliega a Cloudflare Workers. Listo.
+
+> Requiere Node.js v22+. Si estás en v20, corre primero: `nvm use 22`
 
 ---
 
@@ -32,7 +34,7 @@ npm run deploy
 |---|---|
 | `npm run build:css` | Compila Tailwind → `tailwind.min.css` (necesario si agregaste clases nuevas) |
 | `npm run watch:css` | Compila CSS en modo watch mientras desarrollas |
-| `tail -f logs/server.log` | Ver logs del servidor de producción en tiempo real |
+| `npx wrangler tail` | Ver logs del Worker en tiempo real (equivalente a tail en producción) |
 
 ---
 

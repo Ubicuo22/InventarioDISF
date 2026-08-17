@@ -1,4 +1,4 @@
-/* bodega-bundle.3ddd4411.js — 2026-08-03T23:45:48.948Z */
+/* bodega-bundle.bfe3e0c9.js — 2026-08-17T20:24:21.000Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -896,12 +896,24 @@ function entriesModule() {
 
 
 ;/* ── public/js/modules/orders.js ── */
+function _semanaActual() {
+  const hoy = new Date()
+  const dom = new Date(hoy); dom.setDate(hoy.getDate() - hoy.getDay())
+  const sab = new Date(dom); sab.setDate(dom.getDate() + 6)
+  return {
+    desde: dom.toISOString().slice(0, 10),
+    hasta: sab.toISOString().slice(0, 10)
+  }
+}
+
 function ordersModule() {
+  const _sem = _semanaActual()
   return {
     ordenes: [],
     cargandoOrdenes: false,
     ordenesFiltroRevision: 'todas',  // 'todas' | 'pendientes' | 'revisadas'
-    filtroFechaPedidos: '',
+    filtroDesde: _sem.desde,
+    filtroHasta: _sem.hasta,
     filtroClientePedidos: '',
     grupos: [],
     clientesGrupo: [],
@@ -930,25 +942,36 @@ function ordersModule() {
             || (o.nombre_grupo || '').toLowerCase().includes(txt)
           if (!coincide) return false
         }
-        if (this.filtroFechaPedidos) {
-          const fecha = o.fecha_creacion ? o.fecha_creacion.slice(0, 10) : ''
-          if (fecha !== this.filtroFechaPedidos) return false
-        }
         return true
       })
     },
 
     limpiarFiltrosPedidos() {
-      this.filtroFechaPedidos = ''
+      const sem = _semanaActual()
+      this.filtroDesde = sem.desde
+      this.filtroHasta = sem.hasta
       this.filtroClientePedidos = ''
+    },
+
+    filtroEsSemanaActual() {
+      const sem = _semanaActual()
+      return this.filtroDesde === sem.desde && this.filtroHasta === sem.hasta
+    },
+
+    async verTodosLosPedidos() {
+      this.filtroDesde = ''
+      this.filtroHasta = ''
+      await this.cargarOrdenes()
     },
 
     async cargarOrdenes() {
       this.cargandoOrdenes = true
       try {
         const estado = this.pedidosTab === 'registrados' ? 'registrada' : 'guardada'
-        // 'activos' y 'revisadas' son vistas del mismo estado=guardada (filtro client-side)
-        const r = await API.get(`/api/ordenes?estado=${estado}`)
+        let url = `/api/ordenes?estado=${estado}`
+        if (this.filtroDesde) url += `&desde=${this.filtroDesde}`
+        if (this.filtroHasta) url += `&hasta=${this.filtroHasta}`
+        const r = await API.get(url)
         this.ordenes = r.data || []
       } catch (err) {
         this.ordenes = []
@@ -1259,6 +1282,10 @@ function reviewModule () {
     lockMessage: null,
     _lockRenewInterval: null,
 
+    // ── Orden de revisión ─────────────────────────────────────
+    // true = de abajo a arriba (último producto primero)
+    revisionReverso: localStorage.getItem('rev_reverso') === '1',
+
     // ── Estado del modo Revisión ───────────────────────────────
     _revIdCounter: 0,                   // contador para IDs estables por item en sesión de revisión
     revisionModalOpen: false,
@@ -1298,7 +1325,14 @@ function reviewModule () {
     // Ref al handler de teclado registrado
     _revisionKeyHandler: null,
     // Modal buscar/cambiar producto desde revisión
-    revisionCambiarModal: { visible: false, busqueda: '', resultados: [], buscando: false, error: null },
+    revisionCambiarModal: {
+      visible: false, busqueda: '', resultados: [], buscando: false, error: null,
+      paso: 'buscar',          // 'buscar' | 'precio'
+      productoSinPrecio: null, // prod cuando requiere precio manual
+      precioManual: '',
+      preciosGrupos: [],       // precios de otros grupos como referencia
+      cargandoPrecios: false,
+    },
     _revisionSearchId: null,            // anti-race: solo procesa el resultado de la última búsqueda
 
     // Modal agregar producto a la orden desde revisión
@@ -1407,7 +1441,8 @@ function reviewModule () {
       }
     },
 
-    /** Lista plana de items, respetando orden de secciones (General primero si existe). */
+    /** Lista plana de items, respetando orden de secciones (General primero si existe).
+     *  Con revisionReverso=true se invierte el orden para revisar de abajo a arriba. */
     revisionFlatItems () {
       const keys = this._revisionFilteredKeys()
       const ordered = keys.includes('General')
@@ -1421,7 +1456,17 @@ function reviewModule () {
           out.push({ item, section: sec, flatIdx: out.length })
         }
       }
+      if (this.revisionReverso) {
+        out.reverse()
+        out.forEach((fi, i) => { fi.flatIdx = i })
+      }
       return out
+    },
+
+    toggleRevisionReverso () {
+      this.revisionReverso = !this.revisionReverso
+      localStorage.setItem('rev_reverso', this.revisionReverso ? '1' : '0')
+      this.revisionCurrentIdx = 0
     },
 
     revisionTotal () {
@@ -1575,7 +1620,7 @@ function reviewModule () {
       this.revisionPendingNames = []
       this.revisionCurrentIdx = 0
       this.revisionUndo = null
-      this.revisionCambiarModal   = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
+      this.revisionCambiarModal   = { visible: false, busqueda: '', resultados: [], buscando: false, error: null, paso: 'buscar', productoSinPrecio: null, precioManual: '', preciosGrupos: [], cargandoPrecios: false }
       this._revisionSearchId      = null
       this.revisionGuardandoMensaje = ''
       this.revisionErrorGuardado  = null
@@ -2006,41 +2051,75 @@ function reviewModule () {
       }
     },
 
-    revisionConfirmarCambio (prod) {
+    // Punto de entrada al seleccionar un producto en la búsqueda de cambio.
+    // Si tiene precio para este grupo → aplica directo.
+    // Si no → pasa al paso 2 para pedir precio con referencia de otros grupos.
+    async revisionSeleccionarProductoCambio (prod) {
+      const precio = parseFloat(prod.precio_final ?? prod.precio_base) || 0
+      if (precio > 0) {
+        this.revisionAplicarCambio(prod, precio)
+        return
+      }
+      this.revisionCambiarModal.paso            = 'precio'
+      this.revisionCambiarModal.productoSinPrecio = prod
+      this.revisionCambiarModal.precioManual    = ''
+      this.revisionCambiarModal.preciosGrupos   = []
+      this.revisionCambiarModal.cargandoPrecios = true
+      try {
+        const r = await API.get(`/api/productos/${prod.id_producto}/precios-grupos`)
+        this.revisionCambiarModal.preciosGrupos = r.ok ? (r.data || []) : []
+      } catch { /* silent */ }
+      finally { this.revisionCambiarModal.cargandoPrecios = false }
+      this.$nextTick(() => document.getElementById('rev-cambiar-precio-input')?.focus())
+    },
+
+    // Confirmar cambio con precio manual (paso 2).
+    revisionConfirmarCambioConPrecio () {
+      const prod   = this.revisionCambiarModal.productoSinPrecio
+      const precio = parseFloat(this.revisionCambiarModal.precioManual)
+      if (!prod || !precio || precio <= 0) return
+      if (this.revisionIdGrupo) {
+        API.post('/api/productos/precio-rapido', {
+          id_producto: prod.id_producto,
+          id_grupo:    this.revisionIdGrupo,
+          precio_base: precio
+        }).catch(e => console.warn('No se pudo guardar el precio:', e.message))
+      }
+      this.revisionAplicarCambio(prod, precio)
+    },
+
+    // Aplica el cambio en el carrito y cierra el modal.
+    revisionAplicarCambio (prod, precio) {
       const c = this.revisionCurrent()
       if (!c || !prod) return
       const items = this.revisionCart[c.section]
       if (!items) return
-      // Por _revId: con duplicados, findIndex por id_producto cambiaría el primero
       const idx = items.findIndex(i => i._revId === c.item._revId)
       if (idx < 0) return
 
-      const oldNombre  = c.item.nombre_producto
-      const key        = this.revisionItemKey(c.item)   // _revId no cambia al sustituir
+      const oldNombre = c.item.nombre_producto
+      const key       = this.revisionItemKey(c.item)
 
-      // Sustituir el item en el carrito conservando _revId
       items[idx] = {
         ...items[idx],
         id_producto:     prod.id_producto,
         nombre_producto: prod.nombre_producto,
         unidad:          prod.unidad_producto,
-        precio_unitario: parseFloat(prod.precio_base) || items[idx].precio_unitario || 0,
-        cantidad:        items[idx].cantidad   // conservar cantidad pedida
+        precio_unitario: precio || items[idx].precio_unitario || 0,
+        cantidad:        items[idx].cantidad
       }
 
-      // Limpiar estado anterior y marcar como revisado
       this.revisionReviewedIds = this.revisionReviewedIds.filter(k => k !== key)
       if (this.revisionPendingIds.includes(key)) {
         this.revisionPendingIds = this.revisionPendingIds.filter(k => k !== key)
         this._removeOneName(this.revisionPendingNames, oldNombre)
       }
-
       if (!this.revisionReviewedIds.includes(key)) {
         this.revisionReviewedIds.push(key)
         if (window.sounds) window.sounds.reviewed?.()
       }
 
-      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null }
+      this.revisionCambiarModal = { visible: false, busqueda: '', resultados: [], buscando: false, error: null, paso: 'buscar', productoSinPrecio: null, precioManual: '', preciosGrupos: [], cargandoPrecios: false }
       this.mostrarToast(`Cambiado a ${prod.nombre_producto}`)
     },
 
@@ -2317,7 +2396,12 @@ function historyModule() {
     // ── Formato de fecha ──────────────────────────────────────
     fmtFecha(f) {
       if (!f) return '—'
-      return new Date(f).toLocaleDateString('es-MX', {
+      // Parsear YYYY-MM-DD al mediodía UTC para evitar el cambio de día
+      // al mostrar en timezone local (UTC-6 Mexico = 6h detrás de UTC midnight)
+      const s = typeof f === 'string' ? f : new Date(f).toISOString()
+      const ymd = s.slice(0, 10)
+      const d = new Date(ymd + 'T12:00:00Z')
+      return d.toLocaleDateString('es-MX', {
         day: '2-digit', month: 'short', year: 'numeric',
         timeZone: 'America/Mexico_City'
       })
@@ -3173,7 +3257,10 @@ function cobranzaModule() {
       const saldo    = this.fmtMoney(deuda.saldo_pendiente)
       const folio    = deuda.id_factura ? `#${String(deuda.id_factura).padStart(4, '0')}` : ''
       const vence    = deuda.fecha_vencimiento
-        ? new Date(deuda.fecha_vencimiento).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+        ? (() => {
+            const ymd = typeof deuda.fecha_vencimiento === 'string' ? deuda.fecha_vencimiento.slice(0, 10) : new Date(deuda.fecha_vencimiento).toISOString().slice(0, 10)
+            return new Date(ymd + 'T12:00:00Z').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit', timeZone: 'America/Mexico_City' })
+          })()
         : ''
 
       let msg = `Hola ${deuda.nombre_cliente}, le recordamos que tiene un saldo pendiente de ${saldo}`
@@ -3308,7 +3395,11 @@ function cobranzaModule() {
 
     fmtFechaPago(f) {
       if (!f) return '—'
-      return new Date(f).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
+      const ymd = typeof f === 'string' ? f.slice(0, 10) : new Date(f).toISOString().slice(0, 10)
+      return new Date(ymd + 'T12:00:00Z').toLocaleDateString('es-MX', {
+        day: '2-digit', month: 'short', year: '2-digit',
+        timeZone: 'America/Mexico_City'
+      })
     }
   }
 }
@@ -3383,10 +3474,11 @@ function comprasModule() {
     // ── Helpers de formato ────────────────────────────────────
     fmtFechaCompra(f) {
       if (!f) return '—'
-      const [y, m, d] = f.split('-').map(Number)
-      const utc = new Date(Date.UTC(y, m - 1, d))
-      return utc.toLocaleDateString('es-MX', {
-        weekday: 'short', day: 'numeric', month: 'short'
+      const ymd = typeof f === 'string' ? f.slice(0, 10) : new Date(f).toISOString().slice(0, 10)
+      const d = new Date(ymd + 'T12:00:00Z')
+      return d.toLocaleDateString('es-MX', {
+        weekday: 'short', day: 'numeric', month: 'short',
+        timeZone: 'America/Mexico_City'
       })
     },
 
@@ -3423,11 +3515,13 @@ function comprasModule() {
 function dashboardModule() {
   return {
     // ── Estado ────────────────────────────────────────────
-    dashMetricas:  null,       // respuesta completa del endpoint
-    dashCargando:  false,
-    dashTs:        null,       // Date del último refresh exitoso
-    dashAnimNums:  {},         // valores animados de conteo { key: number }
-    _dashAnimRaf:  null,
+    dashMetricas:   null,       // respuesta completa del endpoint
+    dashCargando:   false,
+    dashTs:         null,       // Date del último refresh exitoso
+    dashAnimNums:   {},         // valores animados de conteo { key: number }
+    _dashAnimRaf:   null,
+    ceoDatos:       null,       // CEO insights (semana)
+    ceoCargando:    false,
 
     // ── Carga ─────────────────────────────────────────────
     async cargarDashboard() {
@@ -3441,6 +3535,24 @@ function dashboardModule() {
         }
       } catch { /* silent — no romper la carga inicial */ }
       finally  { this.dashCargando = false }
+      // Cargar CEO insights en paralelo si aplica
+      if (this.session?.rol === 'ceo') this.cargarCeoInsights()
+    },
+
+    async cargarCeoInsights() {
+      this.ceoCargando = true
+      try {
+        const r = await API.get('/api/dashboard/ceo-insights')
+        if (r.ok) this.ceoDatos = r
+      } catch { /* silent */ }
+      finally { this.ceoCargando = false }
+    },
+
+    ceoFmt(n) {
+      if (!n && n !== 0) return '—'
+      return new Intl.NumberFormat('es-MX', {
+        style: 'currency', currency: 'MXN', maximumFractionDigits: 0
+      }).format(n)
     },
 
     // ── Helpers de presentación ───────────────────────────
@@ -3995,9 +4107,229 @@ function conteoModule() {
 }
 
 
+;/* ── public/js/modules/prices.js ── */
+/**
+ * prices.js — Módulo Alpine.js para gestión de precios por grupo (solo CEO)
+ */
+
+function preciosModule() {
+  return {
+    // ── Estado ────────────────────────────────────────────
+    preciosGrupos:       [],
+    preciosIdGrupo:      null,
+    preciosProductos:    [],
+    preciosBusqueda:     '',
+    preciosCargando:     false,
+    preciosGuardando:    {},   // { id_producto: true } mientras se guarda
+    precioEditando:      {},   // { id_producto: 'string' } valor en edición
+
+    preciosAjusteModal: {
+      visible: false,
+      pct:     '',
+      error:   null,
+      guardando: false,
+    },
+
+    preciosCopiarModal: {
+      visible:          false,
+      id_grupo_destino: '',
+      sobrescribir:     false,
+      error:            null,
+      guardando:        false,
+    },
+
+    // ── Init ──────────────────────────────────────────────
+    async cargarPreciosGrupos() {
+      if (this.session?.rol !== 'ceo') return
+      const r = await API.get('/api/precios/grupos')
+      if (r.ok) {
+        this.preciosGrupos = r.data || []
+        if (this.preciosGrupos.length && !this.preciosIdGrupo) {
+          this.preciosIdGrupo = this.preciosGrupos[0].id_grupo
+          await this.cargarPrecios()
+        }
+      }
+    },
+
+    async cargarPrecios() {
+      if (!this.preciosIdGrupo) return
+      this.preciosCargando = true
+      this.precioEditando  = {}
+      try {
+        const r = await API.get(`/api/precios?id_grupo=${this.preciosIdGrupo}`)
+        this.preciosProductos = r.ok ? (r.data || []) : []
+      } finally {
+        this.preciosCargando = false
+      }
+    },
+
+    async preciosCambiarGrupo(id_grupo) {
+      this.preciosIdGrupo  = id_grupo
+      this.preciosBusqueda = ''
+      await this.cargarPrecios()
+    },
+
+    // ── Filtrado ──────────────────────────────────────────
+    preciosFiltrados() {
+      const q = this.preciosBusqueda.trim().toLowerCase()
+      if (!q) return this.preciosProductos
+      return this.preciosProductos.filter(p =>
+        p.nombre_producto.toLowerCase().includes(q)
+      )
+    },
+
+    // ── Edición inline ────────────────────────────────────
+    precioIniciarEdicion(prod) {
+      this.precioEditando = {
+        ...this.precioEditando,
+        [prod.id_producto]: prod.precio_base > 0 ? String(prod.precio_base) : ''
+      }
+      this.$nextTick(() => {
+        document.getElementById(`precio-input-${prod.id_producto}`)?.focus()
+      })
+    },
+
+    async precioGuardar(id_producto) {
+      const raw    = (this.precioEditando[id_producto] ?? '').trim()
+      const precio = parseFloat(raw.replace(',', '.'))
+
+      if (raw !== '' && (isNaN(precio) || precio < 0)) {
+        this.mostrarToast('Precio inválido', true)
+        return
+      }
+
+      const precio_base = raw === '' ? 0 : precio
+      this.preciosGuardando = { ...this.preciosGuardando, [id_producto]: true }
+
+      try {
+        const r = await API.put('/api/precios', {
+          id_producto,
+          id_grupo: this.preciosIdGrupo,
+          precio_base,
+        })
+        if (r.ok) {
+          const idx = this.preciosProductos.findIndex(p => p.id_producto === id_producto)
+          if (idx >= 0) {
+            const grupo = this.preciosGrupos.find(g => g.id_grupo === this.preciosIdGrupo)
+            const desc  = grupo ? parseFloat(grupo.descuento) : 0
+            this.preciosProductos[idx] = {
+              ...this.preciosProductos[idx],
+              precio_base,
+              precio_final: desc > 0 ? +(precio_base * (1 - desc / 100)).toFixed(2) : precio_base,
+            }
+          }
+          const del = { ...this.precioEditando }
+          delete del[id_producto]
+          this.precioEditando = del
+        } else {
+          this.mostrarToast(r.error || 'No se pudo guardar', true)
+        }
+      } catch (e) {
+        this.mostrarToast('Error al guardar precio', true)
+      } finally {
+        const g = { ...this.preciosGuardando }
+        delete g[id_producto]
+        this.preciosGuardando = g
+      }
+    },
+
+    preciosCancelarEdicion(id_producto) {
+      const del = { ...this.precioEditando }
+      delete del[id_producto]
+      this.precioEditando = del
+    },
+
+    // ── Ajuste masivo ─────────────────────────────────────
+    preciosAbrirAjuste() {
+      this.preciosAjusteModal = { visible: true, pct: '', error: null, guardando: false }
+      this.$nextTick(() => document.getElementById('precios-ajuste-pct')?.focus())
+    },
+
+    async preciosConfirmarAjuste() {
+      const pct = parseFloat(String(this.preciosAjusteModal.pct).replace(',', '.'))
+      if (isNaN(pct) || pct === 0) {
+        this.preciosAjusteModal.error = 'Ingresa un porcentaje válido (ej: 10 o -5)'
+        return
+      }
+      this.preciosAjusteModal.guardando = true
+      this.preciosAjusteModal.error     = null
+      try {
+        const r = await API.post('/api/precios/ajuste-masivo', {
+          id_grupo: this.preciosIdGrupo,
+          pct,
+        })
+        if (r.ok) {
+          this.mostrarToast(`${r.data?.actualizados ?? 0} precios actualizados`)
+          this.preciosAjusteModal.visible = false
+          await this.cargarPrecios()
+        } else {
+          this.preciosAjusteModal.error = r.error || 'Error al aplicar ajuste'
+        }
+      } catch {
+        this.preciosAjusteModal.error = 'Error de conexión'
+      } finally {
+        this.preciosAjusteModal.guardando = false
+      }
+    },
+
+    // ── Copiar grupo ──────────────────────────────────────
+    preciosAbrirCopiar() {
+      this.preciosCopiarModal = {
+        visible:          true,
+        id_grupo_destino: '',
+        sobrescribir:     false,
+        error:            null,
+        guardando:        false,
+      }
+    },
+
+    async preciosConfirmarCopiar() {
+      const { id_grupo_destino, sobrescribir } = this.preciosCopiarModal
+      if (!id_grupo_destino) {
+        this.preciosCopiarModal.error = 'Selecciona el grupo destino'
+        return
+      }
+      this.preciosCopiarModal.guardando = true
+      this.preciosCopiarModal.error     = null
+      try {
+        const r = await API.post('/api/precios/copiar-grupo', {
+          id_grupo_origen:  this.preciosIdGrupo,
+          id_grupo_destino,
+          sobrescribir,
+        })
+        if (r.ok) {
+          this.mostrarToast(`${r.data?.copiados ?? 0} precios copiados`)
+          this.preciosCopiarModal.visible = false
+        } else {
+          this.preciosCopiarModal.error = r.error || 'Error al copiar'
+        }
+      } catch {
+        this.preciosCopiarModal.error = 'Error de conexión'
+      } finally {
+        this.preciosCopiarModal.guardando = false
+      }
+    },
+
+    // ── Helpers ───────────────────────────────────────────
+    preciosFmtMoney(v) {
+      const n = parseFloat(v) || 0
+      return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
+    },
+
+    preciosGrupoActual() {
+      return this.preciosGrupos.find(g => g.id_grupo === this.preciosIdGrupo) || null
+    },
+
+    preciosGruposDestino() {
+      return this.preciosGrupos.filter(g => g.id_grupo !== this.preciosIdGrupo)
+    },
+  }
+}
+
+
 ;/* ── public/js/bodega.js ── */
 // Composición del store Alpine.js.
-// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard → pendientes
+// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard → pendientes → conteo → prices
 function bodega() {
   return {
     ...uiModule(),
@@ -4016,5 +4348,6 @@ function bodega() {
     ...dashboardModule(),
     ...pendientesModule(),
     ...conteoModule(),
+    ...preciosModule(),
   }
 }

@@ -76,10 +76,18 @@ function computarDiffCarrito (viejo, nuevo) {
   return cambios
 }
 
-/* ─── GET /api/ordenes?estado=guardada|registrada ─── */
+/* ─── GET /api/ordenes?estado=guardada|registrada[&desde=YYYY-MM-DD&hasta=YYYY-MM-DD] ─── */
 router.get('/', async (req, res) => {
   try {
     const estado = req.query.estado === 'registrada' ? 'registrada' : 'guardada'
+    const { desde, hasta } = req.query
+
+    const conditions = ['o.estado = ?', 'o.activo = 1']
+    const params = [estado]
+
+    if (desde) { conditions.push('DATE(o.fecha_creacion) >= ?'); params.push(desde) }
+    if (hasta) { conditions.push('DATE(o.fecha_creacion) <= ?'); params.push(hasta) }
+
     const rows = await q(`
       SELECT o.folio_numero, o.id_cliente, c.nombre_cliente,
              g.id_grupo, g.nombre_grupo,
@@ -90,9 +98,9 @@ router.get('/', async (req, res) => {
       FROM   ordenes_guardadas o
       INNER JOIN cliente c ON o.id_cliente = c.id_cliente
       INNER JOIN grupo   g ON c.id_grupo   = g.id_grupo
-      WHERE  o.estado = ? AND o.activo = 1
+      WHERE  ${conditions.join(' AND ')}
       ORDER  BY o.folio_numero DESC
-    `, [estado])
+    `, params)
     res.json({ ok: true, data: rows })
   } catch (e) {
     console.error('[ordenes] GET /', e.message)
