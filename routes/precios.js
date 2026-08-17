@@ -18,8 +18,10 @@ router.use(requireAuth, requireAdmin)
 router.get('/grupos', async (req, res) => {
   try {
     const rows = await q(
-      `SELECT id_grupo, nombre_grupo, COALESCE(descuento, 0) AS descuento
-       FROM grupo ORDER BY nombre_grupo ASC`
+      `SELECT g.id_grupo, g.nombre_grupo, COALESCE(tc.descuento, 0) AS descuento
+       FROM grupo g
+       LEFT JOIN tipo_cliente tc ON tc.id_tipo_cliente = g.id_tipo_cliente
+       ORDER BY g.nombre_grupo ASC`
     )
     res.json({ ok: true, data: rows })
   } catch (e) {
@@ -34,14 +36,15 @@ router.get('/', async (req, res) => {
   try {
     const rows = await q(
       `SELECT p.id_producto, p.nombre_producto, p.unidad_producto,
-              COALESCE(pg.precio_base, 0)  AS precio_base,
-              COALESCE(g.descuento, 0)     AS descuento,
-              CASE WHEN COALESCE(g.descuento, 0) > 0
-                   THEN ROUND(COALESCE(pg.precio_base, 0) * (1 - g.descuento / 100), 2)
+              COALESCE(pg.precio_base, 0)   AS precio_base,
+              COALESCE(tc.descuento, 0)     AS descuento,
+              CASE WHEN COALESCE(tc.descuento, 0) > 0
+                   THEN ROUND(COALESCE(pg.precio_base, 0) * (1 - tc.descuento / 100), 2)
                    ELSE COALESCE(pg.precio_base, 0)
               END AS precio_final
        FROM producto p
        CROSS JOIN grupo g
+       LEFT JOIN tipo_cliente tc ON tc.id_tipo_cliente = g.id_tipo_cliente
        LEFT JOIN precio_por_grupo pg
          ON pg.id_producto = p.id_producto AND pg.id_grupo = g.id_grupo
        WHERE g.id_grupo = ? AND p.activo = 1

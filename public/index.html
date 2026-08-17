@@ -41,7 +41,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.bfe3e0c9.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.5226e0e9.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -1849,7 +1849,8 @@
           <div x-show="cargandoEntradas" class="py-14 text-center text-slate-500 text-sm">
             Cargando historial...
           </div>
-          <table x-show="!cargandoEntradas" class="w-full text-sm">
+          <div class="overflow-x-auto">
+          <table x-show="!cargandoEntradas" class="w-full text-sm min-w-[360px]">
             <thead class="border-b border-slate-700">
               <tr>
                 <th class="text-left px-4 py-3 text-[11px] text-slate-400 font-semibold uppercase tracking-wide">Fecha</th>
@@ -1888,6 +1889,7 @@
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -2260,7 +2262,8 @@
             <div class="px-4 py-3 border-b border-slate-700/60">
               <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Por día</p>
             </div>
-            <table class="w-full">
+            <div class="overflow-x-auto">
+            <table class="w-full min-w-[320px]">
               <thead class="border-b bd glass-divider">
                 <tr>
                   <th class="text-left px-4 py-2.5 text-[11px] text-slate-500 font-semibold uppercase tracking-wide">Fecha</th>
@@ -2280,6 +2283,7 @@
                 </template>
               </tbody>
             </table>
+            </div>
           </div>
 
           <!-- Top productos -->
@@ -2667,7 +2671,7 @@
                         @keydown.enter="precioGuardar(prod.id_producto)"
                         @keydown.escape="preciosCancelarEdicion(prod.id_producto)"
                         type="text" inputmode="decimal" placeholder="0.00"
-                        class="w-24 bg-slate-700 border border-emerald-500/50 rounded-lg px-2 py-1 text-right text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                        class="w-16 sm:w-24 bg-slate-700 border border-emerald-500/50 rounded-lg px-2 py-1 text-right text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                       <button @click="precioGuardar(prod.id_producto)"
                         :disabled="preciosGuardando[prod.id_producto]"
                         class="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-40 transition-colors">
@@ -2695,7 +2699,7 @@
                 <td class="px-2 py-3 text-right">
                   <button x-show="precioEditando[prod.id_producto] === undefined"
                     @click="precioIniciarEdicion(prod)"
-                    class="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:sf-lo">
+                    class="sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-600 hover:text-slate-300 hover:sf-lo">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                     </svg>
@@ -5859,10 +5863,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.bfe3e0c9.js agrupa todos los módulos en 1 request.
+     bodega-bundle.5226e0e9.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.bfe3e0c9.js"></script>
+<script src="/js/bodega-bundle.5226e0e9.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 <script>

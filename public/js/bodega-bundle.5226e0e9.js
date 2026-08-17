@@ -1,4 +1,4 @@
-/* bodega-bundle.bfe3e0c9.js — 2026-08-17T20:24:21.000Z */
+/* bodega-bundle.5226e0e9.js — 2026-08-17T20:42:20.666Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -4141,13 +4141,19 @@ function preciosModule() {
     // ── Init ──────────────────────────────────────────────
     async cargarPreciosGrupos() {
       if (this.session?.rol !== 'ceo') return
-      const r = await API.get('/api/precios/grupos')
-      if (r.ok) {
-        this.preciosGrupos = r.data || []
-        if (this.preciosGrupos.length && !this.preciosIdGrupo) {
-          this.preciosIdGrupo = this.preciosGrupos[0].id_grupo
-          await this.cargarPrecios()
+      try {
+        const r = await API.get('/api/precios/grupos')
+        if (r.ok) {
+          this.preciosGrupos = r.data || []
+          if (this.preciosGrupos.length && !this.preciosIdGrupo) {
+            this.preciosIdGrupo = this.preciosGrupos[0].id_grupo
+            await this.cargarPrecios()
+          }
+        } else {
+          this.mostrarToast(r.error || 'Error al cargar grupos', true)
         }
+      } catch (e) {
+        this.mostrarToast('Error de conexión', true)
       }
     },
 
@@ -4157,7 +4163,15 @@ function preciosModule() {
       this.precioEditando  = {}
       try {
         const r = await API.get(`/api/precios?id_grupo=${this.preciosIdGrupo}`)
-        this.preciosProductos = r.ok ? (r.data || []) : []
+        if (r.ok) {
+          this.preciosProductos = r.data || []
+        } else {
+          this.preciosProductos = []
+          this.mostrarToast(r.error || 'Error al cargar precios', true)
+        }
+      } catch (e) {
+        this.preciosProductos = []
+        this.mostrarToast('Error de conexión', true)
       } finally {
         this.preciosCargando = false
       }
