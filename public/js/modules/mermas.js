@@ -127,9 +127,11 @@ function mermasModule() {
       this.cargandoMermas = true
       try {
         const r = await API.get('/api/mermas/recientes')
-        this.mermasRecientes = r.data || []
-      } catch {
+        if (r.ok) this.mermasRecientes = r.data || []
+        else      this.mostrarToast(r.error || 'Error al cargar mermas', true)
+      } catch (e) {
         this.mermasRecientes = []
+        this.mostrarToast(e.message || 'Error de conexión', true)
       } finally {
         this.cargandoMermas = false
       }

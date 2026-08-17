@@ -41,10 +41,14 @@ function cobranzaModule() {
           API.get(`/api/deudas?${params}`),
           API.get('/api/deudas/stats')
         ])
-        if (r.ok) this.deudas      = r.data
-        if (s.ok) this.deudaStats  = s.data
-      } catch { /* silent */ }
-      finally { this.cargandoDeudas = false }
+        if (r.ok) this.deudas     = r.data
+        else      this.mostrarToast(r.error || 'Error al cargar cobranza', true)
+        if (s.ok) this.deudaStats = s.data
+      } catch (e) {
+        this.mostrarToast(e.message || 'Error de conexión', true)
+      } finally {
+        this.cargandoDeudas = false
+      }
     },
 
     async abrirDeuda(deuda) {
@@ -54,8 +58,12 @@ function cobranzaModule() {
       try {
         const r = await API.get(`/api/deudas/${deuda.id_deuda}/pagos`)
         if (r.ok) this.pagosDeuda = r.data
-      } catch { /* silent */ }
-      finally { this.cargandoPagos = false }
+        else      this.mostrarToast(r.error || 'Error al cargar historial de pagos', true)
+      } catch (e) {
+        this.mostrarToast(e.message || 'Error de conexión', true)
+      } finally {
+        this.cargandoPagos = false
+      }
     },
 
     volverALista() {

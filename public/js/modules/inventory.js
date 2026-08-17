@@ -13,8 +13,8 @@ function inventoryModule() {
       this.cargando = true
       try {
         const r = await API.get('/api/productos')
-        this.productos = r.data || []
-        this.filtrar()
+        if (r.ok) { this.productos = r.data || []; this.filtrar() }
+        else       this.mostrarToast(r.error || 'Error al cargar productos', true)
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar productos', true)
       } finally {
@@ -25,7 +25,8 @@ function inventoryModule() {
     async cargarResumen() {
       try {
         const r = await API.get('/api/productos/resumen')
-        this.resumen = r.data || {}
+        if (r.ok) this.resumen = r.data || {}
+        else      this.mostrarToast(r.error || 'Error al cargar resumen', true)
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar resumen', true)
       }
@@ -34,7 +35,8 @@ function inventoryModule() {
     async cargarProveedores() {
       try {
         const r = await API.get('/api/productos/proveedores')
-        this.proveedores = r.data || []
+        if (r.ok) this.proveedores = r.data || []
+        else      this.mostrarToast(r.error || 'Error al cargar proveedores', true)
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar proveedores', true)
       }

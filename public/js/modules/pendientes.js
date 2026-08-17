@@ -23,11 +23,16 @@ function pendientesModule() {
       this.pendienteCambiando = null
       try {
         const r = await API.get('/api/ordenes/pendientes-hoy')
-        this.pendientesHoy     = r.data || []
-        // Expandir todos por defecto
-        this.pendientesAbiertos = this.pendientesHoy.map(o => o.folio_numero)
-      } catch {
+        if (r.ok) {
+          this.pendientesHoy      = r.data || []
+          this.pendientesAbiertos = this.pendientesHoy.map(o => o.folio_numero)
+        } else {
+          this.pendientesHoy = []
+          this.mostrarToast(r.error || 'Error al cargar pendientes', true)
+        }
+      } catch (e) {
         this.pendientesHoy = []
+        this.mostrarToast(e.message || 'Error de conexión', true)
       } finally {
         this.cargandoPendientes = false
       }

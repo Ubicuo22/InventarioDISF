@@ -1,4 +1,4 @@
-/* bodega-bundle.5226e0e9.js — 2026-08-17T20:42:20.666Z */
+/* bodega-bundle.33a57247.js — 2026-08-17T21:05:06.801Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -562,8 +562,8 @@ function inventoryModule() {
       this.cargando = true
       try {
         const r = await API.get('/api/productos')
-        this.productos = r.data || []
-        this.filtrar()
+        if (r.ok) { this.productos = r.data || []; this.filtrar() }
+        else       this.mostrarToast(r.error || 'Error al cargar productos', true)
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar productos', true)
       } finally {
@@ -574,7 +574,8 @@ function inventoryModule() {
     async cargarResumen() {
       try {
         const r = await API.get('/api/productos/resumen')
-        this.resumen = r.data || {}
+        if (r.ok) this.resumen = r.data || {}
+        else      this.mostrarToast(r.error || 'Error al cargar resumen', true)
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar resumen', true)
       }
@@ -583,7 +584,8 @@ function inventoryModule() {
     async cargarProveedores() {
       try {
         const r = await API.get('/api/productos/proveedores')
-        this.proveedores = r.data || []
+        if (r.ok) this.proveedores = r.data || []
+        else      this.mostrarToast(r.error || 'Error al cargar proveedores', true)
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar proveedores', true)
       }
@@ -2540,9 +2542,11 @@ function mermasModule() {
       this.cargandoMermas = true
       try {
         const r = await API.get('/api/mermas/recientes')
-        this.mermasRecientes = r.data || []
-      } catch {
+        if (r.ok) this.mermasRecientes = r.data || []
+        else      this.mostrarToast(r.error || 'Error al cargar mermas', true)
+      } catch (e) {
         this.mermasRecientes = []
+        this.mostrarToast(e.message || 'Error de conexión', true)
       } finally {
         this.cargandoMermas = false
       }
@@ -3223,10 +3227,14 @@ function cobranzaModule() {
           API.get(`/api/deudas?${params}`),
           API.get('/api/deudas/stats')
         ])
-        if (r.ok) this.deudas      = r.data
-        if (s.ok) this.deudaStats  = s.data
-      } catch { /* silent */ }
-      finally { this.cargandoDeudas = false }
+        if (r.ok) this.deudas     = r.data
+        else      this.mostrarToast(r.error || 'Error al cargar cobranza', true)
+        if (s.ok) this.deudaStats = s.data
+      } catch (e) {
+        this.mostrarToast(e.message || 'Error de conexión', true)
+      } finally {
+        this.cargandoDeudas = false
+      }
     },
 
     async abrirDeuda(deuda) {
@@ -3236,8 +3244,12 @@ function cobranzaModule() {
       try {
         const r = await API.get(`/api/deudas/${deuda.id_deuda}/pagos`)
         if (r.ok) this.pagosDeuda = r.data
-      } catch { /* silent */ }
-      finally { this.cargandoPagos = false }
+        else      this.mostrarToast(r.error || 'Error al cargar historial de pagos', true)
+      } catch (e) {
+        this.mostrarToast(e.message || 'Error de conexión', true)
+      } finally {
+        this.cargandoPagos = false
+      }
     },
 
     volverALista() {
@@ -3760,11 +3772,16 @@ function pendientesModule() {
       this.pendienteCambiando = null
       try {
         const r = await API.get('/api/ordenes/pendientes-hoy')
-        this.pendientesHoy     = r.data || []
-        // Expandir todos por defecto
-        this.pendientesAbiertos = this.pendientesHoy.map(o => o.folio_numero)
-      } catch {
+        if (r.ok) {
+          this.pendientesHoy      = r.data || []
+          this.pendientesAbiertos = this.pendientesHoy.map(o => o.folio_numero)
+        } else {
+          this.pendientesHoy = []
+          this.mostrarToast(r.error || 'Error al cargar pendientes', true)
+        }
+      } catch (e) {
         this.pendientesHoy = []
+        this.mostrarToast(e.message || 'Error de conexión', true)
       } finally {
         this.cargandoPendientes = false
       }
