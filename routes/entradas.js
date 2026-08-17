@@ -125,29 +125,29 @@ router.get('/recientes', requireAuth, async (req, res) => {
 
 // Registrar nueva entrada de inventario
 router.post('/', requireAuth, async (req, res) => {
+  const {
+    idProducto,
+    idProveedor    = null,
+    cantidad,
+    precio,
+    fechaCompra,
+    folio          = null,
+    incluirIva     = true,
+    notas          = null,
+    pesoLote       = null   // kg totales del lote — opcional, para factor PEPS
+  } = req.body
+
+  // Validaciones básicas antes de abrir conexión
+  if (!idProducto || !cantidad || precio == null || !fechaCompra) {
+    return res.status(400).json({ ok: false, error: 'Faltan campos: idProducto, cantidad, precio, fechaCompra' })
+  }
+  const cantidadNum  = parseFloat(cantidad)
+  const precioConIVA = parseFloat(precio)
+  if (isNaN(cantidadNum) || cantidadNum <= 0)  return res.status(400).json({ ok: false, error: 'Cantidad inválida' })
+  if (isNaN(precioConIVA) || precioConIVA < 0) return res.status(400).json({ ok: false, error: 'Precio inválido' })
+
   const conn = await pool.getConnection()
   try {
-    const {
-      idProducto,
-      idProveedor    = null,
-      cantidad,
-      precio,
-      fechaCompra,
-      folio          = null,
-      incluirIva     = true,
-      notas          = null,
-      pesoLote       = null   // kg totales del lote — opcional, para factor PEPS
-    } = req.body
-
-    // Validaciones
-    if (!idProducto || !cantidad || precio == null || !fechaCompra) {
-      return res.status(400).json({ ok: false, error: 'Faltan campos: idProducto, cantidad, precio, fechaCompra' })
-    }
-    const cantidadNum  = parseFloat(cantidad)
-    const precioConIVA = parseFloat(precio)
-    if (isNaN(cantidadNum) || cantidadNum <= 0)  return res.status(400).json({ ok: false, error: 'Cantidad inválida' })
-    if (isNaN(precioConIVA) || precioConIVA < 0) return res.status(400).json({ ok: false, error: 'Precio inválido' })
-
     // Verificar que el producto existe y está activo
     const [prodRows] = await conn.execute(
       'SELECT id_producto FROM producto WHERE id_producto = ? AND activo = 1',
