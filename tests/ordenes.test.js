@@ -31,6 +31,11 @@ const request = require('supertest')
 const app     = require('../app')
 const { q }   = require('../db/pool')
 
+beforeAll(() => {
+  jest.spyOn(console, 'error').mockImplementation(() => {})
+  jest.spyOn(console, 'log').mockImplementation(() => {})
+})
+
 beforeEach(() => jest.clearAllMocks())
 
 // ── Fixture helpers ───────────────────────────────────────────

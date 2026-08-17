@@ -30,6 +30,11 @@ function token(payload, expiresIn = '1h') {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn })
 }
 
+beforeAll(() => {
+  jest.spyOn(console, 'error').mockImplementation(() => {})
+  jest.spyOn(console, 'log').mockImplementation(() => {})
+})
+
 beforeEach(() => jest.clearAllMocks())
 
 // ─── requireAuth ───────────────────────────────────────────────

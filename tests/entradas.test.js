@@ -48,6 +48,11 @@ function mockConn(executeResponses = []) {
   return conn
 }
 
+beforeAll(() => {
+  jest.spyOn(console, 'error').mockImplementation(() => {})
+  jest.spyOn(console, 'log').mockImplementation(() => {})
+})
+
 beforeEach(() => jest.clearAllMocks())
 
 // ─── GET /api/entradas/peps-info/:id ─────────────────────────
