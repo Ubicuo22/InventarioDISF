@@ -101,7 +101,7 @@ router.get('/', async (req, res) => {
     res.json({ ok: true, data })
   } catch (e) {
     console.error('[deudas] GET /:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -144,7 +144,7 @@ router.get('/stats', async (req, res) => {
     })
   } catch (e) {
     console.error('[deudas] GET /stats:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -154,7 +154,16 @@ router.get('/:id', async (req, res) => {
     const hoy = fechaMexico()
     const rows = await q(`
       SELECT
-        d.*,
+        d.id_deuda,
+        d.id_factura,
+        d.id_cliente,
+        d.nombre_cliente,
+        d.nombre_grupo,
+        d.monto_total,
+        d.monto_pagado,
+        d.pagado,
+        d.fecha_generada,
+        d.metodo_pago,
         (d.monto_total - d.monto_pagado)                             AS saldo_pendiente,
         COALESCE(c.telefono, '')                                     AS telefono,
         COALESCE(c.dias_credito_override, g.dias_credito, 0)        AS dias_credito,
@@ -177,7 +186,7 @@ router.get('/:id', async (req, res) => {
     res.json({ ok: true, data: rows[0] })
   } catch (e) {
     console.error('[deudas] GET /:id:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -199,7 +208,7 @@ router.get('/:id/pagos', async (req, res) => {
     res.json({ ok: true, data: rows })
   } catch (e) {
     console.error('[deudas] GET /:id/pagos:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 

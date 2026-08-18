@@ -25,7 +25,7 @@ router.get('/grupos', async (req, res) => {
     )
     res.json({ ok: true, data: rows })
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -53,7 +53,7 @@ router.get('/', async (req, res) => {
     )
     res.json({ ok: true, data: rows })
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -83,7 +83,7 @@ router.put('/', async (req, res) => {
     }
     res.json({ ok: true })
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -107,7 +107,7 @@ router.post('/ajuste-masivo', async (req, res) => {
     )
     res.json({ ok: true, actualizados: result.affectedRows })
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -131,7 +131,7 @@ router.post('/copiar-grupo', async (req, res) => {
     const [result] = await pool.execute(sql, [id_grupo_destino, id_grupo_origen])
     res.json({ ok: true, copiados: result.affectedRows })
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 

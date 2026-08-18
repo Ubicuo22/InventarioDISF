@@ -17,6 +17,9 @@ router.get('/resumen', requireAuth, async (req, res) => {
 
     const desde = req.query.desde || hace30
     const hasta = req.query.hasta || hoy
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) {
+      return res.status(400).json({ ok: false, error: 'Formato de fecha inválido, use YYYY-MM-DD' })
+    }
 
     const rows = await q(`
       SELECT
@@ -113,7 +116,7 @@ router.get('/resumen', requireAuth, async (req, res) => {
     })
   } catch (err) {
     console.error('[compras] GET /resumen:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 

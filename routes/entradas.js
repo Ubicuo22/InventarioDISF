@@ -58,7 +58,7 @@ router.get('/peps-info/:idProducto', requireAuth, async (req, res) => {
       esDerivado: esDerivado.length > 0 ? esDerivado[0] : null
     })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -86,7 +86,7 @@ router.get('/lotes/:idProducto', requireAuth, async (req, res) => {
     `, [idProducto])
     res.json({ ok: true, data: rows })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -119,7 +119,7 @@ router.get('/recientes', requireAuth, async (req, res) => {
     `)
     res.json({ ok: true, data: rows })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -146,17 +146,17 @@ router.post('/', requireAuth, async (req, res) => {
   if (isNaN(cantidadNum) || cantidadNum <= 0)  return res.status(400).json({ ok: false, error: 'Cantidad inválida' })
   if (isNaN(precioConIVA) || precioConIVA < 0) return res.status(400).json({ ok: false, error: 'Precio inválido' })
 
+  // Verificar producto antes de abrir conexión (evita connection leak en early return)
+  const prodRows = await q(
+    'SELECT id_producto FROM producto WHERE id_producto = ? AND activo = 1',
+    [idProducto]
+  )
+  if (!prodRows.length) {
+    return res.status(400).json({ ok: false, error: 'Producto no encontrado o inactivo' })
+  }
+
   const conn = await pool.getConnection()
   try {
-    // Verificar que el producto existe y está activo
-    const [prodRows] = await conn.execute(
-      'SELECT id_producto FROM producto WHERE id_producto = ? AND activo = 1',
-      [idProducto]
-    )
-    if (!prodRows.length) {
-      return res.status(400).json({ ok: false, error: 'Producto no encontrado o inactivo' })
-    }
-
     // Peso del lote — calcula peso_por_pieza y factor_conversion del lote
     const pesoLoteNum = pesoLote != null ? parseFloat(pesoLote) : NaN
     const pesoPorPieza      = (!isNaN(pesoLoteNum) && pesoLoteNum > 0 && cantidadNum > 0)
@@ -346,7 +346,7 @@ router.post('/', requireAuth, async (req, res) => {
     await conn.rollback()
     conn.release()
     console.error('[entradas] POST /:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -403,7 +403,7 @@ router.get('/conteo-fisico/estado', requireAuth, async (req, res) => {
     const data = soloPendientes === 'true' ? rows.filter(r => !r.ultima_fecha) : rows
     res.json({ ok: true, data })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -529,7 +529,7 @@ router.post('/ajuste-inventario', requireAuth, async (req, res) => {
     await conn.rollback()
     conn.release()
     console.error('[entradas] POST /ajuste-inventario:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 

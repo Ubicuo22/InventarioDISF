@@ -47,7 +47,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.json({ ok: true, data: rows })
   } catch (err) {
     console.error('[productos] GET /:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -83,7 +83,7 @@ router.get('/resumen', requireAuth, async (req, res) => {
     `)
     res.json({ ok: true, data: stats })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -123,7 +123,7 @@ router.get('/buscar', requireAuth, async (req, res) => {
     res.json({ ok: true, data: rows })
   } catch (err) {
     console.error('[productos] GET /buscar:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -160,7 +160,7 @@ router.post('/', requireAuth, async (req, res) => {
     res.json({ ok: true, data: { id_producto, nombre_producto: nombre_producto.trim() } })
   } catch (err) {
     console.error('[productos] POST /:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -180,7 +180,7 @@ router.post('/precio-rapido', requireAuth, async (req, res) => {
     res.json({ ok: true })
   } catch (err) {
     console.error('[productos] POST /precio-rapido', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -197,7 +197,7 @@ router.get('/:id/precios-grupos', requireAuth, async (req, res) => {
     )
     res.json({ ok: true, data: rows })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -207,7 +207,7 @@ router.get('/proveedores', requireAuth, async (req, res) => {
     const rows = await q(`SELECT id_proveedor, nombre_proveedor FROM proveedor ORDER BY nombre_proveedor ASC`)
     res.json({ ok: true, data: rows })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 

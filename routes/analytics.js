@@ -64,7 +64,7 @@ router.get('/hoy', async (req, res) => {
     })
   } catch (err) {
     console.error('[analytics] GET /hoy:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -76,6 +76,9 @@ router.get('/periodo', async (req, res) => {
     const { fechaInicio, fechaFin } = req.query
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ ok: false, error: 'Faltan fechaInicio y fechaFin' })
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
+      return res.status(400).json({ ok: false, error: 'Formato de fecha inválido, use YYYY-MM-DD' })
     }
 
     // 3 queries en paralelo — mismo patrón que Electron analytics handler
@@ -178,7 +181,7 @@ router.get('/periodo', async (req, res) => {
     })
   } catch (err) {
     console.error('[analytics] GET /periodo:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -190,6 +193,9 @@ router.get('/top-productos', async (req, res) => {
     const { fechaInicio, fechaFin } = req.query
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ ok: false, error: 'Faltan fechaInicio y fechaFin' })
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
+      return res.status(400).json({ ok: false, error: 'Formato de fecha inválido, use YYYY-MM-DD' })
     }
 
     const rows = await q(`
@@ -212,7 +218,7 @@ router.get('/top-productos', async (req, res) => {
     res.json({ ok: true, data: rows })
   } catch (err) {
     console.error('[analytics] GET /top-productos:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -287,7 +293,7 @@ router.get('/notas', async (req, res) => {
     res.json({ ok: true, fecha, data: lista })
   } catch (err) {
     console.error('[analytics] GET /notas:', err.message)
-    res.status(500).json({ ok: false, error: err.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 

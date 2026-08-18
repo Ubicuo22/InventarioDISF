@@ -7,7 +7,7 @@ const { fechaMexico } = require('../utils/fecha')
 router.use(requireAuth)
 
 /* ─── POST /api/mermas — registrar merma/ajuste ─── */
-router.post('/', async (req, res) => {
+router.post('/', requireModulo('mermas'), async (req, res) => {
   const { id_producto, tipo_merma, cantidad_merma, motivo, fecha_merma, notas } = req.body
   if (!id_producto)    return res.status(400).json({ ok: false, error: 'id_producto requerido' })
   if (!tipo_merma)     return res.status(400).json({ ok: false, error: 'tipo_merma requerido' })
@@ -54,7 +54,7 @@ router.post('/', async (req, res) => {
       [id_producto]
     )
     if (!prod) { await conn.rollback(); return res.status(404).json({ ok: false, error: 'Producto no encontrado' }) }
-    if (parseFloat(prod.stock_virtual) < cantidad_merma) {
+    if (parseFloat(prod.stock_virtual) < _cant) {
       await conn.rollback()
       return res.status(400).json({ ok: false, error: `Stock insuficiente. Disponible: ${prod.stock_virtual} ${prod.unidad_producto}` })
     }
@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
       INSERT INTO merma (id_producto, cantidad_merma, tipo_merma, motivo, fecha_merma,
                          costo_unitario, costo_total, usuario_registro, notas)
       VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
-    `, [id_producto, cantidad_merma, tipo_merma, motivo.trim(), fecha, usuario, notas?.trim() || null])
+    `, [id_producto, _cant, tipo_merma, motivo.trim(), fecha, usuario, notas?.trim() || null])
 
     // Consumir lotes PEPS en orden FIFO (idéntico a mermas:registrar del electron).
     // Sin esto, el stock de `producto` baja pero `inventario_peps.cantidad_restante` queda
@@ -84,7 +84,7 @@ router.post('/', async (req, res) => {
          ORDER BY fecha_movimiento ASC, id_inventario_peps ASC`,
         [id_producto]
       )
-      let pendiente = parseFloat(cantidad_merma)
+      let pendiente = _cant
       for (const lote of lotes) {
         if (pendiente <= 0) break
         const consumir = Math.min(pendiente, parseFloat(lote.cantidad_restante))

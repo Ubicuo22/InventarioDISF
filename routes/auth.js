@@ -72,7 +72,7 @@ router.post('/login', rateLimitLogin, async (req, res) => {
 
     const [users] = await pool.execute(
       `SELECT id_usuario, username, password_hash, nombre_completo,
-              rol, activo, bloqueado_hasta, avatar_color, avatar_r2_key
+              rol, activo, bloqueado_hasta, intentos_fallidos, avatar_color, avatar_r2_key
        FROM usuarios_sistema
        WHERE username = ? AND activo = 1`,
       [username.toUpperCase()]
@@ -103,17 +103,27 @@ router.post('/login', rateLimitLogin, async (req, res) => {
     // Verificar contraseña
     const valid = await bcrypt.compare(password, user.password_hash)
     if (!valid) {
+      const nuevoIntento = (user.intentos_fallidos || 0) + 1
       await pool.execute(
-        `UPDATE usuarios_sistema SET intentos_fallidos = intentos_fallidos + 1 WHERE id_usuario = ?`,
+        `UPDATE usuarios_sistema
+         SET intentos_fallidos = intentos_fallidos + 1,
+             bloqueado_hasta = CASE
+               WHEN intentos_fallidos + 1 >= 5 THEN DATE_ADD(NOW(), INTERVAL 15 MINUTE)
+               ELSE bloqueado_hasta
+             END
+         WHERE id_usuario = ?`,
         [user.id_usuario]
       )
-      return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos' })
+      const error = nuevoIntento >= 5
+        ? 'Cuenta bloqueada 15 minutos por demasiados intentos fallidos'
+        : 'Usuario o contraseña incorrectos'
+      return res.status(401).json({ ok: false, error })
     }
 
     // Correr en paralelo: resetear intentos + obtener permisos de supervisor
     const [, permsResult] = await Promise.all([
       pool.execute(
-        `UPDATE usuarios_sistema SET intentos_fallidos = 0, ultimo_acceso = NOW() WHERE id_usuario = ?`,
+        `UPDATE usuarios_sistema SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = NOW() WHERE id_usuario = ?`,
         [user.id_usuario]
       ),
       user.rol === 'supervisor'
@@ -140,7 +150,7 @@ router.post('/login', rateLimitLogin, async (req, res) => {
         ...(modulosPermitidos !== null ? { modulosPermitidos } : {})
       },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '24h' }
     )
 
     // Guardar sesión antes de responder — garantiza que el jti existe en BD
@@ -156,7 +166,7 @@ router.post('/login', rateLimitLogin, async (req, res) => {
            WHERE id_usuario = ?
              AND activo = 1
              AND (
-               fecha_login < DATE_SUB(NOW(), INTERVAL 30 DAY)
+               fecha_login < DATE_SUB(NOW(), INTERVAL 2 DAY)
                OR id NOT IN (
                  SELECT id FROM (
                    SELECT id FROM bodega_sesiones

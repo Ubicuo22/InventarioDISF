@@ -105,7 +105,7 @@ router.post('/', async (req, res) => {
   } catch (e) {
     await conn.rollback().catch(() => {})
     console.error('[pagos] POST /:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   } finally {
     conn.release()
   }

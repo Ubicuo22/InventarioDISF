@@ -82,7 +82,7 @@ router.post('/sesiones/limpiar', async (req, res) => {
     res.json({ ok: true, cerradas: result.affectedRows })
   } catch (e) {
     console.error('[admin] POST /sesiones/limpiar:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 

@@ -131,7 +131,7 @@ router.get('/data', requireDashboardToken, async (req, res) => {
     })
   } catch (e) {
     console.error('[dashboard] GET /data:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -466,7 +466,7 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
     })
   } catch (e) {
     console.error('[dashboard] GET /metricas-hoy:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
@@ -587,7 +587,7 @@ router.get('/ceo-insights', requireAuth, async (req, res) => {
     })
   } catch (e) {
     console.error('[dashboard] GET /ceo-insights:', e.message)
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, error: 'Error interno' })
   }
 })
 
