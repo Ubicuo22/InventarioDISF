@@ -413,17 +413,34 @@ router.get('/conteo-fisico/estado', requireAuth, async (req, res) => {
  * Calcula delta vs stock sistema, crea ajuste apropiado y registra verificación.
  */
 router.post('/ajuste-inventario', requireAuth, async (req, res) => {
+  const { idProducto, cantidadFisica, notas = '' } = req.body
+  if (!idProducto || cantidadFisica == null) {
+    return res.status(400).json({ ok: false, error: 'Faltan campos: idProducto, cantidadFisica' })
+  }
+  const fisicaNum = parseFloat(cantidadFisica)
+  if (isNaN(fisicaNum) || fisicaNum < 0) {
+    return res.status(400).json({ ok: false, error: 'Cantidad física inválida' })
+  }
+
+  // Mutex: bloquear si hay notas en estado 'registrada' en Electron
+  const notasPendientes = await q(
+    `SELECT COUNT(*) AS n FROM ordenes_guardadas WHERE activo = 1 AND estado = 'registrada'`
+  )
+  if (Number(notasPendientes[0]?.n) > 0) {
+    return res.status(409).json({
+      ok: false,
+      error: 'Hay notas pendientes de confirmar en Electron. Confírmalas antes de ajustar el inventario.'
+    })
+  }
+
+  // Activar mutex de revisión para que Electron bloquee confirmaciones de notas
+  await q(
+    `UPDATE revision_activa SET activa = 1, inicio = NOW(), usuario = ? WHERE id = 1`,
+    [req.user.username]
+  )
+
   const conn = await pool.getConnection()
   try {
-    const { idProducto, cantidadFisica, notas = '' } = req.body
-    if (!idProducto || cantidadFisica == null) {
-      return res.status(400).json({ ok: false, error: 'Faltan campos: idProducto, cantidadFisica' })
-    }
-    const fisicaNum = parseFloat(cantidadFisica)
-    if (isNaN(fisicaNum) || fisicaNum < 0) {
-      return res.status(400).json({ ok: false, error: 'Cantidad física inválida' })
-    }
-
     await conn.beginTransaction()
 
     // Leer stock actual y datos producto
@@ -530,6 +547,8 @@ router.post('/ajuste-inventario', requireAuth, async (req, res) => {
     conn.release()
     console.error('[entradas] POST /ajuste-inventario:', err.message)
     res.status(500).json({ ok: false, error: 'Error interno' })
+  } finally {
+    q(`UPDATE revision_activa SET activa = 0 WHERE id = 1`).catch(() => {})
   }
 })
 
