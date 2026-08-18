@@ -1,4 +1,4 @@
-/* bodega-bundle.33a57247.js — 2026-08-17T21:14:07.206Z */
+/* bodega-bundle.6f417fb3.js — 2026-08-18T05:44:24.546Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1135,7 +1135,8 @@ function ordersModule() {
       const cantidad = parseFloat(this.agregarModal.cantidad) || 1
       if (!precio || precio <= 0) return
 
-      // Guardar precio en el grupo si el usuario lo pidió
+      // Guardar precio base en el grupo si el usuario lo pidió.
+      // El admin teclea el precio base; el backend aplica el descuento del grupo.
       if (this.agregarModal.guardarPrecio && this.ordenForm.id_grupo) {
         try {
           await API.post('/api/productos/precio-rapido', {
@@ -2194,18 +2195,14 @@ function reviewModule () {
       const key = this.revisionItemKey(nuevo)
       if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
 
-      // Persistir el precio en la DB cuando el usuario lo ingresó manualmente.
-      // Se guarda como precio_base = precioManual / (1 - descuento/100) para que
-      // Electron calcule el mismo precio_final al leer la cotización del grupo.
+      // Persistir el precio base en la DB cuando el usuario lo ingresó manualmente.
+      // El admin teclea el precio base; el backend aplica el descuento del grupo
+      // al momento de mostrar el precio al cliente.
       if (precioManual > 0 && precioExistente <= 0 && this.revisionIdGrupo) {
-        const descuento  = parseFloat(prod.descuento ?? 0)
-        const precioBase = descuento > 0
-          ? Math.round(precioManual / (1 - descuento / 100) * 100) / 100
-          : precioManual
         API.post('/api/productos/precio-rapido', {
           id_producto: prod.id_producto,
           id_grupo:    this.revisionIdGrupo,
-          precio_base: precioBase
+          precio_base: precioManual
         }).catch(e => console.warn('No se pudo guardar el precio:', e.message))
       }
 

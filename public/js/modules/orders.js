@@ -235,7 +235,8 @@ function ordersModule() {
       const cantidad = parseFloat(this.agregarModal.cantidad) || 1
       if (!precio || precio <= 0) return
 
-      // Guardar precio en el grupo si el usuario lo pidió
+      // Guardar precio base en el grupo si el usuario lo pidió.
+      // El admin teclea el precio base; el backend aplica el descuento del grupo.
       if (this.agregarModal.guardarPrecio && this.ordenForm.id_grupo) {
         try {
           await API.post('/api/productos/precio-rapido', {
