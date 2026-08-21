@@ -1,4 +1,4 @@
-/* bodega-bundle.6f417fb3.js — 2026-08-18T17:23:58.868Z */
+/* bodega-bundle.1e5541a6.js — 2026-08-21T16:57:35.880Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -2011,7 +2011,7 @@ function reviewModule () {
     revisionAbrirCambiar () {
       const c = this.revisionCurrent()
       if (!c) return
-      this.revisionCambiarModal = { visible: true, busqueda: '', resultados: [], buscando: false, error: null }
+      this.revisionCambiarModal = { visible: true, busqueda: '', resultados: [], buscando: false, error: null, paso: 'buscar', productoSinPrecio: null, precioManual: '', preciosGrupos: [], cargandoPrecios: false }
       this.$nextTick(() => document.getElementById('rev-buscar-input')?.focus())
     },
 
@@ -3755,10 +3755,17 @@ function pendientesModule() {
     pendienteEditCant:  '',
 
     // Cambio de producto
-    pendienteCambiando: null,
+    pendienteCambiando: null,   // { folio, nombre, tipo, idGrupo, nombreGrupo }
     cambioQuery:        '',
     cambioResultados:   [],
     cambioBuscando:     false,
+
+    // Modal de precio para producto sin precio en el grupo
+    cambioPrecioModal:       null,   // { prod, folio, nombreViejo, tipo, idGrupo, nombreGrupo } | null
+    cambioPrecioManual:      '',
+    cambioPreciosGrupos:     [],
+    cambioCargandoPrecios:   false,
+    cambioPrecioGuardarGrupo: true,  // true = guardar en el grupo, false = solo esta nota
 
     // Resolución de faltante — pregunta llegó/no llegó
     pendienteResolviendo: null,   // { folio, nombre } | null
@@ -3878,7 +3885,14 @@ function pendientesModule() {
         this.cambioResultados = []
         return
       }
-      this.pendienteCambiando = { folio, nombre: item.nombre, tipo }
+      const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
+      this.pendienteCambiando = {
+        folio,
+        nombre:      item.nombre,
+        tipo,
+        idGrupo:     orden?.id_grupo    || null,
+        nombreGrupo: orden?.nombre_grupo || ''
+      }
       this.cambioQuery = ''
       this.cambioResultados = []
     },
@@ -3888,7 +3902,8 @@ function pendientesModule() {
       if (q.length < 1) { this.cambioResultados = []; return }
       this.cambioBuscando = true
       try {
-        const r = await API.get(`/api/productos/buscar?q=${encodeURIComponent(q)}`)
+        const gid = this.pendienteCambiando?.idGrupo ? `&groupId=${this.pendienteCambiando.idGrupo}` : ''
+        const r = await API.get(`/api/productos/buscar?q=${encodeURIComponent(q)}${gid}`)
         this.cambioResultados = r.data || []
       } catch {
         this.cambioResultados = []
@@ -3899,8 +3914,54 @@ function pendientesModule() {
 
     async confirmarCambioProducto(prod) {
       if (!this.pendienteCambiando) return
-      const { folio, nombre: nombreViejo, tipo } = this.pendienteCambiando
+      const { folio, nombre: nombreViejo, tipo, idGrupo, nombreGrupo } = this.pendienteCambiando
+      const precio = parseFloat(prod.precio_final ?? prod.precio_base) || 0
 
+      if (precio <= 0) {
+        // Sin precio para este grupo — abrir modal de precio
+        this.cambioPrecioModal = { prod, folio, nombreViejo, tipo, idGrupo, nombreGrupo }
+        this.cambioPrecioManual       = ''
+        this.cambioPreciosGrupos      = []
+        this.cambioCargandoPrecios    = true
+        this.cambioPrecioGuardarGrupo = true
+        this.pendienteCambiando       = null
+        this.cambioQuery              = ''
+        this.cambioResultados         = []
+        try {
+          const r = await API.get(`/api/productos/${prod.id_producto}/precios-grupos`)
+          this.cambioPreciosGrupos = r.ok ? (r.data || []) : []
+        } catch { /* silent */ }
+        finally { this.cambioCargandoPrecios = false }
+        return
+      }
+
+      this.pendienteCambiando = null
+      this.cambioQuery        = ''
+      this.cambioResultados   = []
+      await this._aplicarCambioProducto({ prod, folio, nombreViejo, tipo, precio })
+    },
+
+    async confirmarCambioPrecioManual() {
+      if (!this.cambioPrecioModal) return
+      const precio = parseFloat(this.cambioPrecioManual)
+      if (!precio || precio <= 0) return
+
+      const { prod, folio, nombreViejo, tipo, idGrupo } = this.cambioPrecioModal
+      const guardarGrupo = this.cambioPrecioGuardarGrupo
+      this.cambioPrecioModal = null
+
+      if (guardarGrupo && idGrupo) {
+        API.post('/api/productos/precio-rapido', {
+          id_producto: prod.id_producto,
+          id_grupo:    idGrupo,
+          precio_base: precio
+        }).catch(e => console.warn('precio-rapido:', e.message))
+      }
+
+      await this._aplicarCambioProducto({ prod, folio, nombreViejo, tipo, precio })
+    },
+
+    async _aplicarCambioProducto({ prod, folio, nombreViejo, tipo, precio }) {
       const orden = this.pendientesHoy.find(o => o.folio_numero === folio)
       if (orden) {
         const campo = tipo === 'pendiente' ? 'pendientes' : 'faltantes'
@@ -3915,16 +3976,13 @@ function pendientesModule() {
         }
       }
 
-      this.pendienteCambiando = null
-      this.cambioQuery = ''
-      this.cambioResultados = []
-
       try {
         const r = await API.patch(`/api/ordenes/${folio}/cambiar-item`, {
           nombre_viejo: nombreViejo,
           id_nuevo:     prod.id_producto,
           nombre_nuevo: prod.nombre_producto,
-          unidad_nueva: prod.unidad_producto
+          unidad_nueva: prod.unidad_producto,
+          precio_nuevo: precio || null
         })
         if (!r.ok) throw new Error(r.error || 'Error')
         this.mostrarToast(`Cambiado a ${prod.nombre_producto}`)

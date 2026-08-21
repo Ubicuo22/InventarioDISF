@@ -395,7 +395,7 @@ router.patch('/:folio/cambiar-item', requireModulo('pedidos'), async (req, res) 
   try {
     const folio = parseInt(req.params.folio, 10)
     if (!folio || isNaN(folio)) return res.status(400).json({ ok: false, error: 'folio inválido' })
-    const { nombre_viejo, id_nuevo, nombre_nuevo, unidad_nueva } = req.body
+    const { nombre_viejo, id_nuevo, nombre_nuevo, unidad_nueva, precio_nuevo } = req.body
     if (!nombre_viejo || !id_nuevo || !nombre_nuevo) return res.status(400).json({ ok: false, error: 'nombre_viejo, id_nuevo y nombre_nuevo requeridos' })
 
     const [row] = await q('SELECT datos_carrito, estado FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1', [folio])
@@ -413,6 +413,7 @@ router.patch('/:folio/cambiar-item', requireModulo('pedidos'), async (req, res) 
           item.id_producto      = id_nuevo
           item.nombre_producto  = nombre_nuevo
           item.unidad_producto  = unidad_nueva || item.unidad_producto
+          if (precio_nuevo != null && precio_nuevo > 0) item.precio_unitario = precio_nuevo
           reemplazado = true
         }
       }
@@ -437,6 +438,7 @@ router.patch('/:folio/cambiar-item', requireModulo('pedidos'), async (req, res) 
             d.nombre      = nombre_nuevo
             d.id_producto = id_nuevo
             if (unidad_nueva) d.unidad = unidad_nueva
+            if (precio_nuevo != null && precio_nuevo > 0) d.precio_unitario = precio_nuevo
           }
         }
       }

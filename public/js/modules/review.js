@@ -741,7 +741,7 @@ function reviewModule () {
     revisionAbrirCambiar () {
       const c = this.revisionCurrent()
       if (!c) return
-      this.revisionCambiarModal = { visible: true, busqueda: '', resultados: [], buscando: false, error: null }
+      this.revisionCambiarModal = { visible: true, busqueda: '', resultados: [], buscando: false, error: null, paso: 'buscar', productoSinPrecio: null, precioManual: '', preciosGrupos: [], cargandoPrecios: false }
       this.$nextTick(() => document.getElementById('rev-buscar-input')?.focus())
     },
 
