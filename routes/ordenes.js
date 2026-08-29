@@ -2,6 +2,7 @@ const router  = require('express').Router()
 const { q }   = require('../db/pool')
 const { requireAuth, requireModulo } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
+const { fechaMexico, rangoUtcDelDia } = require('../utils/fecha')
 
 router.use(requireAuth)
 
@@ -111,6 +112,7 @@ router.get('/', async (req, res) => {
 /* ─── GET /api/ordenes/pendientes-hoy ─── */
 router.get('/pendientes-hoy', async (req, res) => {
   try {
+    const { inicio, fin } = rangoUtcDelDia(fechaMexico())
     const rows = await q(`
       SELECT o.folio_numero, o.id_cliente, c.nombre_cliente,
              g.id_grupo, g.nombre_grupo,
@@ -119,9 +121,9 @@ router.get('/pendientes-hoy', async (req, res) => {
       INNER JOIN cliente c ON o.id_cliente = c.id_cliente
       INNER JOIN grupo   g ON c.id_grupo   = g.id_grupo
       WHERE  o.estado = 'guardada' AND o.activo = 1
-        AND  DATE(o.fecha_creacion) = CURDATE()
+        AND  o.fecha_creacion >= ? AND o.fecha_creacion < ?
       ORDER  BY o.folio_numero ASC
-    `)
+    `, [inicio, fin])
 
     const result = []
     for (const row of rows) {
