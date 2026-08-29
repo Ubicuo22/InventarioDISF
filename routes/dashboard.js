@@ -15,7 +15,7 @@ const crypto = require('crypto')
 const router = require('express').Router()
 const { q }  = require('../db/pool')
 const { requireAuth } = require('../middleware/auth')
-const { fechaMexico } = require('../utils/fecha')
+const { fechaMexico, rangoUtcDelDia } = require('../utils/fecha')
 
 function requireDashboardToken(req, res, next) {
   const token = req.query.token
@@ -140,6 +140,8 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
   try {
     const hoy = fechaMexico()
     const ayer = fechaMexico(-1)
+    const rangoHoy  = rangoUtcDelDia(hoy)
+    const rangoAyer = rangoUtcDelDia(ayer)
 
     // ── Batch 1: queries ligeras (sin JOINs pesados) ─────────────────────────
     const [
@@ -155,15 +157,17 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
       lotesAntiguos
     ] = await Promise.all([
 
-      // Pedidos creados hoy
+      // Pedidos creados hoy — rango UTC usa idx_orden_fecha (DATE() lo bloquea)
       q(`SELECT COUNT(*) AS total
          FROM ordenes_guardadas
-         WHERE DATE(fecha_creacion) = ? AND activo = 1`, [hoy]),
+         WHERE fecha_creacion >= ? AND fecha_creacion < ? AND activo = 1`,
+        [rangoHoy.inicio, rangoHoy.fin]),
 
       // Pedidos creados ayer
       q(`SELECT COUNT(*) AS total
          FROM ordenes_guardadas
-         WHERE DATE(fecha_creacion) = ? AND activo = 1`, [ayer]),
+         WHERE fecha_creacion >= ? AND fecha_creacion < ? AND activo = 1`,
+        [rangoAyer.inicio, rangoAyer.fin]),
 
       // Pedidos activos con su carrito (para detectar revisados/no revisados)
       q(`SELECT folio_numero, datos_carrito, fecha_creacion

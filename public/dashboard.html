@@ -225,16 +225,28 @@ setInterval(updateClock, 1000)
 updateClock()
 
 // ── Countdown ─────────────────────────────────────────────
-let countdownVal = 30
+const REFRESH_SECS = 120
+let countdownVal = REFRESH_SECS
+let countdownPaused = false
 function tickCountdown() {
+  if (countdownPaused) return
   countdownVal--
   document.getElementById('countdown').textContent = countdownVal
   if (countdownVal <= 0) {
-    countdownVal = 30
+    countdownVal = REFRESH_SECS
     cargarDatos()
   }
 }
 setInterval(tickCountdown, 1000)
+// Pausa el polling cuando la pestaña está oculta (TV apagada, tab en fondo)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    countdownPaused = true
+  } else {
+    countdownPaused = false
+    countdownVal = 0  // refresca de inmediato al volver
+  }
+})
 
 // ── Renderizar pedidos ────────────────────────────────────
 function renderPedidos(pedidos) {
