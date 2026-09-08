@@ -61,7 +61,10 @@ app.get('/api/status', async (req, res) => {
     await q('SELECT 1')
     res.json({ ok: true, ts: new Date().toISOString() })
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
+    // No exponer el mensaje crudo de MySQL: filtraba usuario de BD e IP
+    // a cualquiera sin autenticar (mismo criterio que A-4 en Electron).
+    console.error(`[${new Date().toISOString()}] ❌ /api/status:`, err.message)
+    res.status(500).json({ ok: false, error: 'Base de datos no disponible' })
   }
 })
 
