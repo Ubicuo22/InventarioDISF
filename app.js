@@ -14,6 +14,7 @@ const app = express()
 const esWorkers = globalThis.navigator?.userAgent === 'Cloudflare-Workers'
 
 const { requireAuth, requireModulo } = require('./middleware/auth')
+const { requireAuthElectron } = require('./middleware/auth-electron')
 
 // ─── Middleware global ────────────────────────────────────────
 app.use(require('cors')())
@@ -31,6 +32,14 @@ if (!esWorkers) {
 // ─── Rutas públicas / con auth propio ────────────────────────
 app.use('/api/auth',           require('./routes/auth'))
 app.use('/api/notificaciones', require('./routes/notificaciones'))
+
+// ─── Disfruleg Electron (H-5: migración fuera del cliente pesado) ─────
+// Namespace propio, separado de las rutas de la app web bodega de arriba —
+// vocabulario de roles distinto (admin/supervisor/cajero/ceo) y tabla de
+// sesión propia (electron_sesiones). Ver plan en
+// disfruleg-electron/.claude/plans (H-5) para el resto de las fases.
+app.use('/api/electron/auth',          require('./routes/electron/auth'))
+app.use('/api/electron/tipos-cliente', requireAuthElectron, require('./routes/electron/tiposCliente'))
 
 // ─── Rutas protegidas — acceso general (cualquier rol válido) ─
 app.use('/api/productos',  requireAuth, require('./routes/productos'))
