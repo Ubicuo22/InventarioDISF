@@ -40,6 +40,8 @@ app.use('/api/notificaciones', require('./routes/notificaciones'))
 // disfruleg-electron/.claude/plans (H-5) para el resto de las fases.
 app.use('/api/electron/auth',          require('./routes/electron/auth'))
 app.use('/api/electron/tipos-cliente', requireAuthElectron, require('./routes/electron/tiposCliente'))
+app.use('/api/electron/geocoding',     requireAuthElectron, require('./routes/electron/geocoding'))
+app.use('/api/electron/ia',            requireAuthElectron, require('./routes/electron/ia'))
 
 // ─── Rutas protegidas — acceso general (cualquier rol válido) ─
 app.use('/api/productos',  requireAuth, require('./routes/productos'))
