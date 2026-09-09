@@ -21,12 +21,15 @@
 const router = require('express').Router()
 const { q, pool } = require('../../db/pool')
 const { fechaMexico, rangoUtcDelDia } = require('../../utils/fecha')
+const { requireRoleElectron } = require('../../middleware/auth-electron')
 const {
   resolverCadenas,
   construirFuentes,
   consumirDeFuentes,
   factoresGrupoEquivalencia,
 } = require('peps-engine-core')
+
+const ADMIN = requireRoleElectron(['admin', 'ceo'])
 
 const SELECT_ORDEN = `
   SELECT
@@ -530,6 +533,227 @@ router.put('/lock/:folio', async (req, res) => {
   } catch (e) {
     console.error('[ordenes] renewLock:', e.message)
     res.status(500).json({ ok: false, error: 'Error al renovar el bloqueo' })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════
+// ESCRITURAS SIMPLES (B3) — sin respaldo local del lado Electron
+// ═══════════════════════════════════════════════════════════════
+//
+// La identidad de "quién hizo esto" (usada en el historial de la orden y
+// para el gate de rol) sale del JWT (req.user.nombre || username), nunca
+// del body — cierra el hueco de verificarRolCeo(usuario) que dejaba
+// verificar el rol de un username que el renderer podía mandar libremente,
+// sin comprobar que la sesión activa fuera realmente de esa persona.
+
+function identidadEscritura(req) {
+  return req.user.nombre || req.user.username
+}
+
+// ─── PUT /estado/:folio — cambiarEstado ────────────────────────
+router.put('/estado/:folio', async (req, res) => {
+  try {
+    const { nuevoEstado } = req.body
+    const estado = nuevoEstado === 1 ? 'guardada' : 'registrada'
+    const [upd] = await pool.execute(
+      'UPDATE ordenes_guardadas SET estado = ? WHERE folio_numero = ?',
+      [estado, req.params.folio]
+    )
+    res.json({ ok: true, data: { affectedRows: upd.affectedRows } })
+  } catch (e) {
+    console.error('[ordenes] cambiarEstado:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al cambiar el estado' })
+  }
+})
+
+// ─── POST /revision/:folio — registrarRevision ─────────────────
+router.post('/revision/:folio', async (req, res) => {
+  const folio = req.params.folio
+  const usuario = identidadEscritura(req)
+  const { totalProductos, faltantes, pendientes } = req.body
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [rows] = await conn.execute('SELECT datos_carrito FROM ordenes_guardadas WHERE folio_numero = ?', [folio])
+    if (rows.length === 0) { await conn.rollback(); return res.status(404).json({ ok: false, error: 'Orden no encontrada' }) }
+
+    const carrito = typeof rows[0].datos_carrito === 'string' ? JSON.parse(rows[0].datos_carrito) : (rows[0].datos_carrito || {})
+    const historialPrevio = carrito.__historial__ || []
+    carrito.__historial__ = [...historialPrevio, {
+      usuario,
+      fecha: new Date().toISOString(),
+      tipoEvento: 'revision',
+      totalProductos: totalProductos || 0,
+      faltantes: Array.isArray(faltantes) ? faltantes : [],
+      pendientes: Array.isArray(pendientes) ? pendientes : [],
+    }]
+
+    await conn.execute(
+      'UPDATE ordenes_guardadas SET datos_carrito = ?, fecha_modificacion = NOW() WHERE folio_numero = ?',
+      [JSON.stringify(carrito), folio]
+    )
+    await conn.commit()
+    res.json({ ok: true, data: null })
+  } catch (e) {
+    await conn.rollback()
+    console.error('[ordenes] registrarRevision:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al registrar la revisión' })
+  } finally {
+    conn.release()
+  }
+})
+
+// ─── PUT /enviado/:folio — marcarEnviado (admin/ceo) ───────────
+router.put('/enviado/:folio', ADMIN, async (req, res) => {
+  const folio = req.params.folio
+  const usuario = identidadEscritura(req)
+  const nuevaFecha = req.body.fecha || null
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [rows] = await conn.execute(
+      'SELECT estado, fecha_envio, datos_carrito FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      [folio]
+    )
+    if (rows.length === 0) { await conn.rollback(); return res.json({ ok: false, error: 'Orden no encontrada' }) }
+
+    const row = rows[0]
+    const carrito = typeof row.datos_carrito === 'string' ? JSON.parse(row.datos_carrito) : (row.datos_carrito || {})
+    const historial = carrito.__historial__ || []
+    historial.push({
+      tipoEvento: 'fecha_envio',
+      fecha: new Date().toISOString(),
+      usuario,
+      fecha_envio: nuevaFecha,
+      fecha_anterior: row.fecha_envio || null,
+    })
+    carrito.__historial__ = historial
+
+    await conn.execute('UPDATE ordenes_guardadas SET datos_carrito = ? WHERE folio_numero = ?', [JSON.stringify(carrito), folio])
+    await conn.execute('UPDATE ordenes_guardadas SET fecha_envio = ? WHERE folio_numero = ?', [nuevaFecha, folio])
+    await conn.commit()
+    res.json({ ok: true, data: { success: true } })
+  } catch (e) {
+    await conn.rollback()
+    console.error('[ordenes] marcarEnviado:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al marcar el envío' })
+  } finally {
+    conn.release()
+  }
+})
+
+// ─── POST /notas-ceo/:folio — guardarNotaCeo (admin/ceo) ───────
+router.post('/notas-ceo/:folio', ADMIN, async (req, res) => {
+  const folio = req.params.folio
+  const usuario = identidadEscritura(req)
+  const nota = String(req.body.nota || '').trim()
+  if (!nota) return res.status(400).json({ ok: false, error: 'La nota no puede estar vacía' })
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [checkRows] = await conn.execute(
+      'SELECT id_orden, datos_carrito FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1', [folio]
+    )
+    if (checkRows.length === 0) { await conn.rollback(); return res.json({ ok: false, error: 'Orden no encontrada' }) }
+
+    const { id_orden, datos_carrito } = checkRows[0]
+    const carrito = typeof datos_carrito === 'string' ? JSON.parse(datos_carrito) : (datos_carrito || {})
+    carrito.__notas_ceo__ = carrito.__notas_ceo__ || []
+    carrito.__notas_ceo__.push({ texto: nota, usuario, fecha: new Date().toISOString() })
+
+    await conn.execute('UPDATE ordenes_guardadas SET datos_carrito = ? WHERE folio_numero = ?', [JSON.stringify(carrito), folio])
+
+    const [autorRows] = await conn.execute(
+      'SELECT id_usuario, nombre_completo FROM usuarios_sistema WHERE username = ? AND activo = 1 LIMIT 1',
+      [req.user.username]
+    )
+    const autorId = autorRows[0]?.id_usuario
+    const autorNombre = autorRows[0]?.nombre_completo || usuario
+
+    const [msgResult] = await conn.execute(
+      `INSERT INTO orden_mensajes (id_orden, id_usuario, username, nombre_completo, texto, menciones, folio_numero)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id_orden, autorId ?? 0, req.user.username, autorNombre, nota, '[]', String(folio)]
+    )
+    const idMensaje = msgResult.insertId
+
+    if (idMensaje) {
+      const [destRows] = await conn.execute(
+        `SELECT id_usuario FROM usuarios_sistema WHERE activo = 1 AND rol IN ('admin','ceo','supervisor') AND id_usuario != ?`,
+        [autorId ?? 0]
+      )
+      const destinatarios = (destRows ?? []).map(r => r.id_usuario)
+      if (destinatarios.length > 0) {
+        const values = destinatarios.map(() => '(?, ?, ?, ?, ?)').join(',')
+        const flat = destinatarios.flatMap(d => [d, idMensaje, id_orden, String(folio), nota.slice(0, 80)])
+        await conn.execute(
+          `INSERT INTO notificaciones_mensajes (id_usuario_destino, id_mensaje, id_orden, folio_numero, texto_preview) VALUES ${values}`,
+          flat
+        )
+      }
+    }
+
+    await conn.commit()
+    res.json({ ok: true, data: { success: true } })
+  } catch (e) {
+    await conn.rollback()
+    console.error('[ordenes] guardarNotaCeo:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al guardar la nota' })
+  } finally {
+    conn.release()
+  }
+})
+
+// ─── POST /notas-ceo/:folio/vista — registrarVistaCeo ──────────
+// Sin gate de rol — cualquier usuario autenticado puede marcar como vistas
+// las notas que YA puede ver (igual que hoy en Electron).
+router.post('/notas-ceo/:folio/vista', async (req, res) => {
+  const folio = req.params.folio
+  const usuario = identidadEscritura(req)
+  try {
+    const rows = await q('SELECT datos_carrito FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1', [folio])
+    if (rows.length === 0) return res.json({ ok: true, data: { success: false } })
+
+    const carrito = typeof rows[0].datos_carrito === 'string' ? JSON.parse(rows[0].datos_carrito) : (rows[0].datos_carrito || {})
+    if (!Array.isArray(carrito.__notas_ceo__) || carrito.__notas_ceo__.length === 0) {
+      return res.json({ ok: true, data: { success: true } })
+    }
+
+    const vistas = carrito.__notas_ceo_vistas__ || []
+    const ya = vistas.find(v => v.usuario === usuario)
+    if (ya) ya.fecha = new Date().toISOString()
+    else vistas.push({ usuario, fecha: new Date().toISOString() })
+    carrito.__notas_ceo_vistas__ = vistas
+
+    await pool.execute('UPDATE ordenes_guardadas SET datos_carrito = ? WHERE folio_numero = ?', [JSON.stringify(carrito), folio])
+    res.json({ ok: true, data: { success: true } })
+  } catch (e) {
+    console.error('[ordenes] registrarVistaCeo:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al registrar la vista' })
+  }
+})
+
+// ─── DELETE /notas-ceo/:folio/:index — eliminarNotaCeo (admin/ceo) ─
+router.delete('/notas-ceo/:folio/:index', ADMIN, async (req, res) => {
+  const folio = req.params.folio
+  const index = Number(req.params.index)
+  try {
+    const rows = await q('SELECT datos_carrito FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1', [folio])
+    if (rows.length === 0) return res.json({ ok: false, error: 'Orden no encontrada' })
+
+    const carrito = typeof rows[0].datos_carrito === 'string' ? JSON.parse(rows[0].datos_carrito) : (rows[0].datos_carrito || {})
+    const notas = carrito.__notas_ceo__ || []
+    if (index < 0 || index >= notas.length) return res.json({ ok: false, error: 'Índice de nota inválido' })
+
+    notas.splice(index, 1)
+    carrito.__notas_ceo__ = notas
+
+    await pool.execute('UPDATE ordenes_guardadas SET datos_carrito = ? WHERE folio_numero = ?', [JSON.stringify(carrito), folio])
+    res.json({ ok: true, data: { success: true } })
+  } catch (e) {
+    console.error('[ordenes] eliminarNotaCeo:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al eliminar la nota' })
   }
 })
 

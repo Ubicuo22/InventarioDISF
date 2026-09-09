@@ -4,17 +4,25 @@
  * H-5 Fase 4: tramo B1 (lecturas puras, patrón híbrido igual que
  * tiposCliente/usuarios/dispositivos) + tramo B2 (bloqueo de edición,
  * compartido con bodega-web — ver tests/ordenes.test.js para el lado
- * espejo del candado no-Electron).
+ * espejo del candado no-Electron) + tramo B3 (escrituras simples, sin
+ * respaldo local, con gate de rol real vía mockUser mutable — mismo
+ * criterio que electron-usuarios.test.js).
  */
+
+let mockUser = { id: 1, username: 'TEST', nombre: 'Usuario de Prueba', rol: 'admin' }
 
 jest.mock('../db/pool', () => ({
   q:    jest.fn(),
-  pool: { execute: jest.fn() }
+  pool: { execute: jest.fn(), getConnection: jest.fn() }
 }))
 
 jest.mock('../middleware/auth-electron', () => ({
-  requireAuthElectron: (req, res, next) => { req.user = { id: 1, username: 'TEST', nombre: 'Usuario de Prueba', rol: 'admin' }; next() },
-  requireRoleElectron: () => (req, res, next) => next(),
+  requireAuthElectron: (req, res, next) => { req.user = mockUser; next() },
+  requireRoleElectron: (roles) => (req, res, next) => {
+    req.user = mockUser
+    if (!roles.includes(mockUser.rol)) return res.status(403).json({ ok: false, error: 'No tienes permisos para realizar esta acción.' })
+    next()
+  },
   invalidarCacheElectron: () => {},
   AUD: 'disfruleg-electron'
 }))
@@ -23,11 +31,28 @@ const request = require('supertest')
 const app = require('../app')
 const { q, pool } = require('../db/pool')
 
+function mockConn(executeResponses = []) {
+  const conn = {
+    execute:          jest.fn(),
+    beginTransaction: jest.fn().mockResolvedValue(undefined),
+    commit:           jest.fn().mockResolvedValue(undefined),
+    rollback:         jest.fn().mockResolvedValue(undefined),
+    release:          jest.fn()
+  }
+  for (const resp of executeResponses) conn.execute.mockResolvedValueOnce(resp)
+  conn.execute.mockResolvedValue([{ affectedRows: 1, insertId: 1 }, []])
+  pool.getConnection.mockResolvedValue(conn)
+  return conn
+}
+
 beforeAll(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {})
   jest.spyOn(console, 'warn').mockImplementation(() => {})
 })
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockUser = { id: 1, username: 'TEST', nombre: 'Usuario de Prueba', rol: 'admin' }
+})
 
 describe('GET /api/electron/ordenes — obtenerTodas', () => {
   it('devuelve las órdenes con ok:true', async () => {
@@ -301,5 +326,141 @@ describe('PATCH /api/electron/ordenes/lock/:folio — renewLock', () => {
     pool.execute.mockResolvedValueOnce([{ affectedRows: 0 }])
     const res = await request(app).put('/api/electron/ordenes/lock/42')
     expect(res.body.data.renewed).toBe(false)
+  })
+})
+
+describe('PUT /api/electron/ordenes/estado/:folio — cambiarEstado', () => {
+  it('cambia el estado sin gate de rol', async () => {
+    mockUser.rol = 'cajero'
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 1 }])
+    const res = await request(app).put('/api/electron/ordenes/estado/42').send({ nuevoEstado: 1 })
+    expect(res.status).toBe(200)
+    expect(pool.execute.mock.calls[0][1]).toEqual(['guardada', '42'])
+  })
+})
+
+describe('POST /api/electron/ordenes/revision/:folio — registrarRevision', () => {
+  it('agrega la entrada al historial con la identidad del JWT', async () => {
+    const conn = mockConn([
+      [[{ datos_carrito: JSON.stringify({}) }]], // SELECT datos_carrito
+    ])
+    const res = await request(app).post('/api/electron/ordenes/revision/42').send({ totalProductos: 5, faltantes: ['x'] })
+    expect(res.status).toBe(200)
+    const update = conn.execute.mock.calls.find(c => /UPDATE ordenes_guardadas SET datos_carrito/.test(c[0]))
+    const carritoGuardado = JSON.parse(update[1][0])
+    expect(carritoGuardado.__historial__[0].usuario).toBe('Usuario de Prueba')
+    expect(carritoGuardado.__historial__[0].totalProductos).toBe(5)
+  })
+
+  it('404 si la orden no existe', async () => {
+    mockConn([[[]]])
+    const res = await request(app).post('/api/electron/ordenes/revision/999999').send({})
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('PUT /api/electron/ordenes/enviado/:folio — marcarEnviado (admin/ceo)', () => {
+  it('rechaza a un rol sin permiso (403)', async () => {
+    mockUser.rol = 'cajero'
+    const res = await request(app).put('/api/electron/ordenes/enviado/42').send({ fecha: '2026-09-10' })
+    expect(res.status).toBe(403)
+  })
+
+  it('admin: marca el envío y registra el historial', async () => {
+    const conn = mockConn([
+      [[{ estado: 'guardada', fecha_envio: null, datos_carrito: JSON.stringify({}) }]],
+    ])
+    const res = await request(app).put('/api/electron/ordenes/enviado/42').send({ fecha: '2026-09-10' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.success).toBe(true)
+    const updates = conn.execute.mock.calls.filter(c => /UPDATE ordenes_guardadas/.test(c[0]))
+    expect(updates).toHaveLength(2) // datos_carrito (historial) + fecha_envio
+  })
+})
+
+describe('POST /api/electron/ordenes/notas-ceo/:folio — guardarNotaCeo (admin/ceo)', () => {
+  it('rechaza a un rol sin permiso (403)', async () => {
+    mockUser.rol = 'supervisor'
+    const res = await request(app).post('/api/electron/ordenes/notas-ceo/42').send({ nota: 'ojo con esto' })
+    expect(res.status).toBe(403)
+  })
+
+  it('400 si la nota viene vacía', async () => {
+    const res = await request(app).post('/api/electron/ordenes/notas-ceo/42').send({ nota: '   ' })
+    expect(res.status).toBe(400)
+  })
+
+  it('admin: guarda la nota, inserta el mensaje y notifica a otros admins/ceo/supervisor', async () => {
+    const conn = mockConn([
+      [[{ id_orden: 7, datos_carrito: JSON.stringify({}) }]],                     // check orden
+      [{ affectedRows: 1 }],                                                       // UPDATE datos_carrito
+      [[{ id_usuario: 1, nombre_completo: 'Usuario de Prueba' }]],                 // autor
+      [{ insertId: 55 }],                                                          // INSERT orden_mensajes
+      [[{ id_usuario: 2 }, { id_usuario: 3 }]],                                    // destinatarios
+    ])
+    const res = await request(app).post('/api/electron/ordenes/notas-ceo/42').send({ nota: 'revisar precio' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.success).toBe(true)
+
+    const insertNotif = conn.execute.mock.calls.find(c => /INSERT INTO notificaciones_mensajes/.test(c[0]))
+    expect(insertNotif).toBeTruthy()
+    expect(insertNotif[1]).toEqual([2, 55, 7, '42', 'revisar precio', 3, 55, 7, '42', 'revisar precio'])
+  })
+
+  it('no notifica a nadie si no hay otros admins/ceo/supervisor', async () => {
+    const conn = mockConn([
+      [[{ id_orden: 7, datos_carrito: JSON.stringify({}) }]],
+      [{ affectedRows: 1 }],
+      [[{ id_usuario: 1, nombre_completo: 'Usuario de Prueba' }]],
+      [{ insertId: 55 }],
+      [[]], // sin destinatarios
+    ])
+    const res = await request(app).post('/api/electron/ordenes/notas-ceo/42').send({ nota: 'nota sola' })
+    expect(res.status).toBe(200)
+    const insertNotif = conn.execute.mock.calls.find(c => /INSERT INTO notificaciones_mensajes/.test(c[0]))
+    expect(insertNotif).toBeUndefined()
+  })
+})
+
+describe('POST /api/electron/ordenes/notas-ceo/:folio/vista — registrarVistaCeo', () => {
+  it('sin gate de rol: cualquier usuario autenticado puede marcar vista', async () => {
+    mockUser.rol = 'cajero'
+    q.mockResolvedValueOnce([{ datos_carrito: JSON.stringify({ __notas_ceo__: [{ texto: 'x' }] }) }])
+    const res = await request(app).post('/api/electron/ordenes/notas-ceo/42/vista')
+    expect(res.status).toBe(200)
+    expect(res.body.data.success).toBe(true)
+    const update = pool.execute.mock.calls.find(c => /UPDATE ordenes_guardadas/.test(c[0]))
+    const carrito = JSON.parse(update[1][0])
+    expect(carrito.__notas_ceo_vistas__[0].usuario).toBe('Usuario de Prueba')
+  })
+
+  it('success:true sin tocar BD si no hay notas CEO', async () => {
+    q.mockResolvedValueOnce([{ datos_carrito: JSON.stringify({}) }])
+    const res = await request(app).post('/api/electron/ordenes/notas-ceo/42/vista')
+    expect(res.body.data.success).toBe(true)
+    expect(pool.execute).not.toHaveBeenCalled()
+  })
+})
+
+describe('DELETE /api/electron/ordenes/notas-ceo/:folio/:index — eliminarNotaCeo (admin/ceo)', () => {
+  it('rechaza a un rol sin permiso (403)', async () => {
+    mockUser.rol = 'usuario'
+    const res = await request(app).delete('/api/electron/ordenes/notas-ceo/42/0')
+    expect(res.status).toBe(403)
+  })
+
+  it('admin: elimina la nota por índice', async () => {
+    q.mockResolvedValueOnce([{ datos_carrito: JSON.stringify({ __notas_ceo__: ['a', 'b', 'c'] }) }])
+    const res = await request(app).delete('/api/electron/ordenes/notas-ceo/42/1')
+    expect(res.status).toBe(200)
+    const update = pool.execute.mock.calls[0]
+    const carrito = JSON.parse(update[1][0])
+    expect(carrito.__notas_ceo__).toEqual(['a', 'c'])
+  })
+
+  it('error si el índice es inválido', async () => {
+    q.mockResolvedValueOnce([{ datos_carrito: JSON.stringify({ __notas_ceo__: ['a'] }) }])
+    const res = await request(app).delete('/api/electron/ordenes/notas-ceo/42/9')
+    expect(res.body.ok).toBe(false)
   })
 })
