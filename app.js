@@ -42,6 +42,8 @@ app.use('/api/electron/auth',          require('./routes/electron/auth'))
 app.use('/api/electron/tipos-cliente', requireAuthElectron, require('./routes/electron/tiposCliente'))
 app.use('/api/electron/geocoding',     requireAuthElectron, require('./routes/electron/geocoding'))
 app.use('/api/electron/ia',            requireAuthElectron, require('./routes/electron/ia'))
+app.use('/api/electron/usuarios',      requireAuthElectron, require('./routes/electron/usuarios'))
+app.use('/api/electron/dispositivos',  requireAuthElectron, require('./routes/electron/dispositivos'))
 
 // ─── Rutas protegidas — acceso general (cualquier rol válido) ─
 app.use('/api/productos',  requireAuth, require('./routes/productos'))

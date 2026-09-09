@@ -21,6 +21,33 @@ const crypto = require('crypto')
 const { pool } = require('../../db/pool')
 const { requireAuthElectron, invalidarCacheElectron, AUD } = require('../../middleware/auth-electron')
 
+// Fase 2 de H-5: paridad de auditoría con el login local de Electron — esta
+// ruta ya replicaba el bcrypt/lockout/gate de dispositivo, pero nunca
+// escribía intentos_fallidos/login_history. Cada INSERT va en su propio
+// try/catch (igual que el de electron_sesiones más abajo) para que un
+// fallo de auditoría nunca tumbe el login.
+async function registrarIntentoFallido(deviceId, razon, usuarioIntentado, ip) {
+  try {
+    await pool.execute(
+      `INSERT INTO intentos_fallidos (device_id, ip_address, razon, usuario_intentado) VALUES (?, ?, ?, ?)`,
+      [deviceId || null, ip || null, razon, usuarioIntentado || null]
+    )
+  } catch (e) {
+    console.warn('[electron-auth] No se pudo registrar intento fallido:', e.message)
+  }
+}
+
+async function registrarLoginHistory(idUsuario, idDispositivo, exito, razonFallo, ip) {
+  try {
+    await pool.execute(
+      `INSERT INTO login_history (id_usuario, id_dispositivo, ip_address, device_info, exito, razon_fallo) VALUES (?, ?, ?, ?, ?, ?)`,
+      [idUsuario, idDispositivo ?? null, ip || null, null, exito ? 1 : 0, razonFallo]
+    )
+  } catch (e) {
+    console.warn('[electron-auth] No se pudo registrar login history:', e.message)
+  }
+}
+
 // ─── POST /api/electron/auth/login ─────────────────────────
 router.post('/login', async (req, res) => {
   try {
@@ -30,6 +57,7 @@ router.post('/login', async (req, res) => {
     }
     const cleanUsername = String(username).trim()
     const cleanPassword = String(password).trim()
+    const ip = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '').slice(0, 45)
 
     const [rows] = await pool.execute(
       `SELECT id_usuario, username, password_hash, nombre_completo, rol, activo,
@@ -40,6 +68,7 @@ router.post('/login', async (req, res) => {
     )
 
     if (rows.length === 0) {
+      await registrarIntentoFallido(deviceId, 'Usuario no encontrado', cleanUsername, ip)
       return res.status(401).json({ ok: false, error: 'Usuario no encontrado' })
     }
     const user = rows[0]
@@ -49,6 +78,7 @@ router.post('/login', async (req, res) => {
     // TiDB interpretado como hora local) se corrigió hoy del lado Electron
     // y la regla aplica igual aquí.
     if (Number(user.esta_bloqueado)) {
+      await registrarIntentoFallido(deviceId, 'Cuenta bloqueada temporalmente', cleanUsername, ip)
       return res.status(401).json({
         ok: false,
         error: 'Cuenta bloqueada por demasiados intentos fallidos. Intenta de nuevo en unos minutos o contacta a un administrador.',
@@ -58,6 +88,8 @@ router.post('/login', async (req, res) => {
 
     const accessGranted = await bcrypt.compare(cleanPassword, user.password_hash)
     if (!accessGranted) {
+      await registrarIntentoFallido(deviceId, 'Contraseña incorrecta', cleanUsername, ip)
+      await registrarLoginHistory(user.id_usuario, null, false, 'Contraseña incorrecta', ip)
       const nuevosIntentos = (user.intentos_fallidos || 0) + 1
       if (nuevosIntentos >= 5) {
         await pool.execute(
@@ -75,6 +107,8 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user.activo) {
+      await registrarIntentoFallido(deviceId, 'Usuario desactivado', cleanUsername, ip)
+      await registrarLoginHistory(user.id_usuario, null, false, 'Usuario desactivado', ip)
       return res.status(401).json({ ok: false, error: 'Usuario desactivado' })
     }
 
@@ -100,6 +134,7 @@ router.post('/login', async (req, res) => {
          VALUES (?, ?, ?, ?, 0, 'PENDING', 0)`,
         [deviceId, deviceName || 'Dispositivo desconocido', JSON.stringify({ origen: 'electron-worker-login' }), user.id_usuario]
       )
+      await registrarIntentoFallido(deviceId, 'Dispositivo no autorizado', cleanUsername, ip)
       return res.status(401).json({
         ok: false,
         error: 'Dispositivo nuevo detectado. Un administrador debe autorizarlo antes de continuar.',
@@ -111,9 +146,13 @@ router.post('/login', async (req, res) => {
     await pool.execute('UPDATE dispositivos_autorizados SET ultimo_acceso = NOW() WHERE device_id = ?', [deviceId])
 
     if (dispositivo.estado === 'BLOQUEADO') {
+      await registrarIntentoFallido(deviceId, 'Dispositivo bloqueado', cleanUsername, ip)
+      await registrarLoginHistory(user.id_usuario, dispositivo.id_dispositivo, false, 'Dispositivo bloqueado', ip)
       return res.status(401).json({ ok: false, error: 'Este dispositivo ha sido bloqueado. Contacte al administrador.', reason: 'DEVICE_BLOCKED' })
     }
     if (dispositivo.estado !== 'AUTORIZADO' || !dispositivo.autorizado) {
+      await registrarIntentoFallido(deviceId, 'Dispositivo no autorizado', cleanUsername, ip)
+      await registrarLoginHistory(user.id_usuario, dispositivo.id_dispositivo, false, 'Dispositivo no autorizado', ip)
       return res.status(401).json({ ok: false, error: 'Dispositivo no autorizado. Contacte al administrador.', reason: 'DEVICE_NOT_AUTHORIZED' })
     }
 
@@ -126,8 +165,8 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h', audience: AUD, issuer: 'disfruleg-bodega' }
     )
 
-    const ip = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '').slice(0, 45)
     const ua = (req.headers['user-agent'] || '').slice(0, 255)
+    await registrarLoginHistory(user.id_usuario, dispositivo.id_dispositivo, true, null, ip)
     try {
       // Igual que bodega_sesiones: cerrar sesiones viejas/en exceso y registrar la nueva en paralelo
       await Promise.all([

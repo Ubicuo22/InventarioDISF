@@ -66,9 +66,11 @@ describe('POST /api/electron/auth/login', () => {
     expect(res.body.reason).toBe('ACCOUNT_LOCKED')
   })
 
-  it('contraseña incorrecta incrementa intentos_fallidos y no revela si el usuario existe', async () => {
+  it('contraseña incorrecta incrementa intentos_fallidos, audita, y no revela si el usuario existe', async () => {
     pool.execute
       .mockResolvedValueOnce([[usuarioBase]])   // SELECT usuario
+      .mockResolvedValueOnce([{}])               // INSERT intentos_fallidos (auditoría, Fase 2)
+      .mockResolvedValueOnce([{}])               // INSERT login_history (auditoría, Fase 2)
       .mockResolvedValueOnce([{}])               // UPDATE intentos_fallidos
     const res = await request(app).post('/api/electron/auth/login').send({ username: 'ANTONIO', password: 'incorrecta' })
     expect(res.status).toBe(401)
@@ -77,12 +79,22 @@ describe('POST /api/electron/auth/login', () => {
       expect.stringContaining('UPDATE usuarios_sistema SET intentos_fallidos'),
       [1, usuarioBase.id_usuario]
     )
+    expect(pool.execute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO intentos_fallidos'),
+      expect.arrayContaining(['Contraseña incorrecta'])
+    )
+    expect(pool.execute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO login_history'),
+      expect.arrayContaining([usuarioBase.id_usuario, null, 0, 'Contraseña incorrecta'])
+    )
   })
 
-  it('5º intento fallido bloquea la cuenta 15 minutos', async () => {
+  it('5º intento fallido bloquea la cuenta 15 minutos y audita', async () => {
     pool.execute
       .mockResolvedValueOnce([[{ ...usuarioBase, intentos_fallidos: 4 }]])
-      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]) // INSERT intentos_fallidos
+      .mockResolvedValueOnce([{}]) // INSERT login_history
+      .mockResolvedValueOnce([{}]) // UPDATE lockout
     const res = await request(app).post('/api/electron/auth/login').send({ username: 'ANTONIO', password: 'incorrecta' })
     expect(res.status).toBe(401)
     expect(res.body.reason).toBe('ACCOUNT_LOCKED')
@@ -103,6 +115,7 @@ describe('POST /api/electron/auth/login', () => {
       .mockResolvedValueOnce([[usuarioBase]])  // SELECT usuario (intentos_fallidos=0 → se salta el UPDATE de reset)
       .mockResolvedValueOnce([[]])              // SELECT dispositivo → no existe
       .mockResolvedValueOnce([{}])              // INSERT dispositivo PENDING
+      .mockResolvedValueOnce([{}])              // INSERT intentos_fallidos (auditoría, Fase 2)
     const res = await request(app).post('/api/electron/auth/login').send({
       username: 'ANTONIO', password: 'clave-correcta', deviceId: 'nuevo-device', deviceName: 'Mac de prueba'
     })
@@ -119,11 +132,17 @@ describe('POST /api/electron/auth/login', () => {
       .mockResolvedValueOnce([[usuarioBase]])
       .mockResolvedValueOnce([[{ id_dispositivo: 1, estado: 'BLOQUEADO', autorizado: 0 }]])
       .mockResolvedValueOnce([{}]) // UPDATE ultimo_acceso
+      .mockResolvedValueOnce([{}]) // INSERT intentos_fallidos (auditoría, Fase 2)
+      .mockResolvedValueOnce([{}]) // INSERT login_history (auditoría, Fase 2)
     const res = await request(app).post('/api/electron/auth/login').send({
       username: 'ANTONIO', password: 'clave-correcta', deviceId: 'device-bloqueado', deviceName: 'x'
     })
     expect(res.status).toBe(401)
     expect(res.body.reason).toBe('DEVICE_BLOCKED')
+    expect(pool.execute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO login_history'),
+      expect.arrayContaining([usuarioBase.id_usuario, 1, 0, 'Dispositivo bloqueado'])
+    )
   })
 
   it('login exitoso: usuario activo, contraseña correcta, dispositivo autorizado → token con aud correcto', async () => {
@@ -132,6 +151,7 @@ describe('POST /api/electron/auth/login', () => {
       .mockResolvedValueOnce([[{ id_dispositivo: 1, estado: 'AUTORIZADO', autorizado: 1 }]])
       .mockResolvedValueOnce([{}]) // UPDATE ultimo_acceso dispositivo
       .mockResolvedValueOnce([{}]) // UPDATE ultimo_acceso usuario
+      .mockResolvedValueOnce([{}]) // INSERT login_history (auditoría, Fase 2)
       .mockResolvedValueOnce([{}]) // UPDATE sesiones viejas
       .mockResolvedValueOnce([{}]) // INSERT electron_sesiones
 
@@ -142,6 +162,10 @@ describe('POST /api/electron/auth/login', () => {
     expect(res.body.ok).toBe(true)
     expect(typeof res.body.token).toBe('string')
     expect(res.body.user.rol).toBe('ceo')
+    expect(pool.execute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO login_history'),
+      expect.arrayContaining([usuarioBase.id_usuario, 1, 1, null])
+    )
 
     const decoded = jwt.verify(res.body.token, process.env.JWT_SECRET_ELECTRON, { audience: 'disfruleg-electron' })
     expect(decoded.id).toBe(usuarioBase.id_usuario)
