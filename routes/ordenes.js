@@ -1,5 +1,5 @@
 const router  = require('express').Router()
-const { q }   = require('../db/pool')
+const { q, pool } = require('../db/pool')
 const { requireAuth, requireModulo } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
 const { fechaMexico, rangoUtcDelDia } = require('../utils/fecha')
@@ -696,39 +696,49 @@ router.get('/:folio/lock', async (req, res) => {
   }
 })
 
-/* ─── PATCH /api/ordenes/:folio/lock — adquirir o renovar bloqueo ─── */
+/* ─── PATCH /api/ordenes/:folio/lock — adquirir o renovar bloqueo ───
+ * FIX (H-5 Fase 4 B2, 2026-09-09): antes era SELECT → check en JS → UPDATE,
+ * una carrera real — dos requests casi simultáneos podían leer el mismo
+ * "libre" antes de que cualquiera escribiera, y el segundo UPDATE pisaba
+ * al primero en silencio. Ahora es un UPDATE condicional atómico, mismo
+ * patrón que ya usa el canal equivalente de Electron
+ * (routes/electron/ordenes.js POST /lock/:folio) — las dos apps comparten
+ * las mismas columnas, así que conviene que compartan la misma garantía.
+ */
 router.patch('/:folio/lock', requireAuth, async (req, res) => {
+  const folio = req.params.folio
+  const usuario = req.user.nombre_completo || req.user.username
+  const LOCK_TIMEOUT_SECONDS = 5 * 60
   try {
-    const folio = req.params.folio
-    const usuario = req.user.nombre_completo || req.user.username
-    const source = 'bodega-web'
+    const [upd] = await pool.execute(
+      `UPDATE ordenes_guardadas
+       SET editing_by = ?, editing_at = NOW(), editing_source = 'bodega-web'
+       WHERE folio_numero = ? AND activo = 1
+         AND (
+           editing_by IS NULL
+           OR editing_by = ?
+           OR TIMESTAMPDIFF(SECOND, editing_at, NOW()) >= ?
+         )`,
+      [usuario, folio, usuario, LOCK_TIMEOUT_SECONDS]
+    )
+    if (upd.affectedRows > 0) return res.json({ ok: true, locked: false })
 
+    // affectedRows = 0 → no encontrado o lock activo de otro usuario
     const [row] = await q(
-      'SELECT editing_by, editing_at, editing_source FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
+      'SELECT editing_by, editing_source FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1',
       [folio]
     )
     if (!row) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+    if (!row.editing_by) return res.json({ ok: true, locked: false })
 
-    const LOCK_TIMEOUT_MS = 5 * 60 * 1000
-    if (row.editing_by && row.editing_at) {
-      const elapsed = Date.now() - new Date(row.editing_at).getTime()
-      if (elapsed < LOCK_TIMEOUT_MS && row.editing_by !== usuario) {
-        const desde = row.editing_source === 'electron' ? 'la aplicación de escritorio' : 'la app web'
-        return res.json({
-          ok: false,
-          locked: true,
-          message: `${row.editing_by} está editando esta nota desde ${desde}`,
-          editing_by: row.editing_by,
-          editing_source: row.editing_source
-        })
-      }
-    }
-
-    await q(
-      'UPDATE ordenes_guardadas SET editing_by = ?, editing_at = NOW(), editing_source = ? WHERE folio_numero = ?',
-      [usuario, source, folio]
-    )
-    res.json({ ok: true, locked: false })
+    const desde = row.editing_source === 'electron' ? 'la aplicación de escritorio' : 'la app web'
+    res.json({
+      ok: false,
+      locked: true,
+      message: `${row.editing_by} está editando esta nota desde ${desde}`,
+      editing_by: row.editing_by,
+      editing_source: row.editing_source
+    })
   } catch (e) {
     console.error('[ordenes] PATCH /:folio/lock', e.message)
     res.status(500).json({ ok: false, error: 'Error al adquirir bloqueo' })

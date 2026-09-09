@@ -1,19 +1,25 @@
 /**
  * routes/electron/ordenes.js — Ordenes de Disfruleg Electron
- * (H-5 Fase 4, tramo B1: lecturas puras — ver plan de migración)
+ * (H-5 Fase 4 — ver plan de migración)
  *
- * Solo lecturas por ahora. Los canales que mutan PEPS (crear, guardar,
- * actualizar, eliminar, procesarVenta, revertirProcesamiento) y el
- * bloqueo de edición (checkLock/acquireLock/releaseLock/renewLock)
- * quedan para tramos posteriores — ver db/PEPS-RECONCILIATION-AUDIT.md
- * para el porqué de ese orden.
+ * Tramo B1: las 10 lecturas puras. Tramo B2: el bloqueo de edición
+ * (checkLock/acquireLock/releaseLock/renewLock) — comparte columnas
+ * (editing_by/editing_at/editing_source) con el candado propio de
+ * bodega-web en routes/ordenes.js (`PATCH /api/ordenes/:folio/lock`),
+ * así que ambos deben seguir interoperando: mismo timeout (5 min) y
+ * mismos valores de editing_source ('electron' / 'bodega-web').
+ *
+ * Los canales que mutan PEPS (crear, guardar, actualizar, eliminar,
+ * procesarVenta, revertirProcesamiento) quedan para un tramo posterior
+ * — ver db/PEPS-RECONCILIATION-AUDIT.md para el porqué de ese orden.
  *
  * Todas las lecturas son abiertas a cualquier rol autenticado, igual que
- * hoy en Electron (sin gate de rol adicional).
+ * hoy en Electron (sin gate de rol adicional). El candado también: ver
+ * ordenes.handler.ts, ningún rol lo restringe hoy.
  */
 
 const router = require('express').Router()
-const { q } = require('../../db/pool')
+const { q, pool } = require('../../db/pool')
 const { fechaMexico, rangoUtcDelDia } = require('../../utils/fecha')
 const {
   resolverCadenas,
@@ -413,5 +419,118 @@ async function validarStockCarrito(datosCarrito, folioExcluir) {
     ? { suficiente: true, productos_faltantes: [] }
     : { suficiente: false, productos_faltantes }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// BLOQUEO DE EDICIÓN CONCURRENTE (B2)
+// ═══════════════════════════════════════════════════════════════
+//
+// La identidad para el candado (almacenada en editing_by Y usada para el
+// check de "es la misma persona") sale del JWT (req.user.nombre || username),
+// nunca del body — mismo criterio que ya usa bodega-web en su propio
+// PATCH /api/ordenes/:folio/lock. El valor que la app Electron le pasaba
+// históricamente a este canal (`usuario` del body) queda solo como dato
+// informativo, no autoritativo.
+
+const LOCK_TIMEOUT_SECONDS = 5 * 60
+
+function identidadCandado(req) {
+  return req.user.nombre || req.user.username
+}
+
+// ─── GET /lock/:folio — checkLock ──────────────────────────────
+router.get('/lock/:folio', async (req, res) => {
+  try {
+    const rows = await q(
+      `SELECT editing_by, editing_source, TIMESTAMPDIFF(SECOND, editing_at, NOW()) as elapsed_s
+       FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1`,
+      [req.params.folio]
+    )
+    if (rows.length === 0) return res.json({ ok: true, data: { locked: false } })
+
+    const row = rows[0]
+    if (row.editing_by && row.elapsed_s != null && row.elapsed_s < LOCK_TIMEOUT_SECONDS) {
+      return res.json({ ok: true, data: { locked: true, editing_by: row.editing_by, editing_source: row.editing_source } })
+    }
+    res.json({ ok: true, data: { locked: false } })
+  } catch (e) {
+    console.error('[ordenes] checkLock:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al consultar el bloqueo' })
+  }
+})
+
+// ─── POST /lock/:folio — acquireLock ───────────────────────────
+// Adquisición atómica: el UPDATE solo ocurre si nadie más tiene el lock
+// activo — elimina la carrera SELECT→check→UPDATE de dos pasos (la misma
+// que sigue teniendo bodega-web en routes/ordenes.js, ver nota ahí).
+router.post('/lock/:folio', async (req, res) => {
+  const folio = req.params.folio
+  const usuario = identidadCandado(req)
+  try {
+    const upd = await pool.execute(
+      `UPDATE ordenes_guardadas
+       SET editing_by = ?, editing_at = NOW(), editing_source = 'electron'
+       WHERE folio_numero = ? AND activo = 1
+         AND (
+           editing_by IS NULL
+           OR editing_by = ?
+           OR TIMESTAMPDIFF(SECOND, editing_at, NOW()) >= ?
+         )`,
+      [usuario, folio, usuario, LOCK_TIMEOUT_SECONDS]
+    )
+    if (upd[0].affectedRows > 0) return res.json({ ok: true, data: { locked: false } })
+
+    // affectedRows = 0 → no encontrado o lock activo de otro usuario
+    const rows = await q('SELECT editing_by, editing_source FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1', [folio])
+    if (rows.length === 0) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+    const row = rows[0]
+    if (!row.editing_by) return res.json({ ok: true, data: { locked: false } })
+
+    const desde = row.editing_source === 'bodega-web' ? 'la app web (bodega)' : 'la aplicación de escritorio'
+    res.json({
+      ok: true,
+      data: {
+        locked: true,
+        adquirido: false,
+        message: `${row.editing_by} está editando esta nota desde ${desde}`,
+        editing_by: row.editing_by,
+        editing_source: row.editing_source,
+      }
+    })
+  } catch (e) {
+    console.error('[ordenes] acquireLock:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al adquirir el bloqueo' })
+  }
+})
+
+// ─── DELETE /lock/:folio — releaseLock ─────────────────────────
+router.delete('/lock/:folio', async (req, res) => {
+  try {
+    await pool.execute(
+      'UPDATE ordenes_guardadas SET editing_by = NULL, editing_at = NULL, editing_source = NULL WHERE folio_numero = ?',
+      [req.params.folio]
+    )
+    res.json({ ok: true, data: { released: true } })
+  } catch (e) {
+    console.error('[ordenes] releaseLock:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al liberar el bloqueo' })
+  }
+})
+
+// ─── PUT /lock/:folio — renewLock (heartbeat) ──────────────────
+// PUT y no PATCH: bodegaClient.ts (disfruleg-electron) solo expone
+// get/post/put/del — no hay verbo PATCH en el cliente HTTP compartido.
+router.put('/lock/:folio', async (req, res) => {
+  const usuario = identidadCandado(req)
+  try {
+    const upd = await pool.execute(
+      'UPDATE ordenes_guardadas SET editing_at = NOW() WHERE folio_numero = ? AND editing_by = ?',
+      [req.params.folio, usuario]
+    )
+    res.json({ ok: true, data: { renewed: upd[0].affectedRows > 0 } })
+  } catch (e) {
+    console.error('[ordenes] renewLock:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al renovar el bloqueo' })
+  }
+})
 
 module.exports = router

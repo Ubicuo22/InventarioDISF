@@ -1,9 +1,10 @@
 /**
  * tests/electron-ordenes.test.js — Pruebas de routes/electron/ordenes.js
  *
- * H-5 Fase 4, tramo B1: solo los canales de lectura pura. Cubre el patrón
- * híbrido de fallback que ya usan tiposCliente/usuarios/dispositivos, más
- * las dos rutas que dependen de peps-engine-core (reservas, validar-stock).
+ * H-5 Fase 4: tramo B1 (lecturas puras, patrón híbrido igual que
+ * tiposCliente/usuarios/dispositivos) + tramo B2 (bloqueo de edición,
+ * compartido con bodega-web — ver tests/ordenes.test.js para el lado
+ * espejo del candado no-Electron).
  */
 
 jest.mock('../db/pool', () => ({
@@ -12,7 +13,7 @@ jest.mock('../db/pool', () => ({
 }))
 
 jest.mock('../middleware/auth-electron', () => ({
-  requireAuthElectron: (req, res, next) => { req.user = { id: 1, username: 'TEST', rol: 'admin' }; next() },
+  requireAuthElectron: (req, res, next) => { req.user = { id: 1, username: 'TEST', nombre: 'Usuario de Prueba', rol: 'admin' }; next() },
   requireRoleElectron: () => (req, res, next) => next(),
   invalidarCacheElectron: () => {},
   AUD: 'disfruleg-electron'
@@ -20,7 +21,7 @@ jest.mock('../middleware/auth-electron', () => ({
 
 const request = require('supertest')
 const app = require('../app')
-const { q } = require('../db/pool')
+const { q, pool } = require('../db/pool')
 
 beforeAll(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -207,5 +208,98 @@ describe('POST /api/electron/ordenes/validar-stock', () => {
     const res = await request(app).post('/api/electron/ordenes/validar-stock').send({ datos_carrito: carritoDerivado })
     expect(res.status).toBe(200)
     expect(res.body.data.suficiente).toBe(true) // 2 cajas * 12 = 24 pz, hay 30
+  })
+})
+
+describe('GET /api/electron/ordenes/lock/:folio — checkLock', () => {
+  it('locked:false cuando no hay editing_by', async () => {
+    q.mockResolvedValueOnce([{ editing_by: null, editing_source: null, elapsed_s: null }])
+    const res = await request(app).get('/api/electron/ordenes/lock/42')
+    expect(res.status).toBe(200)
+    expect(res.body.data.locked).toBe(false)
+  })
+
+  it('locked:true cuando hay un lock reciente', async () => {
+    q.mockResolvedValueOnce([{ editing_by: 'Otra Persona', editing_source: 'bodega-web', elapsed_s: 30 }])
+    const res = await request(app).get('/api/electron/ordenes/lock/42')
+    expect(res.body.data.locked).toBe(true)
+    expect(res.body.data.editing_by).toBe('Otra Persona')
+  })
+
+  it('locked:false cuando el lock expiró (>= 300s)', async () => {
+    q.mockResolvedValueOnce([{ editing_by: 'Otra Persona', editing_source: 'electron', elapsed_s: 301 }])
+    const res = await request(app).get('/api/electron/ordenes/lock/42')
+    expect(res.body.data.locked).toBe(false)
+  })
+
+  it('locked:false cuando la orden no existe (sin 404 — mismo criterio que bodega-web)', async () => {
+    q.mockResolvedValueOnce([])
+    const res = await request(app).get('/api/electron/ordenes/lock/999999')
+    expect(res.status).toBe(200)
+    expect(res.body.data.locked).toBe(false)
+  })
+})
+
+describe('POST /api/electron/ordenes/lock/:folio — acquireLock', () => {
+  it('adquiere el lock cuando nadie más lo tiene (UPDATE atómico afecta 1 fila)', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 1 }])
+    const res = await request(app).post('/api/electron/ordenes/lock/42')
+    expect(res.status).toBe(200)
+    expect(res.body.data.locked).toBe(false)
+    expect(q).not.toHaveBeenCalled() // no consulta el SELECT de respaldo
+
+    const [sql, params] = pool.execute.mock.calls[0]
+    expect(sql).toMatch(/editing_source = 'electron'/)
+    // La identidad sale del JWT (req.user.nombre), nunca del body
+    expect(params[0]).toBe('Usuario de Prueba')
+  })
+
+  it('rechaza si otro usuario ya tiene el lock (UPDATE afecta 0 filas)', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 0 }])
+    q.mockResolvedValueOnce([{ editing_by: 'Otra Persona', editing_source: 'bodega-web' }])
+    const res = await request(app).post('/api/electron/ordenes/lock/42')
+    expect(res.body.data.locked).toBe(true)
+    expect(res.body.data.adquirido).toBe(false)
+    expect(res.body.data.message).toMatch(/Otra Persona/)
+  })
+
+  it('404 si la orden no existe', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 0 }])
+    q.mockResolvedValueOnce([])
+    const res = await request(app).post('/api/electron/ordenes/lock/999999')
+    expect(res.status).toBe(404)
+  })
+
+  it('ignora cualquier "usuario" que mande el body — la identidad es del JWT', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 1 }])
+    await request(app).post('/api/electron/ordenes/lock/42').send({ usuario: 'Alguien Que No Soy' })
+    const [, params] = pool.execute.mock.calls[0]
+    expect(params[0]).toBe('Usuario de Prueba')
+    expect(params).not.toContain('Alguien Que No Soy')
+  })
+})
+
+describe('DELETE /api/electron/ordenes/lock/:folio — releaseLock', () => {
+  it('libera el lock', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 1 }])
+    const res = await request(app).delete('/api/electron/ordenes/lock/42')
+    expect(res.status).toBe(200)
+    expect(res.body.data.released).toBe(true)
+    expect(pool.execute.mock.calls[0][0]).toMatch(/editing_by = NULL/)
+  })
+})
+
+describe('PATCH /api/electron/ordenes/lock/:folio — renewLock', () => {
+  it('renueva cuando el editing_by coincide con la identidad del JWT', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 1 }])
+    const res = await request(app).put('/api/electron/ordenes/lock/42')
+    expect(res.body.data.renewed).toBe(true)
+    expect(pool.execute.mock.calls[0][1]).toEqual(['42', 'Usuario de Prueba'])
+  })
+
+  it('renewed:false si el lock ya no es de esta persona (0 filas afectadas)', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 0 }])
+    const res = await request(app).put('/api/electron/ordenes/lock/42')
+    expect(res.body.data.renewed).toBe(false)
   })
 })

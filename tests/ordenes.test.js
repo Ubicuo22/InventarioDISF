@@ -29,7 +29,7 @@ jest.mock('../utils/actividad', () => ({ registrar: jest.fn() }))
 
 const request = require('supertest')
 const app     = require('../app')
-const { q }   = require('../db/pool')
+const { q, pool } = require('../db/pool')
 
 beforeAll(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -611,20 +611,31 @@ describe('Lock concurrente', () => {
     expect(res.status).toBe(404)
   })
 
-  it('PATCH /:folio/lock → adquiere el lock cuando no hay lock activo', async () => {
-    q.mockResolvedValueOnce([{ editing_by: null, editing_at: null }]) // SELECT
-    q.mockResolvedValueOnce([])                                         // UPDATE
+  it('PATCH /:folio/lock → adquiere el lock cuando no hay lock activo (UPDATE atómico)', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 1 }])
     const res = await request(app).patch('/api/ordenes/42/lock')
     expect(res.body.ok).toBe(true)
     expect(res.body.locked).toBe(false)
+    // No debe consultar el SELECT de respaldo si el UPDATE ya adquirió el lock
+    expect(q).not.toHaveBeenCalled()
   })
 
-  it('PATCH /:folio/lock → rechaza si otro usuario tiene el lock', async () => {
-    const hace1min = new Date(Date.now() - 60 * 1000).toISOString()
-    q.mockResolvedValue([{ editing_by: 'otro-usuario', editing_at: hace1min, editing_source: 'electron' }])
+  it('PATCH /:folio/lock → rechaza si otro usuario tiene el lock (UPDATE afecta 0 filas)', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 0 }])
+    q.mockResolvedValueOnce([{ editing_by: 'otro-usuario', editing_source: 'electron' }])
     const res = await request(app).patch('/api/ordenes/42/lock')
     expect(res.body.ok).toBe(false)
     expect(res.body.locked).toBe(true)
+    expect(res.body.editing_by).toBe('otro-usuario')
+  })
+
+  it('PATCH /:folio/lock → la propia usuaria puede renovar su lock (mismo editing_by)', async () => {
+    pool.execute.mockResolvedValueOnce([{ affectedRows: 1 }])
+    const res = await request(app).patch('/api/ordenes/42/lock')
+    expect(res.body.ok).toBe(true)
+    const [sql, params] = pool.execute.mock.calls[0]
+    expect(sql).toMatch(/editing_by = \?/)
+    expect(params).toEqual(['Tester', '42', 'Tester', 300])
   })
 
   it('DELETE /:folio/lock → libera el lock', async () => {
