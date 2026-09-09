@@ -3,8 +3,27 @@ const { q }   = require('../db/pool')
 const { requireAuth, requireModulo } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
 const { fechaMexico } = require('../utils/fecha')
+const { resolverCadenas } = require('peps-engine-core')
 
 router.use(requireAuth)
+
+/**
+ * Resuelve la cadena de equivalencias de UN producto derivado hasta su base
+ * final, usando el motor compartido (peps-engine-core) — fuente única con
+ * disfruleg-electron, no una copia hand-porteada (ver auditoría H-5 Fase 4,
+ * 2026-09-09, que encontró un bug real causado exactamente por una copia
+ * desincronizada).
+ *
+ * @param {number} idProducto
+ * @param {Record<number, {idBase:number, factor:number}>} allConvMap  grafo completo derivado -> {idBase, factor}
+ * @returns {{idBase:number, factor:number}|null}
+ */
+function resolverCadenaGlobal (idProducto, allConvMap) {
+  if (!allConvMap[idProducto]) return null
+  const convMap = { [idProducto]: allConvMap[idProducto] }
+  resolverCadenas(convMap, allConvMap)
+  return convMap[idProducto]
+}
 
 /* ─── POST /api/mermas — registrar merma/ajuste ─── */
 router.post('/', requireModulo('mermas'), async (req, res) => {
@@ -27,36 +46,39 @@ router.post('/', requireModulo('mermas'), async (req, res) => {
   try {
     await conn.beginTransaction()
 
-    // Verificar stock VIRTUAL (propio + cobertura del base vía equivalencia PEPS).
-    // Mismo patrón que el catálogo de Electron (4.2.x): un nivel de conversión,
-    // id_grupo global y filtro anti auto-conversión. Sin esto se bloquearían
-    // mermas legítimas de productos derivados con stock propio 0 pero cobertura
-    // en el producto base.
     const [[prod]] = await conn.execute(
-      `SELECT
-         p.stock, p.nombre_producto, p.unidad_producto,
-         CASE
-           WHEN cp.id_conversion IS NOT NULL AND pb.stock IS NOT NULL
-           THEN ROUND(pb.stock / cp.factor + p.stock, 4)
-           ELSE p.stock
-         END AS stock_virtual
-       FROM producto p
-       LEFT JOIN (
-         SELECT id_producto_derivado, MIN(id_conversion) AS min_id
-         FROM producto_conversion_peps
-         WHERE activo = 1 AND id_grupo IS NULL
-           AND id_producto_derivado != id_producto_base
-         GROUP BY id_producto_derivado
-       ) cp_min ON p.id_producto = cp_min.id_producto_derivado
-       LEFT JOIN producto_conversion_peps cp ON cp.id_conversion = cp_min.min_id
-       LEFT JOIN producto pb ON cp.id_producto_base = pb.id_producto
-       WHERE p.id_producto = ? AND p.activo = 1`,
+      `SELECT stock, nombre_producto, unidad_producto FROM producto WHERE id_producto = ? AND activo = 1`,
       [id_producto]
     )
     if (!prod) { await conn.rollback(); return res.status(404).json({ ok: false, error: 'Producto no encontrado' }) }
-    if (parseFloat(prod.stock_virtual) < _cant) {
+
+    // Resolver la cadena de equivalencias completa (propio -> ... -> base final),
+    // no solo un salto — ver resolverCadenaGlobal arriba.
+    const [convRows] = await conn.execute(
+      `SELECT id_producto_derivado, id_producto_base, factor
+       FROM producto_conversion_peps
+       WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base`
+    )
+    const baseDe = {}
+    for (const r of convRows) {
+      baseDe[r.id_producto_derivado] = { idBase: r.id_producto_base, factor: parseFloat(r.factor) }
+    }
+    const cadena = resolverCadenaGlobal(id_producto, baseDe)
+
+    // Verificar stock VIRTUAL (propio + cobertura de la base final vía la cadena
+    // completa de equivalencias). Sin esto se bloquearían mermas legítimas de
+    // productos derivados con stock propio 0 pero cobertura en la cadena.
+    let stockBaseFinal = null
+    if (cadena) {
+      const [[baseRow]] = await conn.execute('SELECT stock FROM producto WHERE id_producto = ?', [cadena.idBase])
+      stockBaseFinal = baseRow ? parseFloat(baseRow.stock) : 0
+    }
+    const stockVirtual = cadena
+      ? Math.round((parseFloat(prod.stock) + stockBaseFinal / cadena.factor) * 10000) / 10000
+      : parseFloat(prod.stock)
+    if (stockVirtual < _cant) {
       await conn.rollback()
-      return res.status(400).json({ ok: false, error: `Stock insuficiente. Disponible: ${prod.stock_virtual} ${prod.unidad_producto}` })
+      return res.status(400).json({ ok: false, error: `Stock insuficiente. Disponible: ${stockVirtual} ${prod.unidad_producto}` })
     }
 
     // Insertar merma (sin costo — simplificado para web)
@@ -70,35 +92,60 @@ router.post('/', requireModulo('mermas'), async (req, res) => {
     // Sin esto, el stock de `producto` baja pero `inventario_peps.cantidad_restante` queda
     // inflado. La próxima compra desde electron reconciliaría stock = SUM(PEPS) y
     // revertiría silenciosamente la merma.
-    const [[{ stock_peps }]] = await conn.execute(
-      `SELECT COALESCE(SUM(cantidad_restante), 0) AS stock_peps
-       FROM inventario_peps WHERE id_producto = ? AND activo = 1`,
+    let pendiente = _cant
+    const [lotesPropios] = await conn.execute(
+      `SELECT id_inventario_peps, cantidad_restante
+       FROM inventario_peps
+       WHERE id_producto = ? AND cantidad_restante > 0 AND activo = 1
+       ORDER BY fecha_movimiento ASC, id_inventario_peps ASC`,
       [id_producto]
     )
-    if (parseFloat(stock_peps) > 0) {
-      // Hay lotes PEPS — consumir FIFO
-      const [lotes] = await conn.execute(
+    for (const lote of lotesPropios) {
+      if (pendiente <= 0) break
+      const consumir = Math.min(pendiente, parseFloat(lote.cantidad_restante))
+      await conn.execute(
+        'UPDATE inventario_peps SET cantidad_restante = cantidad_restante - ? WHERE id_inventario_peps = ?',
+        [consumir, lote.id_inventario_peps]
+      )
+      // Registrar cada lote consumido — Electron usa merma_lote para
+      // revertir/eliminar la merma devolviendo cantidades al lote exacto
+      await conn.execute(
+        'INSERT INTO merma_lote (id_merma, id_inventario_peps, cantidad_consumida) VALUES (?, ?, ?)',
+        [ins.insertId, lote.id_inventario_peps, consumir]
+      )
+      pendiente -= consumir
+    }
+
+    // FIX (auditoría H-5 Fase 4, 2026-09-09): si los lotes propios no alcanzan,
+    // cruzar la frontera de equivalencia y consumir de la BASE FINAL de la
+    // cadena (no solo un salto) — la validación de arriba (stockVirtual) ya
+    // contó esa cobertura, así que el consumo real tiene que hacer lo mismo
+    // o la merma queda registrada sin ningún efecto en inventario. Semántica
+    // del factor acumulado (igual que peps-engine.ts en Electron): 1 unidad
+    // del DERIVADO original = factor unidades de la BASE final.
+    let idBaseAfectado = null
+    if (pendiente > 0 && cadena) {
+      idBaseAfectado = cadena.idBase
+      let pendienteBase = Math.round(pendiente * cadena.factor * 10000) / 10000
+      const [lotesBase] = await conn.execute(
         `SELECT id_inventario_peps, cantidad_restante
          FROM inventario_peps
          WHERE id_producto = ? AND cantidad_restante > 0 AND activo = 1
          ORDER BY fecha_movimiento ASC, id_inventario_peps ASC`,
-        [id_producto]
+        [idBaseAfectado]
       )
-      let pendiente = _cant
-      for (const lote of lotes) {
-        if (pendiente <= 0) break
-        const consumir = Math.min(pendiente, parseFloat(lote.cantidad_restante))
+      for (const lote of lotesBase) {
+        if (pendienteBase <= 0) break
+        const consumir = Math.min(pendienteBase, parseFloat(lote.cantidad_restante))
         await conn.execute(
           'UPDATE inventario_peps SET cantidad_restante = cantidad_restante - ? WHERE id_inventario_peps = ?',
           [consumir, lote.id_inventario_peps]
         )
-        // Registrar cada lote consumido — Electron usa merma_lote para
-        // revertir/eliminar la merma devolviendo cantidades al lote exacto
         await conn.execute(
           'INSERT INTO merma_lote (id_merma, id_inventario_peps, cantidad_consumida) VALUES (?, ?, ?)',
           [ins.insertId, lote.id_inventario_peps, consumir]
         )
-        pendiente -= consumir
+        pendienteBase -= consumir
       }
     }
 
@@ -114,6 +161,18 @@ router.post('/', requireModulo('mermas'), async (req, res) => {
        WHERE id_producto = ?`,
       [id_producto, id_producto]
     )
+    if (idBaseAfectado) {
+      await conn.execute(
+        `UPDATE producto
+         SET stock = (
+           SELECT COALESCE(SUM(ip.cantidad_restante), 0)
+           FROM inventario_peps ip
+           WHERE ip.id_producto = ? AND ip.activo = 1
+         )
+         WHERE id_producto = ?`,
+        [idBaseAfectado, idBaseAfectado]
+      )
+    }
 
     await conn.commit()
 

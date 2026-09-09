@@ -28,6 +28,7 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.9.7",
+    "peps-engine-core": "github:Ubicuo22/peps-engine-core#main",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
