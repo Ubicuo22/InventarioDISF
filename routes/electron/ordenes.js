@@ -19,6 +19,7 @@
  */
 
 const router = require('express').Router()
+const bcrypt = require('bcryptjs')
 const { q, pool } = require('../../db/pool')
 const { fechaMexico, rangoUtcDelDia } = require('../../utils/fecha')
 const { requireRoleElectron } = require('../../middleware/auth-electron')
@@ -28,8 +29,82 @@ const {
   consumirDeFuentes,
   factoresGrupoEquivalencia,
 } = require('peps-engine-core')
+const { consumirPepsParaOrden, revertirConsumoOrden, tieneConsumoOrden } = require('./orden-consumo')
+const { costosPromedioHistorico } = require('./costo-promedio')
 
 const ADMIN = requireRoleElectron(['admin', 'ceo'])
+
+// Folios ≤ este número son pre-inventario: al procesarse generan lotes fantasma
+// en vez de consumir stock real. A partir del siguiente, comportamiento normal PEPS.
+const FOLIO_CORTE_INVENTARIO = 337
+
+/**
+ * Verifica usuario+contraseña de un admin/ceo real contra la BD — mismo
+ * bcrypt+lockout que routes/electron/auth.js usa para el login normal.
+ *
+ * Fix de seguridad (H-5, procesarVenta/revertirProcesamiento): antes, el
+ * modal AdminAuthModal validaba la contraseña solo localmente en Electron
+ * (auth:verifyAdminPassword) y el Worker se limitaba a confiar en el
+ * username que mandaba el body — un renderer parchado podía saltarse el
+ * modal por completo. Ahora la contraseña se re-verifica AQUÍ, en el mismo
+ * request que ejecuta la acción — no en una llamada separada que se pueda
+ * omitir.
+ */
+async function verificarAdminPassword(req, username, password) {
+  const u = String(username ?? '').trim()
+  const p = String(password ?? '').trim()
+  if (!u || !p) return { ok: false, error: 'Usuario y contraseña de administrador son requeridos' }
+
+  const ip = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '').slice(0, 45)
+
+  try {
+    const intentos = await q(
+      `SELECT COUNT(*) as cnt FROM intentos_fallidos
+       WHERE ip_address = ? AND razon = 'Admin venta/reversión' AND fecha_intento >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)`,
+      [ip]
+    )
+    if ((intentos[0]?.cnt || 0) >= 5) {
+      return { ok: false, error: 'Demasiados intentos fallidos. Espera 5 minutos.' }
+    }
+  } catch (_) { /* tabla aún no existe — continuar */ }
+
+  const rows = await q(
+    "SELECT password_hash FROM usuarios_sistema WHERE UPPER(username) = UPPER(?) AND rol IN ('admin','ceo') AND activo = 1",
+    [u]
+  )
+
+  const registrarFallo = () =>
+    q(`INSERT INTO intentos_fallidos (ip_address, razon, usuario_intentado) VALUES (?, 'Admin venta/reversión', ?)`, [ip, u]).catch(() => {})
+
+  if (rows.length === 0) {
+    await registrarFallo()
+    return { ok: false, error: 'Usuario o contraseña de administrador incorrectos' }
+  }
+
+  const valido = await bcrypt.compare(p, String(rows[0].password_hash ?? ''))
+  if (!valido) {
+    await registrarFallo()
+    return { ok: false, error: 'Usuario o contraseña de administrador incorrectos' }
+  }
+
+  return { ok: true }
+}
+
+async function consumirReservas(conn, folioNumero) {
+  await conn.execute(
+    `UPDATE reserva_inventario SET estado = 'consumida' WHERE folio_numero = ? AND estado = 'activa'`,
+    [folioNumero]
+  )
+}
+
+async function obtenerIdGrupoCliente(conn, idCliente) {
+  try {
+    const [rows] = await conn.execute('SELECT id_grupo FROM cliente WHERE id_cliente = ?', [idCliente])
+    return rows?.[0]?.id_grupo ?? null
+  } catch (_) {
+    return null
+  }
+}
 
 const SELECT_ORDEN = `
   SELECT
@@ -754,6 +829,987 @@ router.delete('/notas-ceo/:folio/:index', ADMIN, async (req, res) => {
   } catch (e) {
     console.error('[ordenes] eliminarNotaCeo:', e.message)
     res.status(500).json({ ok: false, error: 'Error al eliminar la nota' })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════
+// PROCESAR VENTA (H-5 Fase 4 — procesarVenta)
+//
+// Fail-closed (requireAuthElectron ya corrió a nivel de app.js — cualquier
+// rol autenticado puede llamar esta ruta, porque un cajero legítimamente la
+// dispara después de que un admin/ceo autoriza vía AdminAuthModal). La
+// identidad que de verdad importa (admin_usuario) se re-verifica aquí con
+// su contraseña real — ver verificarAdminPassword arriba.
+//
+// Overselling (decisión de negocio, Opción A): cuando la rama post-
+// inventario/legacy no tiene lotes suficientes, en vez de vender en
+// silencio se genera una compra PHANTOM:VENTA-F<folio> + su lote PEPS por
+// la cantidad faltante — entradas.js (sin tocar) ya sabe reconciliarla
+// cuando llegue la próxima compra real de ese producto.
+// ═══════════════════════════════════════════════════════════════
+
+router.post('/procesar-venta/:folio', async (req, res) => {
+  const folio = req.params.folio
+  const { admin_usuario, admin_password, monto_pagado } = req.body
+
+  const auth = await verificarAdminPassword(req, admin_usuario, admin_password)
+  if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error })
+
+  try {
+    // Mutex: bloquear si la appweb tiene una revisión de inventario activa.
+    try {
+      const revRows = await q(
+        `SELECT activa, (inicio IS NULL OR inicio < NOW() - INTERVAL 30 MINUTE) AS stale
+         FROM revision_activa WHERE id = 1`
+      )
+      const rev = revRows[0]
+      if (rev && Number(rev.activa) === 1 && Number(rev.stale) !== 1) {
+        return res.json({ ok: false, error: 'Hay una revisión de inventario en curso desde la appweb. Espera a que termine antes de procesar la nota.' })
+      }
+    } catch (e) {
+      if (!e.message?.includes('revision_activa')) throw e
+    }
+
+    // ── FASE 1: LECTURAS (fuera de transacción) ──────────────────
+    const ordenRows = await q(
+      `SELECT id_cliente, total_estimado, datos_carrito, usuario_creador, fecha_creacion, fecha_envio, consumo_pendiente
+       FROM ordenes_guardadas
+       WHERE folio_numero = ? AND activo = 1 AND estado = 'guardada'`,
+      [folio]
+    )
+    if (ordenRows.length === 0) {
+      return res.json({ ok: false, error: `Orden ${folio} no encontrada o ya procesada` })
+    }
+    const orden = ordenRows[0]
+    const datosCarrito = typeof orden.datos_carrito === 'string' ? JSON.parse(orden.datos_carrito) : orden.datos_carrito
+
+    const todosLosItems = []
+    for (const [key, seccion] of Object.entries(datosCarrito)) {
+      if (key.startsWith('__')) continue
+      const items = Array.isArray(seccion) ? seccion : (seccion.items || [])
+      for (const item of items) {
+        const cantidad = parseFloat(String(item.cantidad))
+        if (cantidad > 0) {
+          todosLosItems.push({
+            id_producto: item.id_producto,
+            cantidad,
+            precio_unitario: item.precio_unitario || item.precio_final || 0,
+            cantidad_sin_descuento: item.cantidad_sin_descuento,
+          })
+        }
+      }
+    }
+    if (todosLosItems.length === 0) return res.json({ ok: false, error: 'El carrito está vacío' })
+
+    const esPreInventario = Number(folio) <= FOLIO_CORTE_INVENTARIO
+
+    let flujoNuevo = false
+    if (!esPreInventario) {
+      try {
+        const ocpCountRows = await q('SELECT COUNT(*) AS n FROM orden_consumo_peps WHERE folio_numero = ?', [folio])
+        flujoNuevo = Number(ocpCountRows[0]?.n ?? 0) > 0
+      } catch (_) { /* tabla aún no existe → camino viejo */ }
+    }
+
+    const consumoPendiente = (() => {
+      try {
+        const cp = orden.consumo_pendiente
+        return cp ? (typeof cp === 'string' ? JSON.parse(cp) : cp) : {}
+      } catch (_) { return {} }
+    })()
+
+    let idGrupo = null
+    try {
+      const clienteGrupoRows = await q('SELECT id_grupo FROM cliente WHERE id_cliente = ?', [orden.id_cliente])
+      idGrupo = clienteGrupoRows[0]?.id_grupo ?? null
+    } catch (_) { /* sin grupo */ }
+
+    const idsProductos = [...new Set(todosLosItems.map(i => i.id_producto))]
+    const phConv = idsProductos.map(() => '?').join(',')
+    const convParams = [...idsProductos]
+    if (idGrupo != null) convParams.push(idGrupo)
+    const convRows = await q(`
+      SELECT id_producto_derivado, id_producto_base, factor, id_grupo
+      FROM producto_conversion_peps
+      WHERE id_producto_derivado IN (${phConv})
+        AND activo = 1
+        AND id_producto_derivado != id_producto_base
+        AND (id_grupo IS NULL ${idGrupo != null ? 'OR id_grupo = ?' : ''})
+      ORDER BY (id_grupo IS NULL) ASC
+    `, convParams)
+
+    const convMap = {}
+    for (const row of convRows) {
+      const pid = Number(row.id_producto_derivado)
+      if (!convMap[pid] || row.id_grupo !== null) {
+        convMap[pid] = { idBase: Number(row.id_producto_base), factor: parseFloat(String(row.factor)) }
+      }
+    }
+
+    const allConvRows = await q(`
+      SELECT id_producto_derivado, id_producto_base, factor
+      FROM producto_conversion_peps
+      WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base
+    `)
+    const allConvMap = {}
+    for (const row of allConvRows) {
+      allConvMap[Number(row.id_producto_derivado)] = { idBase: Number(row.id_producto_base), factor: parseFloat(String(row.factor)) }
+    }
+    resolverCadenas(convMap, allConvMap)
+
+    let costoPromMap = {}
+    if (!esPreInventario) {
+      try {
+        costoPromMap = await costosPromedioHistorico(idsProductos)
+      } catch (e) {
+        console.error(`  ⚠️ costosPromedioHistorico falló (folio ${folio}): ${e.message} — líneas sin lote quedarán SIN_COSTO`)
+      }
+    }
+
+    // Overselling ya no bloquea — se cubre con lote PHANTOM:VENTA en la rama legacy (Opción A).
+    const forzarSinStock = true
+
+    if (flujoNuevo && Object.keys(consumoPendiente).length > 0 && !forzarSinStock) {
+      return res.json({ ok: false, error: `Orden ${folio} tiene faltantes de stock pendientes — registra la compra o fuerza el procesamiento` })
+    }
+
+    const lotesPorProducto = {}
+    const ownConvs = {}
+    if (!esPreInventario && !flujoNuevo) {
+      const idsParaPeps = [...new Set(idsProductos.flatMap(id => {
+        const baseId = convMap[id]?.idBase
+        return (baseId && baseId !== id) ? [baseId, id] : [id]
+      }))]
+      const phProd = idsParaPeps.map(() => '?').join(',')
+      const lotesRows = await q(
+        `SELECT id_inventario_peps, id_producto, cantidad_restante, costo_unitario, factor_conversion
+         FROM inventario_peps
+         WHERE id_producto IN (${phProd})
+           AND cantidad_restante > 0 AND activo = 1
+         ORDER BY fecha_movimiento ASC, id_inventario_peps ASC`,
+        idsParaPeps
+      )
+      for (const lote of lotesRows) {
+        const pid = Number(lote.id_producto)
+        if (!lotesPorProducto[pid]) lotesPorProducto[pid] = []
+        lotesPorProducto[pid].push({
+          id: Number(lote.id_inventario_peps),
+          restante: parseFloat(String(lote.cantidad_restante)),
+          costo: parseFloat(String(lote.costo_unitario)),
+          factorConversion: lote.factor_conversion != null ? parseFloat(String(lote.factor_conversion)) : null
+        })
+      }
+
+      for (const id of idsProductos) {
+        const conv = convMap[id]
+        if (conv && lotesPorProducto[id]?.length) {
+          ownConvs[id] = conv
+          delete convMap[id]
+        }
+      }
+    }
+
+    // Calcular asignaciones PEPS en memoria (Fase 1 — se recalcula fresco dentro de la TX)
+    const itemsProcessed = []
+    const pepsPorItem = []
+    const deltaLotes = {}
+    const deltaStock = {}
+    let costoTotalVenta = 0
+    let utilidadTotalVenta = 0
+
+    for (const item of todosLosItems) {
+      const fuentes = construirFuentes(item.id_producto, convMap[item.id_producto], ownConvs[item.id_producto])
+      const sinDesc = Math.min(Number(item.cantidad_sin_descuento) || 0, item.cantidad)
+
+      deltaStock[fuentes[0].idProd] = deltaStock[fuentes[0].idProd] || 0
+
+      const { pendiente: derivadoPendiente, consumos } = consumirDeFuentes(item.cantidad - sinDesc, fuentes, lotesPorProducto)
+
+      let costoAcumulado = 0
+      let utilidadTotal = 0
+      for (const c of consumos) {
+        const utilidadUnit = item.precio_unitario - c.costoDerivado
+        const utilidadLote = Math.round(utilidadUnit * c.derivadoTomado * 100) / 100
+        pepsPorItem.push({ loteId: c.loteId, consumir: c.consumir, costo: c.costoLote, precioVenta: item.precio_unitario, utilidadUnit, utilidadLote, itemIdx: itemsProcessed.length })
+        deltaLotes[c.loteId] = (deltaLotes[c.loteId] || 0) + c.consumir
+        deltaStock[c.idProd] = (deltaStock[c.idProd] || 0) + c.consumir
+        costoAcumulado = Math.round((costoAcumulado + c.derivadoTomado * c.costoDerivado) * 100) / 100
+        utilidadTotal = Math.round((utilidadTotal + utilidadLote) * 100) / 100
+      }
+
+      costoTotalVenta = Math.round((costoTotalVenta + costoAcumulado) * 100) / 100
+      utilidadTotalVenta = Math.round((utilidadTotalVenta + utilidadTotal) * 100) / 100
+      itemsProcessed.push({ ...item, costoAcumulado, utilidadTotal, cantidadPendiente: derivadoPendiente, fuentes })
+    }
+
+    // ── FASE 2: ESCRITURAS EN BULK (transacción corta) ───────────
+    const historialActual = Array.isArray(datosCarrito.__historial__) ? datosCarrito.__historial__ : []
+    const entradaProcesamiento = {
+      tipoEvento: 'procesamiento',
+      fecha: new Date().toISOString(),
+      adminUsuario: admin_usuario || 'ADMIN',
+      usuarioOrden: orden.usuario_creador || '',
+    }
+    const datosCarritoConHistorial = { ...datosCarrito, __historial__: [...historialActual, entradaProcesamiento] }
+    const datosCarritoStr = JSON.stringify(datosCarritoConHistorial)
+
+    const conn = await pool.getConnection()
+    let resultadoVenta
+    try {
+      await conn.beginTransaction()
+
+      // W0. Bloquear la orden para evitar procesamiento concurrente
+      const [lockRows] = await conn.execute(`SELECT estado FROM ordenes_guardadas WHERE folio_numero = ? FOR UPDATE`, [folio])
+      if (!lockRows?.length || lockRows[0].estado !== 'guardada') {
+        throw new Error(`Orden ${folio} ya fue procesada por otro proceso`)
+      }
+
+      // W1. Marcar orden como registrada + historial
+      const [updateRes] = await conn.execute(
+        `UPDATE ordenes_guardadas
+         SET estado = 'registrada', datos_carrito = ?, fecha_modificacion = NOW()
+         WHERE folio_numero = ? AND estado = 'guardada'`,
+        [datosCarritoStr, folio]
+      )
+      if (updateRes.affectedRows === 0) {
+        throw new Error(`Orden ${folio} ya fue procesada por otro proceso`)
+      }
+
+      // W1a. Consumir reservas de inventario
+      await consumirReservas(conn, folio)
+
+      // W1b. Bloquear lotes PEPS dentro de TX y recalcular PEPS con datos frescos
+      if (!esPreInventario && Object.keys(deltaLotes).length > 0) {
+        const loteIdsCheck = Object.keys(deltaLotes).map(Number)
+        const phLotes = loteIdsCheck.map(() => '?').join(',')
+        const [lotesActuales] = await conn.execute(
+          `SELECT id_inventario_peps, id_producto, cantidad_restante, costo_unitario, factor_conversion
+           FROM inventario_peps
+           WHERE id_inventario_peps IN (${phLotes}) FOR UPDATE`,
+          loteIdsCheck
+        )
+
+        const lotesBloqueados = {}
+        for (const lote of lotesActuales) {
+          const pid = Number(lote.id_producto)
+          if (!lotesBloqueados[pid]) lotesBloqueados[pid] = []
+          lotesBloqueados[pid].push({
+            id: Number(lote.id_inventario_peps),
+            restante: parseFloat(String(lote.cantidad_restante)),
+            costo: parseFloat(String(lote.costo_unitario)),
+            factorConversion: lote.factor_conversion != null ? parseFloat(String(lote.factor_conversion)) : null
+          })
+        }
+        for (const pid in lotesBloqueados) lotesBloqueados[pid].sort((a, b) => a.id - b.id)
+
+        pepsPorItem.length = 0
+        for (const k of Object.keys(deltaLotes)) delete deltaLotes[Number(k)]
+        for (const k of Object.keys(deltaStock)) delete deltaStock[Number(k)]
+        costoTotalVenta = 0
+        utilidadTotalVenta = 0
+
+        for (const item of itemsProcessed) {
+          const fuentes = item.fuentes
+          const itemIdx = itemsProcessed.indexOf(item)
+          const sinDescTx = Math.min(Number(item.cantidad_sin_descuento) || 0, item.cantidad)
+
+          deltaStock[fuentes[0].idProd] = deltaStock[fuentes[0].idProd] || 0
+
+          const { pendiente: derivadoPendiente, consumos } = consumirDeFuentes(item.cantidad - sinDescTx, fuentes, lotesBloqueados)
+
+          let costoAcumulado = 0
+          let utilidadTotal = 0
+          for (const c of consumos) {
+            const utilidadUnit = item.precio_unitario - c.costoDerivado
+            const utilidadLote = Math.round(utilidadUnit * c.derivadoTomado * 100) / 100
+            pepsPorItem.push({ loteId: c.loteId, consumir: c.consumir, costo: c.costoLote, precioVenta: item.precio_unitario, utilidadUnit, utilidadLote, itemIdx })
+            deltaLotes[c.loteId] = (deltaLotes[c.loteId] || 0) + c.consumir
+            deltaStock[c.idProd] = (deltaStock[c.idProd] || 0) + c.consumir
+            costoAcumulado = Math.round((costoAcumulado + c.derivadoTomado * c.costoDerivado) * 100) / 100
+            utilidadTotal = Math.round((utilidadTotal + utilidadLote) * 100) / 100
+          }
+
+          costoTotalVenta = Math.round((costoTotalVenta + costoAcumulado) * 100) / 100
+          utilidadTotalVenta = Math.round((utilidadTotalVenta + utilidadTotal) * 100) / 100
+          item.costoAcumulado = costoAcumulado
+          item.utilidadTotal = utilidadTotal
+          item.cantidadPendiente = derivadoPendiente
+
+          if (derivadoPendiente > 0 && !forzarSinStock) {
+            throw new Error(`Lote de producto ${item.id_producto} fue consumido por otra venta concurrente`)
+          }
+        }
+      }
+
+      // W2. Crear factura
+      const fechaFactura = orden.fecha_creacion || new Date().toISOString().slice(0, 19).replace('T', ' ')
+      const [facturaRes] = await conn.execute(
+        'INSERT INTO factura (fecha_factura, id_cliente, folio_numero) VALUES (?, ?, ?)',
+        [fechaFactura, orden.id_cliente, folio]
+      )
+      const idFactura = facturaRes.insertId
+
+      // W3. Insertar detalles de factura (bulk)
+      const dfPlaceholders = itemsProcessed.map(() => '(?,?,?,?)').join(',')
+      const dfParams = itemsProcessed.flatMap(item => [idFactura, item.id_producto, item.cantidad, item.precio_unitario])
+      const [dfBulk] = await conn.execute(
+        `INSERT INTO detalle_factura (id_factura, id_producto, cantidad_factura, precio_unitario_venta)
+         VALUES ${dfPlaceholders}`,
+        dfParams
+      )
+      const firstDetalleId = Number(dfBulk.insertId)
+      const idsDetalles = itemsProcessed.map((_, i) => firstDetalleId + i)
+
+      const coveredDerivada = {}
+
+      if (esPreInventario) {
+        // ── PRE-INVENTARIO (folio ≤ 337): crear lotes fantasma en vez de consumir reales ──
+        const [provRows] = await conn.execute(
+          "SELECT id_proveedor FROM proveedor WHERE nombre_proveedor = 'BOOTSTRAP-INVENTARIO' LIMIT 1"
+        )
+        const phantomProvId = provRows.length > 0 ? provRows[0].id_proveedor : null
+
+        const phantomItems = itemsProcessed.map(item => {
+          const conv = convMap[item.id_producto]
+          const idPepsProducto = conv ? conv.idBase : item.id_producto
+          const cantidadBase = conv ? item.cantidad * conv.factor : item.cantidad
+          return { idPepsProducto, cantidadBase, precio_unitario: item.precio_unitario }
+        })
+
+        const compraPlaceholders = phantomItems.map(() => '(?, ?, ?, 0.01, \'2020-06-01\', ?, ?, 0, 0, ?, \'SISTEMA\', \'PHANTOM:GUARDADAS\', 0, 0, NULL, NULL, 0)').join(',')
+        const compraParams = phantomItems.flatMap(pi => [
+          pi.idPepsProducto, phantomProvId, pi.cantidadBase, `PHANTOM-F${folio}`,
+          pi.cantidadBase * 0.01, pi.cantidadBase * 0.01
+        ])
+        const [comprasBulk] = await conn.execute(
+          `INSERT INTO compra (
+            id_producto, id_proveedor, cantidad_compra, precio_unitario_compra,
+            fecha_compra, folio_factura, subtotal, iva, incluye_iva, total_con_impuestos,
+            usuario_registro, notas, tasa_interes,
+            importe_ieps, metodo_pago, forma_pago, peso_por_pieza
+          ) VALUES ${compraPlaceholders}`,
+          compraParams
+        )
+        const firstCompraId = Number(comprasBulk.insertId)
+
+        const pepsPlaceholders = phantomItems.map(() => '(?, ?, \'2020-06-01\', ?, 0, 0.01, 1)').join(',')
+        const pepsParams = phantomItems.flatMap((pi, i) => [pi.idPepsProducto, firstCompraId + i, pi.cantidadBase])
+        const [pepsBulk] = await conn.execute(
+          `INSERT INTO inventario_peps (
+            id_producto, id_compra, fecha_movimiento,
+            cantidad_inicial, cantidad_restante, costo_unitario, activo
+          ) VALUES ${pepsPlaceholders}`,
+          pepsParams
+        )
+        const firstPepsId = Number(pepsBulk.insertId)
+
+        const dvlPlaceholders = phantomItems.map(() => '(?,?,?,0.01,?,?,?)').join(',')
+        const dvlParams = phantomItems.flatMap((pi, i) => [
+          idsDetalles[i], firstPepsId + i, pi.cantidadBase, pi.precio_unitario,
+          pi.precio_unitario - 0.01,
+          Math.round((pi.precio_unitario - 0.01) * pi.cantidadBase * 100) / 100
+        ])
+        await conn.execute(
+          `INSERT INTO detalle_venta_lote
+             (id_detalle_factura, id_inventario_peps, cantidad_consumida, costo_unitario,
+              precio_venta_unitario, utilidad_unitaria, utilidad_total)
+           VALUES ${dvlPlaceholders}`,
+          dvlParams
+        )
+      } else if (flujoNuevo) {
+        // ── FLUJO NUEVO: el inventario ya se descontó al guardar la orden ──
+        const [ocpRows] = await conn.execute(
+          `SELECT id_producto, id_inventario_peps, cantidad_consumida, cantidad_derivada, costo_unitario, item_idx
+           FROM orden_consumo_peps WHERE folio_numero = ? ORDER BY id_consumo`,
+          [folio]
+        )
+        if (ocpRows.length > 0) {
+          const derivadaPorProducto = {}
+          for (const r of ocpRows) {
+            const pid = Number(r.id_producto)
+            derivadaPorProducto[pid] = (derivadaPorProducto[pid] || 0) + parseFloat(String(r.cantidad_derivada))
+          }
+          const carritoDescontable = {}
+          for (const item of itemsProcessed) {
+            const pid = Number(item.id_producto)
+            const sinDesc = Math.min(Number(item.cantidad_sin_descuento) || 0, item.cantidad)
+            carritoDescontable[pid] = (carritoDescontable[pid] || 0) + (item.cantidad - sinDesc)
+          }
+          for (const [pid, derivada] of Object.entries(derivadaPorProducto)) {
+            if (derivada > (carritoDescontable[Number(pid)] || 0) + 0.01) {
+              throw new Error(
+                `El consumo de inventario del folio ${folio} no coincide con el carrito actual ` +
+                `(producto ${pid}: consumido ${derivada}, en carrito ${carritoDescontable[Number(pid)] || 0}). ` +
+                `Edita y guarda la orden de nuevo antes de procesarla.`
+              )
+            }
+          }
+
+          const dvlParams = []
+          for (const r of ocpRows) {
+            let itemIdx = Number(r.item_idx)
+            const ocpProducto = Number(r.id_producto)
+            const derivada = parseFloat(String(r.cantidad_derivada))
+            if (!itemsProcessed[itemIdx] || Number(itemsProcessed[itemIdx].id_producto) !== ocpProducto) {
+              let mejor = -1
+              let mejorConCapacidad = -1
+              for (let i = 0; i < itemsProcessed.length; i++) {
+                if (Number(itemsProcessed[i].id_producto) !== ocpProducto) continue
+                const capacidad = Number(itemsProcessed[i].cantidad) - (coveredDerivada[i] || 0)
+                if (capacidad >= derivada - 0.001 &&
+                    (mejorConCapacidad === -1 || (coveredDerivada[i] || 0) < (coveredDerivada[mejorConCapacidad] || 0))) {
+                  mejorConCapacidad = i
+                }
+                if (mejor === -1 || (coveredDerivada[i] || 0) < (coveredDerivada[mejor] || 0)) mejor = i
+              }
+              if (mejorConCapacidad !== -1) mejor = mejorConCapacidad
+              if (mejor === -1) throw new Error(`Consumo PEPS del folio ${folio} no coincide con el carrito (producto ${ocpProducto}) — edita y guarda la orden de nuevo`)
+              itemIdx = mejor
+            }
+            const item = itemsProcessed[itemIdx]
+            const consumida = parseFloat(String(r.cantidad_consumida))
+            const costoLote = parseFloat(String(r.costo_unitario))
+            const costoDerivado = derivada > 0 ? (costoLote * consumida) / derivada : costoLote
+            const utilidadUnit = item.precio_unitario - costoDerivado
+            const utilidadLote = Math.round(utilidadUnit * derivada * 100) / 100
+
+            dvlParams.push(idsDetalles[itemIdx], r.id_inventario_peps, consumida, costoLote, item.precio_unitario, utilidadUnit, utilidadLote)
+            coveredDerivada[itemIdx] = (coveredDerivada[itemIdx] || 0) + derivada
+            costoTotalVenta = Math.round((costoTotalVenta + costoLote * consumida) * 100) / 100
+            utilidadTotalVenta = Math.round((utilidadTotalVenta + utilidadLote) * 100) / 100
+          }
+          const dvlPh = ocpRows.map(() => '(?,?,?,?,?,?,?)').join(',')
+          await conn.execute(
+            `INSERT INTO detalle_venta_lote
+               (id_detalle_factura, id_inventario_peps, cantidad_consumida, costo_unitario,
+                precio_venta_unitario, utilidad_unitaria, utilidad_total)
+             VALUES ${dvlPh}`,
+            dvlParams
+          )
+        }
+      } else {
+        // ── POST-INVENTARIO (folio ≥ 338): consumo PEPS normal ──
+
+        // W4. Bulk INSERT detalle_venta_lote (lotes reales)
+        if (pepsPorItem.length > 0) {
+          const pepPlaceholders = pepsPorItem.map(() => '(?,?,?,?,?,?,?)').join(',')
+          const pepParams = pepsPorItem.flatMap(p => [idsDetalles[p.itemIdx], p.loteId, p.consumir, p.costo, p.precioVenta, p.utilidadUnit, p.utilidadLote])
+          await conn.execute(
+            `INSERT INTO detalle_venta_lote
+               (id_detalle_factura, id_inventario_peps, cantidad_consumida, costo_unitario,
+                precio_venta_unitario, utilidad_unitaria, utilidad_total)
+             VALUES ${pepPlaceholders}`,
+            pepParams
+          )
+        }
+
+        // W5. UPDATE inventario_peps (bulk CASE WHEN)
+        const loteEntries = Object.entries(deltaLotes)
+        if (loteEntries.length > 0) {
+          const loteIds = loteEntries.map(([id]) => {
+            const n = Number(id)
+            if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) throw new Error(`ID de lote inválido: ${id}`)
+            return n
+          })
+          const loteRestars = loteEntries.map(([, restar]) => {
+            const n = Number(restar)
+            if (!Number.isFinite(n) || n < 0) throw new Error(`Cantidad a restar inválida: ${restar}`)
+            return n
+          })
+          const caseCantidad = loteIds.map(() => 'WHEN ? THEN GREATEST(0, cantidad_restante - ?)').join(' ')
+          const caseActivo = loteIds.map(() => 'WHEN id_inventario_peps = ? AND cantidad_restante - ? <= 0 THEN 0').join(' ')
+          const phLoteIds = loteIds.map(() => '?').join(',')
+          await conn.execute(
+            `UPDATE inventario_peps
+             SET cantidad_restante = CASE id_inventario_peps ${caseCantidad} ELSE cantidad_restante END,
+                 activo = CASE ${caseActivo} ELSE activo END
+             WHERE id_inventario_peps IN (${phLoteIds})`,
+            [
+              ...loteIds.flatMap((id, i) => [id, loteRestars[i]]),
+              ...loteIds.flatMap((id, i) => [id, loteRestars[i]]),
+              ...loteIds,
+            ]
+          )
+        }
+
+        // W6. UPDATE producto.stock — bulk reconcile from PEPS lotes
+        const stockEntries = Object.entries(deltaStock)
+        if (stockEntries.length > 0) {
+          const stockIds = stockEntries.map(([id]) => {
+            const n = Number(id)
+            if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) throw new Error(`ID de producto inválido: ${id}`)
+            return n
+          })
+          const stockRestars = stockEntries.map(([, restar]) => {
+            const n = Number(restar)
+            if (!Number.isFinite(n)) throw new Error(`Delta de stock inválido: ${restar}`)
+            return n
+          })
+          const caseStock = stockIds.map(() => 'WHEN ? THEN ?').join(' ')
+          const phStockIds = stockIds.map(() => '?').join(',')
+          await conn.execute(
+            `UPDATE producto p
+             SET stock = CASE
+               WHEN EXISTS (SELECT 1 FROM inventario_peps ip WHERE ip.id_producto = p.id_producto)
+               THEN (SELECT COALESCE(SUM(ip2.cantidad_restante), 0) FROM inventario_peps ip2 WHERE ip2.id_producto = p.id_producto AND ip2.activo = 1)
+               ELSE stock - CASE p.id_producto ${caseStock} ELSE 0 END
+             END
+             WHERE p.id_producto IN (${phStockIds})`,
+            [
+              ...stockIds.flatMap((id, i) => [id, stockRestars[i]]),
+              ...stockIds,
+            ]
+          )
+        }
+
+        // W6-phantom. Opción A: cubrir cualquier faltante (derivadoPendiente > 0)
+        // con una compra/lote PHANTOM:VENTA — entradas.js ya sabe reconciliarlo
+        // cuando llegue la próxima compra real de ese producto.
+        const itemsConFaltante = itemsProcessed
+          .map((item, i) => ({ item, idx: i }))
+          .filter(({ item }) => Number(item.cantidadPendiente) > 0.000001)
+
+        if (itemsConFaltante.length > 0) {
+          const [provRows] = await conn.execute(
+            "SELECT id_proveedor FROM proveedor WHERE nombre_proveedor = 'BOOTSTRAP-INVENTARIO' LIMIT 1"
+          )
+          const phantomProvId = provRows.length > 0 ? provRows[0].id_proveedor : null
+
+          const phantomFaltantes = itemsConFaltante.map(({ item }) => {
+            const ultimaFuente = item.fuentes[item.fuentes.length - 1]
+            const idPepsProducto = ultimaFuente.idProd
+            const factorAPeps = ultimaFuente.esConv ? ultimaFuente.factor : 1
+            const cantidadBase = item.cantidadPendiente * factorAPeps
+            return { idPepsProducto, cantidadBase, precio_unitario: item.precio_unitario }
+          })
+
+          const compraPhPlaceholders = phantomFaltantes.map(() => '(?, ?, ?, 0.01, NOW(), ?, ?, 0, 0, ?, \'SISTEMA\', \'PHANTOM:VENTA\', 0, 0, NULL, NULL, 0)').join(',')
+          const compraPhParams = phantomFaltantes.flatMap(pf => [
+            pf.idPepsProducto, phantomProvId, pf.cantidadBase, `PHANTOM-VENTA-F${folio}`,
+            pf.cantidadBase * 0.01, pf.cantidadBase * 0.01
+          ])
+          const [comprasPhBulk] = await conn.execute(
+            `INSERT INTO compra (
+              id_producto, id_proveedor, cantidad_compra, precio_unitario_compra,
+              fecha_compra, folio_factura, subtotal, iva, incluye_iva, total_con_impuestos,
+              usuario_registro, notas, tasa_interes,
+              importe_ieps, metodo_pago, forma_pago, peso_por_pieza
+            ) VALUES ${compraPhPlaceholders}`,
+            compraPhParams
+          )
+          const firstCompraPhId = Number(comprasPhBulk.insertId)
+
+          const pepsPhPlaceholders = phantomFaltantes.map(() => '(?, ?, NOW(), ?, 0, 0.01, 1)').join(',')
+          const pepsPhParams = phantomFaltantes.flatMap((pf, i) => [pf.idPepsProducto, firstCompraPhId + i, pf.cantidadBase])
+          const [pepsPhBulk] = await conn.execute(
+            `INSERT INTO inventario_peps (
+              id_producto, id_compra, fecha_movimiento,
+              cantidad_inicial, cantidad_restante, costo_unitario, activo
+            ) VALUES ${pepsPhPlaceholders}`,
+            pepsPhParams
+          )
+          const firstPepsPhId = Number(pepsPhBulk.insertId)
+
+          const dvlPhPlaceholders = phantomFaltantes.map(() => '(?,?,?,0.01,?,?,?)').join(',')
+          const dvlPhParams = phantomFaltantes.flatMap((pf, i) => [
+            idsDetalles[itemsConFaltante[i].idx], firstPepsPhId + i, pf.cantidadBase, pf.precio_unitario,
+            pf.precio_unitario - 0.01,
+            Math.round((pf.precio_unitario - 0.01) * pf.cantidadBase * 100) / 100
+          ])
+          await conn.execute(
+            `INSERT INTO detalle_venta_lote
+               (id_detalle_factura, id_inventario_peps, cantidad_consumida, costo_unitario,
+                precio_venta_unitario, utilidad_unitaria, utilidad_total)
+             VALUES ${dvlPhPlaceholders}`,
+            dvlPhParams
+          )
+
+          // Costo/utilidad de la porción fantasma se suma al total de la venta
+          // (mismo nominal $0.01 que el resto de fantasmas del sistema — se
+          // corrige solo cuando entradas.js reconcilie con inventario real).
+          for (const { item } of itemsConFaltante) {
+            costoTotalVenta = Math.round((costoTotalVenta + item.cantidadPendiente * 0.01) * 100) / 100
+            utilidadTotalVenta = Math.round((utilidadTotalVenta + item.cantidadPendiente * (item.precio_unitario - 0.01)) * 100) / 100
+          }
+
+          // Ya cubierto por el lote fantasma — W6a-bis no debe volver a
+          // congelar esta porción como costo_no_peps/SIN_STOCK.
+          for (const { item } of itemsConFaltante) item.cantidadPendiente = 0
+        }
+      }
+
+      // W6a-bis. Congelar el costo de la porción NO cubierta con lotes reales
+      if (!esPreInventario) {
+        const EPS = 0.001
+        const setSinDesc = []
+        const setCosto = []
+        const setOrigen = []
+        const idsUpdate = []
+
+        itemsProcessed.forEach((item, i) => {
+          const sinDesc = Math.min(Number(item.cantidad_sin_descuento) || 0, item.cantidad)
+          const descontable = item.cantidad - sinDesc
+          const sinCubrir = flujoNuevo
+            ? Math.max(0, descontable - (coveredDerivada[i] || 0))
+            : Math.max(0, Number(item.cantidadPendiente) || 0)
+
+          if (sinDesc <= EPS && sinCubrir <= EPS) return
+
+          const costoProm = costoPromMap[item.id_producto]
+          let costoNoPeps
+          let origen
+          if (sinCubrir > EPS) {
+            if (costoProm != null) {
+              costoNoPeps = Math.round(sinCubrir * costoProm * 100) / 100
+              origen = sinDesc > EPS ? 'MIXTO' : 'SIN_STOCK'
+            } else {
+              costoNoPeps = null
+              origen = 'SIN_COSTO'
+            }
+          } else {
+            costoNoPeps = null
+            origen = 'SIN_DESCUENTO'
+          }
+
+          const idDetalle = idsDetalles[i]
+          idsUpdate.push(idDetalle)
+          setSinDesc.push(`WHEN ${idDetalle} THEN ${Math.round(sinDesc * 100) / 100}`)
+          setCosto.push(`WHEN ${idDetalle} THEN ${costoNoPeps === null ? 'NULL' : costoNoPeps}`)
+          setOrigen.push(`WHEN ${idDetalle} THEN '${origen}'`)
+        })
+
+        if (idsUpdate.length > 0) {
+          const phU = idsUpdate.map(() => '?').join(',')
+          await conn.execute(
+            `UPDATE detalle_factura SET
+               cantidad_sin_descuento = CASE id_detalle ${setSinDesc.join(' ')} ELSE cantidad_sin_descuento END,
+               costo_no_peps          = CASE id_detalle ${setCosto.join(' ')} ELSE costo_no_peps END,
+               origen_costo           = CASE id_detalle ${setOrigen.join(' ')} ELSE origen_costo END
+             WHERE id_detalle IN (${phU})`,
+            idsUpdate
+          )
+        }
+      }
+
+      // W7. Crear deuda si aplica (con auto-aplicación de saldo a favor)
+      const montoPagadoInicial = monto_pagado || 0
+      let montoPendiente = parseFloat(String(orden.total_estimado)) - montoPagadoInicial
+      let creditoAplicado = 0
+      const aplicacionesCredito = []
+
+      if (montoPendiente > 0) {
+        const [creditosActivos] = await conn.execute(
+          `SELECT id_credito, monto_total, monto_usado,
+                  (monto_total - monto_usado) as disponible
+           FROM credito_cliente
+           WHERE id_cliente = ? AND estado IN ('ACTIVO','PARCIALMENTE_USADO')
+           ORDER BY fecha_creacion ASC
+           FOR UPDATE`,
+          [orden.id_cliente]
+        )
+
+        for (const credito of creditosActivos) {
+          if (montoPendiente <= 0) break
+          const disponible = parseFloat(credito.disponible)
+          if (disponible <= 0) continue
+
+          const aplicar = Math.min(disponible, montoPendiente)
+          const nuevoUsado = parseFloat(credito.monto_usado) + aplicar
+          const nuevoEstado = nuevoUsado >= parseFloat(credito.monto_total) ? 'AGOTADO' : 'PARCIALMENTE_USADO'
+
+          await conn.execute(
+            'UPDATE credito_cliente SET monto_usado = ?, estado = ? WHERE id_credito = ?',
+            [+nuevoUsado.toFixed(2), nuevoEstado, credito.id_credito]
+          )
+
+          creditoAplicado += aplicar
+          montoPendiente -= aplicar
+          aplicacionesCredito.push({ id_credito: credito.id_credito, monto: +aplicar.toFixed(2) })
+        }
+
+        const [clienteRows] = await conn.execute(
+          `SELECT c.nombre_cliente, g.nombre_grupo FROM cliente c INNER JOIN grupo g ON c.id_grupo = g.id_grupo WHERE c.id_cliente = ?`,
+          [orden.id_cliente]
+        )
+        const cliente = clienteRows[0] || {}
+        const montoPagadoTotal = +(montoPagadoInicial + creditoAplicado).toFixed(2)
+        const deudaPagada = montoPendiente <= 0
+        const observacionDeuda = (datosCarrito.__observacion__ ?? '').toString().trim() || null
+
+        const fechaDeuda = orden.fecha_creacion || new Date().toISOString().slice(0, 19).replace('T', ' ')
+        const [deudaResult] = await conn.execute(
+          `INSERT INTO deudas (id_cliente, id_factura, nombre_cliente, nombre_grupo, monto_total, monto_pagado, pagado, fecha_generada, descripcion${deudaPagada ? ', fecha_pago' : ''})
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?${deudaPagada ? ', NOW()' : ''})`,
+          [orden.id_cliente, String(folio), cliente.nombre_cliente || 'Cliente desconocido', cliente.nombre_grupo || 'Sin grupo', orden.total_estimado, montoPagadoTotal, deudaPagada ? 1 : 0, fechaDeuda, observacionDeuda]
+        )
+
+        const idDeuda = deudaResult.insertId
+        for (const ap of aplicacionesCredito) {
+          await conn.execute(
+            `INSERT INTO aplicacion_credito (id_credito, id_deuda, monto_aplicado, fecha_aplicacion, usuario, notas)
+             VALUES (?, ?, ?, NOW(), ?, ?)`,
+            [ap.id_credito, idDeuda, ap.monto, admin_usuario || 'sistema', `Auto-aplicado en orden ${folio}`]
+          )
+        }
+      }
+
+      const totalNum = parseFloat(String(orden.total_estimado)) || 0
+
+      resultadoVenta = {
+        folio_numero: folio,
+        id_factura: idFactura,
+        monto_pendiente: Math.max(montoPendiente, 0),
+        credito_aplicado: creditoAplicado > 0 ? creditoAplicado : undefined,
+        costo_real: costoTotalVenta,
+        utilidad_real: utilidadTotalVenta,
+        margen_porcentaje: totalNum > 0 ? (utilidadTotalVenta / totalNum) * 100 : 0
+      }
+
+      await conn.commit()
+    } catch (e) {
+      await conn.rollback()
+      throw e
+    } finally {
+      conn.release()
+    }
+
+    res.json({ ok: true, data: resultadoVenta })
+  } catch (e) {
+    console.error('[ordenes] procesarVenta:', e.message)
+    res.status(500).json({ ok: false, error: e.message || 'Error al procesar la venta' })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════
+// REVERTIR PROCESAMIENTO (H-5 Fase 4 — revertirProcesamiento)
+// ═══════════════════════════════════════════════════════════════
+
+router.post('/revertir-procesamiento/:folio', async (req, res) => {
+  const folio = req.params.folio
+  const { admin_usuario, admin_password } = req.body
+
+  const auth = await verificarAdminPassword(req, admin_usuario, admin_password)
+  if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error })
+
+  try {
+    const ordenRows = await q(`SELECT datos_carrito, estado, id_cliente FROM ordenes_guardadas WHERE folio_numero = ? AND activo = 1`, [folio])
+    if (ordenRows.length === 0) return res.json({ ok: false, error: `Orden ${folio} no encontrada` })
+    const ordenData = ordenRows[0]
+    if (ordenData.estado !== 'registrada') return res.json({ ok: false, error: `Orden ${folio} no está procesada` })
+
+    const carrito = typeof ordenData.datos_carrito === 'string' ? JSON.parse(ordenData.datos_carrito) : (ordenData.datos_carrito || {})
+    const historialActual = Array.isArray(carrito.__historial__) ? carrito.__historial__ : []
+    const entradaReversion = { tipoEvento: 'reversion', fecha: new Date().toISOString(), adminUsuario: admin_usuario }
+    const carritoConHistorial = { ...carrito, __historial__: [...historialActual, entradaReversion] }
+
+    const esPreInventarioRevert = Number(folio) <= FOLIO_CORTE_INVENTARIO
+
+    // Opción A: si la venta dejó un lote PHANTOM:VENTA sin reconciliar, se
+    // borra junto con su compra (mismo patrón que la rama pre-inventario).
+    // Si ya fue parcialmente reconciliado por una compra real (REC > 0), se
+    // bloquea la reversión — evita corromper una reconciliación que ya
+    // ocurrió. Edge case infrecuente (vender de más y revertir después de
+    // que ya llegó inventario real).
+    const [phantomVentaRows] = await pool.execute(
+      `SELECT id_compra, notas FROM compra WHERE notas LIKE 'PHANTOM:VENTA%' AND folio_factura = ?`,
+      [`PHANTOM-VENTA-F${folio}`]
+    )
+    for (const ph of phantomVentaRows) {
+      const mRec = (ph.notas || '').match(/\|REC:([\d.]+)/)
+      const yaReconciliado = mRec ? parseFloat(mRec[1]) : 0
+      if (yaReconciliado > 0) {
+        return res.json({
+          ok: false,
+          error: `La venta ${folio} generó un lote de inventario pendiente (PHANTOM:VENTA) que ya fue parcialmente reconciliado con una compra real. No se puede revertir automáticamente — contacta a un administrador para resolverlo a mano.`
+        })
+      }
+    }
+
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+
+      // R1. Encontrar la factura asociada
+      const [facturaRows] = await conn.execute(`SELECT id_factura FROM factura WHERE folio_numero = ?`, [folio])
+      const idFactura = facturaRows[0]?.id_factura ?? null
+
+      if (idFactura !== null) {
+        const [detalles] = await conn.execute(`SELECT id_detalle, id_producto, cantidad_factura FROM detalle_factura WHERE id_factura = ?`, [idFactura])
+        const idDetalles = detalles.map(d => d.id_detalle)
+
+        if (esPreInventarioRevert) {
+          if (idDetalles.length > 0) {
+            const phD = idDetalles.map(() => '?').join(',')
+            const [lotes] = await conn.execute(
+              `SELECT dvl.id_inventario_peps, ip.id_compra
+               FROM detalle_venta_lote dvl
+               INNER JOIN inventario_peps ip ON dvl.id_inventario_peps = ip.id_inventario_peps
+               WHERE dvl.id_detalle_factura IN (${phD})`,
+              idDetalles
+            )
+            await conn.execute(`DELETE FROM detalle_venta_lote WHERE id_detalle_factura IN (${phD})`, idDetalles)
+            if (lotes.length > 0) {
+              const phantomLoteIds = lotes.map(l => l.id_inventario_peps)
+              const phantomCompraIds = [...new Set(lotes.map(l => l.id_compra))]
+              await conn.execute(`DELETE FROM inventario_peps WHERE id_inventario_peps IN (${phantomLoteIds.map(() => '?').join(',')})`, phantomLoteIds)
+              await conn.execute(`DELETE FROM compra WHERE id_compra IN (${phantomCompraIds.map(() => '?').join(',')})`, phantomCompraIds)
+            }
+          }
+        } else if (await tieneConsumoOrden(conn, folio)) {
+          // ── FLUJO NUEVO: la traza en orden_consumo_peps sigue siendo dueña del consumo ──
+          if (idDetalles.length > 0) {
+            const phD = idDetalles.map(() => '?').join(',')
+            await conn.execute(`DELETE FROM detalle_venta_lote WHERE id_detalle_factura IN (${phD})`, idDetalles)
+          }
+        } else {
+          // ── POST-INVENTARIO legacy: restaurar PEPS y stock normalmente ──
+          if (idDetalles.length > 0) {
+            const phD = idDetalles.map(() => '?').join(',')
+            const [lotes] = await conn.execute(
+              `SELECT dvl.id_detalle_factura, dvl.id_inventario_peps,
+                      ip.id_producto AS id_producto_peps,
+                      SUM(dvl.cantidad_consumida) AS total
+               FROM detalle_venta_lote dvl
+               INNER JOIN inventario_peps ip ON dvl.id_inventario_peps = ip.id_inventario_peps
+               WHERE dvl.id_detalle_factura IN (${phD})
+               GROUP BY dvl.id_detalle_factura, dvl.id_inventario_peps, ip.id_producto`,
+              idDetalles
+            )
+
+            // Los lotes PHANTOM:VENTA generados por Opción A se borran (no se restauran
+            // como si fueran reales) — mismo criterio que la rama pre-inventario.
+            const [phantomLoteRows] = await conn.execute(
+              `SELECT dvl.id_inventario_peps, ip.id_compra
+               FROM detalle_venta_lote dvl
+               INNER JOIN inventario_peps ip ON dvl.id_inventario_peps = ip.id_inventario_peps
+               INNER JOIN compra c ON c.id_compra = ip.id_compra
+               WHERE dvl.id_detalle_factura IN (${phD}) AND c.notas LIKE 'PHANTOM:VENTA%'`,
+              idDetalles
+            )
+            const phantomLoteIdsSet = new Set(phantomLoteRows.map(r => Number(r.id_inventario_peps)))
+
+            if (lotes.length > 0) {
+              const lotesReales = lotes.filter(l => !phantomLoteIdsSet.has(Number(l.id_inventario_peps)))
+              if (lotesReales.length > 0) {
+                const caseRestore = lotesReales.map(l => `WHEN ${Number(l.id_inventario_peps)} THEN cantidad_restante + ${parseFloat(String(l.total))}`).join(' ')
+                const caseActivo = lotesReales.map(l => `WHEN ${Number(l.id_inventario_peps)} THEN CASE WHEN cantidad_restante + ${parseFloat(String(l.total))} > 0 THEN 1 ELSE activo END`).join(' ')
+                const restoreIds = lotesReales.map(l => Number(l.id_inventario_peps))
+                await conn.execute(
+                  `UPDATE inventario_peps
+                   SET cantidad_restante = CASE id_inventario_peps ${caseRestore} ELSE cantidad_restante END,
+                       activo = CASE id_inventario_peps ${caseActivo} ELSE activo END
+                   WHERE id_inventario_peps IN (${restoreIds.map(() => '?').join(',')})`,
+                  restoreIds
+                )
+              }
+
+              if (phantomLoteRows.length > 0) {
+                const phantomLoteIds = phantomLoteRows.map(r => r.id_inventario_peps)
+                const phantomCompraIds = [...new Set(phantomLoteRows.map(r => r.id_compra))]
+                await conn.execute(`DELETE FROM inventario_peps WHERE id_inventario_peps IN (${phantomLoteIds.map(() => '?').join(',')})`, phantomLoteIds)
+                await conn.execute(`DELETE FROM compra WHERE id_compra IN (${phantomCompraIds.map(() => '?').join(',')})`, phantomCompraIds)
+              }
+
+              await conn.execute(`DELETE FROM detalle_venta_lote WHERE id_detalle_factura IN (${phD})`, idDetalles)
+
+              const stockDelta = {}
+              const detallesCubiertos = new Set()
+              for (const lote of lotes) {
+                const pid = Number(lote.id_producto_peps)
+                stockDelta[pid] = (stockDelta[pid] || 0) + parseFloat(String(lote.total))
+                detallesCubiertos.add(Number(lote.id_detalle_factura))
+              }
+              const allRestoreIds = new Set()
+              for (const pid of Object.keys(stockDelta)) allRestoreIds.add(Number(pid))
+              const fallbackItems = []
+              for (const d of detalles) {
+                if (!detallesCubiertos.has(d.id_detalle)) {
+                  allRestoreIds.add(Number(d.id_producto))
+                  fallbackItems.push({ pid: Number(d.id_producto), cantidad: parseFloat(d.cantidad_factura) })
+                }
+              }
+              if (allRestoreIds.size > 0) {
+                const restoreProductIds = [...allRestoreIds]
+                const caseFallback = fallbackItems.length > 0 ? fallbackItems.map(f => `WHEN ${f.pid} THEN ${f.cantidad}`).join(' ') : ''
+                const phRestore = restoreProductIds.map(() => '?').join(',')
+                await conn.execute(
+                  `UPDATE producto p
+                   SET stock = CASE
+                     WHEN EXISTS (SELECT 1 FROM inventario_peps ip WHERE ip.id_producto = p.id_producto AND ip.activo = 1)
+                     THEN (SELECT COALESCE(SUM(ip2.cantidad_restante), 0) FROM inventario_peps ip2 WHERE ip2.id_producto = p.id_producto AND ip2.activo = 1)
+                     ELSE stock + CASE p.id_producto ${caseFallback || 'WHEN 0 THEN 0'} ELSE 0 END
+                   END
+                   WHERE p.id_producto IN (${phRestore})`,
+                  restoreProductIds
+                )
+              }
+            } else if (detalles.length > 0) {
+              const caseCant = detalles.map(d => `WHEN ${Number(d.id_producto)} THEN stock + ${parseFloat(d.cantidad_factura)}`).join(' ')
+              const detProdIds = detalles.map(d => Number(d.id_producto))
+              await conn.execute(
+                `UPDATE producto SET stock = CASE id_producto ${caseCant} ELSE stock END
+                 WHERE id_producto IN (${detProdIds.map(() => '?').join(',')})`,
+                detProdIds
+              )
+            }
+          }
+        }
+
+        // R6. Eliminar detalle_factura y factura
+        await conn.execute(`DELETE FROM detalle_factura WHERE id_factura = ?`, [idFactura])
+        await conn.execute(`DELETE FROM factura WHERE id_factura = ?`, [idFactura])
+      }
+
+      // R7. Revertir créditos aplicados y eliminar deuda
+      const [deudaRows] = await conn.execute(`SELECT id_deuda FROM deudas WHERE id_factura = ?`, [String(folio)])
+      if (deudaRows.length > 0) {
+        const idDeuda = deudaRows[0].id_deuda
+        const [aplicaciones] = await conn.execute(`SELECT id_credito, monto_aplicado FROM aplicacion_credito WHERE id_deuda = ?`, [idDeuda])
+        if (aplicaciones.length > 0) {
+          for (const ap of aplicaciones) {
+            await conn.execute(
+              `UPDATE credito_cliente
+               SET monto_usado = GREATEST(0, monto_usado - ?),
+                   estado = CASE
+                     WHEN GREATEST(0, monto_usado - ?) <= 0 THEN 'ACTIVO'
+                     WHEN GREATEST(0, monto_usado - ?) < monto_total THEN 'PARCIALMENTE_USADO'
+                     ELSE estado
+                   END
+               WHERE id_credito = ?`,
+              [ap.monto_aplicado, ap.monto_aplicado, ap.monto_aplicado, ap.id_credito]
+            )
+          }
+          await conn.execute(`DELETE FROM aplicacion_credito WHERE id_deuda = ?`, [idDeuda])
+        }
+        await conn.execute(`DELETE FROM deudas WHERE id_deuda = ?`, [idDeuda])
+      }
+
+      // R8. Revertir orden a guardada + actualizar historial
+      await conn.execute(
+        `UPDATE ordenes_guardadas
+         SET estado = 'guardada', datos_carrito = ?, fecha_modificacion = NOW()
+         WHERE folio_numero = ?`,
+        [JSON.stringify(carritoConHistorial), folio]
+      )
+
+      // R9. Traer la orden al flujo nuevo si era legacy
+      if (!esPreInventarioRevert && !(await tieneConsumoOrden(conn, folio))) {
+        const idGrupoRevert = ordenData.id_cliente ? await obtenerIdGrupoCliente(conn, ordenData.id_cliente) : null
+        await consumirPepsParaOrden(conn, folio, carritoConHistorial, idGrupoRevert)
+      }
+
+      await conn.commit()
+    } catch (e) {
+      await conn.rollback()
+      throw e
+    } finally {
+      conn.release()
+    }
+
+    res.json({ ok: true, data: { success: true } })
+  } catch (e) {
+    console.error('[ordenes] revertirProcesamiento:', e.message)
+    res.status(500).json({ ok: false, error: e.message || 'Error al revertir el procesamiento' })
   }
 })
 
