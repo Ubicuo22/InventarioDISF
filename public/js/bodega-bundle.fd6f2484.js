@@ -1,4 +1,4 @@
-/* bodega-bundle.1e5541a6.js — 2026-09-16T23:14:50.211Z */
+/* bodega-bundle.fd6f2484.js — 2026-09-17T17:42:11.021Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1907,15 +1907,20 @@ function reviewModule () {
       this.revisionGuardando = true
       this.revisionErrorGuardado = null
 
-      // Helper de retry — intenta la llamada hasta 2 veces con pausa entre intentos
+      // Helper de retry — intenta la llamada hasta 2 veces con pausa entre intentos.
+      // También reintenta ante un 5xx transitorio de Cloudflare (p.ej. "Worker
+      // exceeded resource limits" al crear el pool de TiDB por request) — api.js
+      // lo reporta como "Error de servidor (N)" cuando la respuesta no es JSON
+      // (página de error del edge, no un rechazo real de la app).
       const tryFetch = async (fn, intentos = 2) => {
         for (let i = 0; i < intentos; i++) {
           try {
             return await fn()
           } catch (e) {
             const esRed = !navigator.onLine || e.message?.includes('fetch') || e.message?.includes('network')
-            if (i < intentos - 1 && esRed) {
-              this.revisionGuardandoMensaje = 'Reconectando…'
+            const esServidorTransitorio = /Error de servidor \(5\d\d\)/.test(e.message || '')
+            if (i < intentos - 1 && (esRed || esServidorTransitorio)) {
+              this.revisionGuardandoMensaje = esRed ? 'Reconectando…' : 'El servidor tardó, reintentando…'
               await new Promise(r => setTimeout(r, 1800))
               this.revisionGuardandoMensaje = 'Reintentando…'
             } else throw e
