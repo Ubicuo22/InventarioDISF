@@ -74,8 +74,8 @@ describe('GET /api/electron/ordenes — obtenerTodas', () => {
     const res = await request(app).get('/api/electron/ordenes')
     expect(res.body.data[0].total_estimado).toBe(100)
     expect(q).toHaveBeenCalledWith(
-      'UPDATE ordenes_guardadas SET total_estimado = ? WHERE folio_numero = ?',
-      [100, 501]
+      'UPDATE ordenes_guardadas SET total_estimado = CASE folio_numero WHEN ? THEN ? END WHERE folio_numero IN (?)',
+      [501, 100, 501]
     )
   })
 

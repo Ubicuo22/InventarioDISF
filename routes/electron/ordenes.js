@@ -143,17 +143,47 @@ function calcularTotal(datosCarrito) {
 // corrige al vuelo en la respuesta y se repara en BD. A diferencia del lado
 // Electron (que hace el UPDATE "fire and forget"), aquí se espera — en
 // Workers una promesa sin await puede morir cuando termina el request.
+//
+// Un UPDATE por fila descuadrada funcionaba bien con mysql2 (queries TCP
+// pooled, pocos ms cada una) pero cada q() se vuelve un subrequest aparte
+// del Worker con el driver HTTP — con varias decenas de filas descuadradas
+// esto se acerca al límite de subrequests por request de Cloudflare (50 en
+// plan Free) y se vuelve lento. Se agrupan todas las correcciones en un
+// solo UPDATE con CASE en vez de N updates sueltos.
 async function sanearTotales(rows) {
+  const correcciones = []
   for (const row of rows) {
     try {
       const calc = calcularTotal(row.datos_carrito)
       if (Math.abs(calc - parseFloat(row.total_estimado)) >= 0.01) {
         console.warn(`⚠️ Total descuadrado en folio ${row.folio_numero}: BD $${row.total_estimado} vs carrito $${calc} — corrigiendo`)
         row.total_estimado = calc
-        await q('UPDATE ordenes_guardadas SET total_estimado = ? WHERE folio_numero = ?', [calc, row.folio_numero])
+        correcciones.push({ folio: row.folio_numero, calc })
       }
     } catch { /* carrito ilegible: dejar el total como está */ }
   }
+
+  if (correcciones.length > 0) {
+    try {
+      const casos  = correcciones.map(() => 'WHEN ? THEN ?').join(' ')
+      const folios = correcciones.map(() => '?').join(',')
+      const params = [
+        ...correcciones.flatMap(c => [c.folio, c.calc]),
+        ...correcciones.map(c => c.folio),
+      ]
+      await q(
+        `UPDATE ordenes_guardadas SET total_estimado = CASE folio_numero ${casos} END WHERE folio_numero IN (${folios})`,
+        params
+      )
+    } catch (e) {
+      // La respuesta ya lleva el total corregido en memoria (arriba) — si
+      // el UPDATE de reparación falla, no tiene sentido tumbar el request
+      // completo por un ajuste que se puede reintentar en la próxima
+      // lectura. Mismo criterio que el catch de arriba (carrito ilegible).
+      console.error('[ordenes] sanearTotales: UPDATE de corrección falló', e.message)
+    }
+  }
+
   return rows
 }
 
