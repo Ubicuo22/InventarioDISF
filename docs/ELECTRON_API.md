@@ -45,9 +45,21 @@ sin pasar por `callBodega`) con su registro de IPC en
 ⚠️ **`auth:whoami`** (el canal IPC, `auth.handler.ts:567`, expuesto como
 `checkSession` en `preload.js:33`) es un falso amigo del nombre — es
 **100% local**, solo lee `getSession(event)` de la sesión en memoria del
-proceso main. No es un proxy de `GET /api/electron/auth/whoami`. Esa ruta
-del Worker parece no tener consumidor desde Electron hoy — confirmar si es
-solo para bodega-web antes de tocarla o borrarla.
+proceso main. No es un proxy de `GET /api/electron/auth/whoami`.
+
+**Confirmado (17 sep 2026): `GET /whoami` es código muerto, pero a propósito.**
+El encabezado de `routes/electron/auth.js` explica que todo este archivo es
+el mecanismo paralelo de la Fase 0 — Electron llama `/login` solo para
+obtener un `bodegaToken` con el que probar los canales ya migrados; la
+autenticación real sigue siendo local. `/whoami` encaja como endpoint de
+verificación manual (`curl`/Postman: "¿este token decodifica al usuario
+correcto?"), nunca pensado para que Electron lo llame en producción — ya
+sabe quién es su usuario localmente. Su único otro uso es
+`tests/electron-auth.test.js:177`, y ni siquiera prueba algo propio de
+`/whoami` — lo usa como ruta protegida genérica para verificar que
+`requireAuthElectron` rechaza un token con `aud` (audience) equivocado.
+Decisión: se deja como está — inofensivo, sigue sirviendo como herramienta
+de depuración manual.
 
 ---
 
@@ -208,8 +220,7 @@ nuevo, no repitas el patrón de `callBodega` de los otros 7 grupos —
 
 ## Pendiente
 
-- [ ] Confirmar si `GET /api/electron/auth/whoami` tiene algún consumidor
-  real (¿bodega-web? ¿nada?) o si es código muerto que se puede borrar.
+- [x] ~~Confirmar si `GET /api/electron/auth/whoami` tiene algún consumidor real~~ — confirmado 17 sep: es código muerto a propósito (utilidad de depuración de la Fase 0), se deja como está. Ver nota en la sección 1.
 - [ ] Este doc es manual — no hay nada que lo mantenga sincronizado. Revisar
   cuando se agregue/quite un endpoint en `routes/electron/*.js` o un
   handler correspondiente en `disfruleg-electron/src/main/handlers/`.
