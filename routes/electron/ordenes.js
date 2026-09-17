@@ -1630,10 +1630,45 @@ router.post('/revertir-procesamiento/:folio', async (req, res) => {
       await conn.beginTransaction()
 
       // R1. Encontrar la factura asociada
-      const [facturaRows] = await conn.execute(`SELECT id_factura FROM factura WHERE folio_numero = ?`, [folio])
+      const [facturaRows] = await conn.execute(`SELECT id_factura, fecha_factura FROM factura WHERE folio_numero = ?`, [folio])
       const idFactura = facturaRows[0]?.id_factura ?? null
+      const fechaFacturaOriginal = facturaRows[0]?.fecha_factura ?? null
 
       if (idFactura !== null) {
+        // R1a. Snapshot del margen real ANTES de borrar nada — mismo shape de
+        // fila que precios:margenFactura (disfruleg-electron), para que el
+        // cliente pueda reusar su misma lógica de formateo sobre datos
+        // archivados cuando ya no exista la factura viva. Sin esto, el costo
+        // real de esta venta se pierde para siempre al revertir.
+        const [lineasMargen] = await conn.execute(
+          `SELECT df.id_detalle, df.id_producto, p.nombre_producto, p.unidad_producto,
+                  df.cantidad_factura, df.precio_unitario_venta,
+                  df.cantidad_sin_descuento, df.costo_no_peps, df.origen_costo,
+                  COALESCE(dvl.costo_peps, 0)    AS costo_peps,
+                  COALESCE(dvl.utilidad_peps, 0) AS utilidad_peps
+           FROM detalle_factura df
+           INNER JOIN producto p ON p.id_producto = df.id_producto
+           LEFT JOIN (
+             SELECT id_detalle_factura,
+                    SUM(cantidad_consumida * costo_unitario) AS costo_peps,
+                    SUM(utilidad_total)                      AS utilidad_peps
+             FROM detalle_venta_lote
+             WHERE costo_unitario > 0.01
+             GROUP BY id_detalle_factura
+           ) dvl ON dvl.id_detalle_factura = df.id_detalle
+           WHERE df.id_factura = ?
+           ORDER BY df.id_detalle`,
+          [idFactura]
+        )
+        if (lineasMargen.length > 0) {
+          await conn.execute(
+            `INSERT INTO margen_historico_revertido
+               (folio_numero, fecha_factura_original, admin_usuario, datos_lineas)
+             VALUES (?, ?, ?, ?)`,
+            [folio, fechaFacturaOriginal, admin_usuario || null, JSON.stringify(lineasMargen)]
+          )
+        }
+
         const [detalles] = await conn.execute(`SELECT id_detalle, id_producto, cantidad_factura FROM detalle_factura WHERE id_factura = ?`, [idFactura])
         const idDetalles = detalles.map(d => d.id_detalle)
 

@@ -17,10 +17,16 @@
     "testEnvironment": "node",
     "clearMocks": true,
     "forceExit": true,
-    "testMatch": ["**/tests/**/*.test.js"],
-    "testPathIgnorePatterns": ["/node_modules/", "/.claude/"]
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/.claude/"
+    ]
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1131.0",
     "@tidbcloud/serverless": "^0.3.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",

@@ -332,7 +332,11 @@ describe('POST /api/electron/ordenes/revertir-procesamiento/:folio', () => {
     pool.execute.mockResolvedValueOnce([[]]) // sin phantoms pendientes para este folio
 
     const conn = mockConn([
-      [[{ id_factura: 900 }]],                                              // R1
+      [[{ id_factura: 900, fecha_factura: '2026-09-09' }]],                 // R1
+      [[{ id_detalle: 5000, id_producto: 10, nombre_producto: 'Prod 10', unidad_producto: 'pz',
+          cantidad_factura: 2, precio_unitario_venta: 50, cantidad_sin_descuento: 0,
+          costo_no_peps: null, origen_costo: null, costo_peps: 20, utilidad_peps: 60 }]], // R1a SELECT snapshot margen
+      [{ affectedRows: 1, insertId: 1 }],                                    // R1a INSERT margen_historico_revertido
       [[{ id_detalle: 5000, id_producto: 10, cantidad_factura: 2 }]],       // R2 detalles
       [[]],                                                                  // tieneConsumoOrden (selección de rama) → legacy
       [[{ id_detalle_factura: 5000, id_inventario_peps: 501, id_producto_peps: 10, total: '2.00' }]], // lotes reales consumidos
@@ -361,6 +365,59 @@ describe('POST /api/electron/ordenes/revertir-procesamiento/:folio', () => {
 
     const deleteFactura = conn.execute.mock.calls.find(c => /DELETE FROM factura/.test(c[0]))
     expect(deleteFactura).toBeTruthy()
+
+    const snapshotInsert = conn.execute.mock.calls.find(c => /INSERT INTO margen_historico_revertido/.test(c[0]))
+    expect(snapshotInsert).toBeTruthy()
+    const [folioArg, fechaArg, adminArg, datosLineasArg] = snapshotInsert[1]
+    expect(folioArg).toBe('500')
+    expect(fechaArg).toBe('2026-09-09')
+    expect(adminArg).toBe('ADMIN')
+    expect(JSON.parse(datosLineasArg)).toEqual([
+      expect.objectContaining({ id_detalle: 5000, id_producto: 10, precio_unitario_venta: 50 }),
+    ])
+
+    // El snapshot se guarda ANTES de borrar detalle_factura/factura — si el
+    // orden se invirtiera, el borrado ya habría corrido y esto fallaría.
+    const snapshotIdx = conn.execute.mock.calls.indexOf(snapshotInsert)
+    const deleteFacturaIdx = conn.execute.mock.calls.indexOf(deleteFactura)
+    expect(snapshotIdx).toBeLessThan(deleteFacturaIdx)
+  })
+
+  test('rama con traza OCP (flujo nuevo): revertir no toca inventario, solo borra el recibo', async () => {
+    q.mockImplementation(withAdminOk([
+      { match: /FROM ordenes_guardadas WHERE folio_numero = \? AND activo = 1/, rows: [{ ...ORDEN_BASE, estado: 'registrada' }] },
+    ]))
+    pool.execute.mockResolvedValueOnce([[]]) // sin phantoms pendientes
+
+    const conn = mockConn([
+      [[{ id_factura: 900, fecha_factura: '2026-09-09' }]],                 // R1
+      [[{ id_detalle: 5000, id_producto: 10, nombre_producto: 'Prod 10', unidad_producto: 'pz',
+          cantidad_factura: 2, precio_unitario_venta: 50, cantidad_sin_descuento: 0,
+          costo_no_peps: null, origen_costo: null, costo_peps: 20, utilidad_peps: 60 }]], // R1a SELECT snapshot margen
+      [{ affectedRows: 1, insertId: 1 }],                                    // R1a INSERT margen_historico_revertido
+      [[{ id_detalle: 5000, id_producto: 10, cantidad_factura: 2 }]],       // R2 detalles
+      [[{ x: 1 }]],                                                          // tieneConsumoOrden → true (flujo nuevo)
+      [{ affectedRows: 1 }],                                                 // DELETE detalle_venta_lote (recibo)
+      [{ affectedRows: 1 }],                                                 // DELETE detalle_factura
+      [{ affectedRows: 1 }],                                                 // DELETE factura
+      [[]],                                                                  // SELECT deudas (ninguna)
+      [{ affectedRows: 1 }],                                                 // UPDATE ordenes_guardadas → guardada
+      [[{ x: 1 }]],                                                          // tieneConsumoOrden (R9) → true, NO corre consumirPepsParaOrden
+    ])
+
+    const res = await request(app).post('/api/electron/ordenes/revertir-procesamiento/500').send({ admin_usuario: 'ADMIN', admin_password: 'clave-admin-correcta' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    expect(conn.commit).toHaveBeenCalled()
+
+    // Invariante de la sección 3 del plan: en la rama con traza OCP, revertir
+    // jamás toca inventario_peps ni producto.stock — la reserva sigue viva
+    // en orden_consumo_peps y no hay nada que restaurar.
+    const tocaInventario = conn.execute.mock.calls.some(c =>
+      /UPDATE\s+inventario_peps/i.test(c[0]) || /UPDATE\s+producto\b/i.test(c[0])
+    )
+    expect(tocaInventario).toBe(false)
   })
 
   test('500 y rollback si la transacción falla', async () => {
