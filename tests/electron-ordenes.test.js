@@ -120,12 +120,14 @@ describe('GET /api/electron/ordenes/folio/:folio', () => {
 
 describe('GET /api/electron/ordenes/siguiente-folio', () => {
   it('devuelve el primer folio libre', async () => {
+    q.mockResolvedValueOnce([{ total: 3 }])
     q.mockResolvedValueOnce([{ folio_numero: 1 }, { folio_numero: 2 }, { folio_numero: 4 }])
     const res = await request(app).get('/api/electron/ordenes/siguiente-folio')
     expect(res.body.data.folio).toBe(3)
   })
 
   it('devuelve 1 si no hay órdenes', async () => {
+    q.mockResolvedValueOnce([{ total: 0 }])
     q.mockResolvedValueOnce([])
     const res = await request(app).get('/api/electron/ordenes/siguiente-folio')
     expect(res.body.data.folio).toBe(1)

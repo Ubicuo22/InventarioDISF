@@ -160,7 +160,7 @@ async function sanearTotales(rows) {
 // ─── GET / — obtenerTodas ─────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const rows = await q(`${SELECT_ORDEN} WHERE o.activo = 1 ORDER BY o.folio_numero DESC`)
+    const rows = await q(`${SELECT_ORDEN} WHERE o.activo = 1 ORDER BY o.folio_numero DESC LIMIT 10000`)
     res.json({ ok: true, data: await sanearTotales(rows) })
   } catch (e) {
     console.error('[ordenes] obtenerTodas:', e.message)
@@ -171,7 +171,7 @@ router.get('/', async (req, res) => {
 // ─── GET /activas — obtenerActivas ────────────────────────────
 router.get('/activas', async (req, res) => {
   try {
-    const rows = await q(`${SELECT_ORDEN} WHERE o.estado = 'guardada' AND o.activo = 1 ORDER BY o.folio_numero DESC`)
+    const rows = await q(`${SELECT_ORDEN} WHERE o.estado = 'guardada' AND o.activo = 1 ORDER BY o.folio_numero DESC LIMIT 10000`)
     res.json({ ok: true, data: await sanearTotales(rows) })
   } catch (e) {
     console.error('[ordenes] obtenerActivas:', e.message)
@@ -182,7 +182,7 @@ router.get('/activas', async (req, res) => {
 // ─── GET /historial — obtenerHistorial ────────────────────────
 router.get('/historial', async (req, res) => {
   try {
-    const rows = await q(`${SELECT_ORDEN} WHERE o.estado = 'registrada' AND o.activo = 1 ORDER BY o.folio_numero DESC`)
+    const rows = await q(`${SELECT_ORDEN} WHERE o.estado = 'registrada' AND o.activo = 1 ORDER BY o.folio_numero DESC LIMIT 10000`)
     res.json({ ok: true, data: await sanearTotales(rows) })
   } catch (e) {
     console.error('[ordenes] obtenerHistorial:', e.message)
@@ -206,7 +206,11 @@ router.get('/folio/:folio', async (req, res) => {
 // ─── GET /siguiente-folio — obtenerSiguienteFolio ─────────────
 router.get('/siguiente-folio', async (req, res) => {
   try {
-    const rows = await q('SELECT folio_numero FROM ordenes_guardadas ORDER BY folio_numero')
+    // Acotado por principio de casillas: con N folios existentes, el primer
+    // hueco (o el siguiente libre si no hay huecos) siempre cae en [1, N+1] —
+    // no hace falta traer folios más allá de ese rango para encontrarlo.
+    const [{ total }] = await q('SELECT COUNT(*) AS total FROM ordenes_guardadas')
+    const rows = await q('SELECT folio_numero FROM ordenes_guardadas WHERE folio_numero <= ? ORDER BY folio_numero', [total + 1])
     const used = new Set(rows.map(r => Number(r.folio_numero)))
     let next = 1
     while (used.has(next)) next++

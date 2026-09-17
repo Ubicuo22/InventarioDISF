@@ -80,6 +80,14 @@ router.get('/periodo', async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaInicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin)) {
       return res.status(400).json({ ok: false, error: 'Formato de fecha inválido, use YYYY-MM-DD' })
     }
+    // Sin tope, un rango arbitrario (años) podría devolver más de 10,000 filas.
+    // Se rechaza en vez de poner LIMIT: la Q1 (facturas) alimenta un merge en
+    // JS contra Q2/Q3 (agregados por id_factura) — truncar solo Q1 dejaría
+    // totales de venta/ganancia silenciosamente incompletos, peor que un error.
+    const diasRango = (new Date(fechaFin) - new Date(fechaInicio)) / 86400000
+    if (diasRango > 366) {
+      return res.status(400).json({ ok: false, error: 'El rango no puede exceder 366 días' })
+    }
 
     // 3 queries en paralelo — mismo patrón que Electron analytics handler
     const [facturas, totalesPorFactura, pepsPorFactura] = await Promise.all([

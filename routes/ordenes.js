@@ -101,6 +101,7 @@ router.get('/', async (req, res) => {
       INNER JOIN grupo   g ON c.id_grupo   = g.id_grupo
       WHERE  ${conditions.join(' AND ')}
       ORDER  BY o.folio_numero DESC
+      LIMIT  10000
     `, params)
     res.json({ ok: true, data: rows })
   } catch (e) {
@@ -684,7 +685,19 @@ router.get('/:folio/lock', async (req, res) => {
 
     const LOCK_TIMEOUT_MS = 5 * 60 * 1000
     if (row.editing_by && row.editing_at) {
-      const elapsed = Date.now() - new Date(row.editing_at).getTime()
+      // editing_at llega como objeto Date (mysql2 sin dateStrings), o como
+      // string ya con zona (ISO), o como string crudo de MySQL sin zona
+      // ("YYYY-MM-DD HH:MM:SS") si algún día cambia esa config —
+      // new Date("YYYY-MM-DD HH:MM:SS") no está garantizado por spec y V8 lo
+      // trata como hora local, no UTC. Forzar 'Z' solo cuando falta.
+      let rawEditingAt
+      if (row.editing_at instanceof Date) {
+        rawEditingAt = row.editing_at.toISOString()
+      } else {
+        const raw = String(row.editing_at).trim()
+        rawEditingAt = raw.includes('Z') || raw.includes('+') ? raw : raw.replace(' ', 'T') + 'Z'
+      }
+      const elapsed = Date.now() - new Date(rawEditingAt).getTime()
       if (elapsed < LOCK_TIMEOUT_MS) {
         return res.json({ ok: true, locked: true, editing_by: row.editing_by, editing_source: row.editing_source })
       }

@@ -20,6 +20,12 @@ router.get('/resumen', requireAuth, async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) {
       return res.status(400).json({ ok: false, error: 'Formato de fecha inválido, use YYYY-MM-DD' })
     }
+    // desde/hasta son sobreescribibles por el cliente sin máximo — sin tope,
+    // un rango de años podría devolver más de 10,000 filas.
+    const diasRango = (new Date(hasta) - new Date(desde)) / 86400000
+    if (diasRango > 366) {
+      return res.status(400).json({ ok: false, error: 'El rango no puede exceder 366 días' })
+    }
 
     const rows = await q(`
       SELECT
