@@ -210,8 +210,8 @@ describe('POST /api/ordenes', () => {
   })
 
   it('crea nueva orden — calcTotal suma cantidad×precio correctamente', async () => {
-    q.mockResolvedValueOnce([{ next: 7 }])  // MAX folio
-    q.mockResolvedValueOnce([])              // INSERT
+    // folio_numero es AUTO_INCREMENT — MySQL lo asigna solo, se lee de insertId
+    pool.execute.mockResolvedValueOnce([{ insertId: 7 }])
 
     const res = await request(app).post('/api/ordenes').send({
       id_cliente: 1,
@@ -227,14 +227,14 @@ describe('POST /api/ordenes', () => {
     expect(res.status).toBe(200)
     expect(res.body.folio_numero).toBe(7)
 
-    // INSERT debe recibir total = 2×10 + 3×5 = 35
-    const insertCall = q.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
+    // INSERT debe recibir total = 2×10 + 3×5 = 35, y ya no incluye folio_numero
+    const insertCall = pool.execute.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
+    expect(insertCall[0]).not.toContain('folio_numero')
     expect(insertCall[1]).toContain(35)
   })
 
   it('no suma claves que empiezan con __ al total', async () => {
-    q.mockResolvedValueOnce([{ next: 1 }])
-    q.mockResolvedValueOnce([])
+    pool.execute.mockResolvedValueOnce([{ insertId: 1 }])
 
     await request(app).post('/api/ordenes').send({
       id_cliente: 1,
@@ -244,7 +244,7 @@ describe('POST /api/ordenes', () => {
       }
     })
 
-    const insertCall = q.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
+    const insertCall = pool.execute.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
     expect(insertCall[1]).toContain(8) // solo 1×8, no procesa __historial__
   })
 

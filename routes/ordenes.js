@@ -567,14 +567,18 @@ router.post('/', async (req, res) => {
       res.json({ ok: true, folio_numero })
     } else {
       // — INSERT nueva orden
-      const [maxRow] = await q('SELECT COALESCE(MAX(folio_numero), 0) + 1 AS next FROM ordenes_guardadas')
-      const nextFolio = maxRow.next
-
-      await q(`
+      // folio_numero es AUTO_INCREMENT — se deja que MySQL lo asigne en vez
+      // de calcularlo a mano (MAX+1, sin candado: además de poder chocar
+      // con lo que ya asignaba disfruleg-electron por su propio camino,
+      // era inseguro entre sí ante dos altas simultáneas). Ver
+      // disfruleg-electron/src/main/database/DOCUMENTACION_DEFINITIVA_BD.md
+      // — folio_sequence, y el incidente del 22 sep 2026.
+      const [result] = await pool.execute(`
         INSERT INTO ordenes_guardadas
-          (folio_numero, id_cliente, usuario_creador, datos_carrito, total_estimado, estado, activo)
-        VALUES (?, ?, ?, ?, ?, 'guardada', 1)
-      `, [nextFolio, id_cliente, usuario, JSON.stringify(datos_carrito), total])
+          (id_cliente, usuario_creador, datos_carrito, total_estimado, estado, activo)
+        VALUES (?, ?, ?, ?, 'guardada', 1)
+      `, [id_cliente, usuario, JSON.stringify(datos_carrito), total])
+      const nextFolio = result.insertId
 
       registrar(req, 'pedidos', 'orden_nueva', { folio: nextFolio, total })
       res.json({ ok: true, folio_numero: nextFolio })
