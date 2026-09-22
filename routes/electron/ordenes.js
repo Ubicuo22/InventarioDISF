@@ -867,6 +867,47 @@ router.delete('/notas-ceo/:folio/:index', ADMIN, async (req, res) => {
 })
 
 // ═══════════════════════════════════════════════════════════════
+// ELIMINAR (H-5 Fase 4 restante — primer canal, el más simple:
+// sin folio nuevo que asignar, sin UbicuoAI de por medio, sin
+// notificación a bodega. Reusa revertirConsumoOrden tal cual la usa
+// revertir-procesamiento. Sin gate de rol adicional — igual que hoy
+// en ordenes.handler.ts, el único control real es el estado.
+// ═══════════════════════════════════════════════════════════════
+
+router.delete('/:folio', async (req, res) => {
+  const folio = req.params.folio
+  try {
+    const check = await q('SELECT estado FROM ordenes_guardadas WHERE folio_numero = ?', [folio])
+    if (check.length === 0) return res.json({ ok: false, error: 'Orden no encontrada' })
+    if (check[0].estado === 'registrada') {
+      return res.json({ ok: false, error: 'No se puede eliminar una orden ya procesada. Usa "Revertir" primero.' })
+    }
+  } catch (e) {
+    console.error('[ordenes] eliminar (check):', e.message)
+    return res.status(500).json({ ok: false, error: 'Error al eliminar la orden' })
+  }
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await revertirConsumoOrden(conn, folio) // devuelve lotes PEPS y reconcilia stock
+    await conn.execute(
+      `UPDATE reserva_inventario SET estado = 'cancelada' WHERE folio_numero = ? AND estado = 'activa'`,
+      [folio]
+    ) // legacy: folios anteriores al cambio de flujo
+    await conn.execute('DELETE FROM ordenes_guardadas WHERE folio_numero = ?', [folio])
+    await conn.commit()
+    res.json({ ok: true, data: { success: true } })
+  } catch (e) {
+    await conn.rollback()
+    console.error('[ordenes] eliminar:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al eliminar la orden' })
+  } finally {
+    conn.release()
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════
 // PROCESAR VENTA (H-5 Fase 4 — procesarVenta)
 //
 // Fail-closed (requireAuthElectron ya corrió a nivel de app.js — cualquier

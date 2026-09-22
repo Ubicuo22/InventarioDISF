@@ -466,3 +466,44 @@ describe('DELETE /api/electron/ordenes/notas-ceo/:folio/:index — eliminarNotaC
     expect(res.body.ok).toBe(false)
   })
 })
+
+describe('DELETE /api/electron/ordenes/:folio — eliminar (H-5 Fase 4 restante)', () => {
+  it('orden no encontrada', async () => {
+    q.mockResolvedValueOnce([])
+    const res = await request(app).delete('/api/electron/ordenes/999')
+    expect(res.body.ok).toBe(false)
+    expect(res.body.error).toMatch(/no encontrada/i)
+  })
+
+  it('rechaza eliminar una orden ya procesada', async () => {
+    q.mockResolvedValueOnce([{ estado: 'registrada' }])
+    const res = await request(app).delete('/api/electron/ordenes/42')
+    expect(res.body.ok).toBe(false)
+    expect(res.body.error).toMatch(/Revertir/i)
+    expect(pool.getConnection).not.toHaveBeenCalled()
+  })
+
+  it('elimina la orden: revierte PEPS, cancela reservas legacy y borra la fila', async () => {
+    q.mockResolvedValueOnce([{ estado: 'guardada' }])
+    const conn = mockConn([[[], []]]) // revertirConsumoOrden: SELECT lotes → sin lotes que restaurar
+    const res = await request(app).delete('/api/electron/ordenes/42')
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    const sqlCalls = conn.execute.mock.calls.map(c => c[0])
+    expect(sqlCalls.some(sql => sql.includes('reserva_inventario') && sql.includes('cancelada'))).toBe(true)
+    expect(sqlCalls.some(sql => sql.includes('DELETE FROM ordenes_guardadas'))).toBe(true)
+    expect(conn.commit).toHaveBeenCalled()
+    expect(conn.rollback).not.toHaveBeenCalled()
+  })
+
+  it('revierte la transacción si algo falla a medio camino', async () => {
+    q.mockResolvedValueOnce([{ estado: 'guardada' }])
+    const conn = mockConn()
+    conn.execute.mockRejectedValueOnce(new Error('boom'))
+    const res = await request(app).delete('/api/electron/ordenes/42')
+    expect(res.status).toBe(500)
+    expect(res.body.ok).toBe(false)
+    expect(conn.rollback).toHaveBeenCalled()
+    expect(conn.release).toHaveBeenCalled()
+  })
+})

@@ -156,14 +156,17 @@ Todos en `ordenes.handler.ts` (1652 líneas — el archivo más grande de todos)
 | `POST /notas-ceo/:folio` | `:984` | `ordenes:guardarNotaCeo` (`:983`) | **No** — fail-closed |
 | `POST /notas-ceo/:folio/vista` | `:988` | `ordenes:registrarVistaCeo` (`:987`) | **No** — fail-closed |
 | `DELETE /notas-ceo/:folio/:index` | `:992` | `ordenes:eliminarNotaCeo` (`:991`) | **No** — fail-closed |
+| `DELETE /:folio` | `:976` | `ordenes:eliminar` (`:975`) | **No** — fail-closed. Reusa `revertirConsumoOrden` de `orden-consumo.js`. Primer canal migrado de la Fase 4 restante (22 sep 2026). |
 | `POST /procesar-venta/:folio` | `:1121-1129` | `ordenes:procesarVenta` (`:1117`) | **No** — fail-closed. Al éxito, dispara `analytics:datosActualizados`/`dashboard:invalidar` a todas las ventanas (`:1132-1136`). |
 | `POST /revertir-procesamiento/:folio` | `:1151-1155` | `ordenes:revertirProcesamiento` (`:1146`) | **No** — fail-closed. Mismo broadcast al éxito (`:1157-1163`). |
 
-`ordenes:crear`, `ordenes:guardar`, `ordenes:actualizar` y
-`ordenes:eliminar` son canales **100% locales** (SQL transaccional sobre
-`ordenes_guardadas` + consumo PEPS) — no existe `POST /`, `PUT /:folio` ni
-`DELETE /:folio` en el Worker, así que no busques un endpoint que no está
-pensado para existir.
+`ordenes:crear`, `ordenes:guardar` y `ordenes:actualizar` siguen siendo
+canales **100% locales** (SQL transaccional sobre `ordenes_guardadas` +
+consumo PEPS) — no existe `POST /`, `PUT /:folio` ni `POST /guardar` en el
+Worker todavía. `ordenes:eliminar` ya no está en esta lista (ver fila de
+arriba) — fue el primero en migrar, justo por ser el más simple: sin folio
+nuevo que asignar, sin caller interno de UbicuoAI, sin notificación a
+bodega.
 
 ---
 
