@@ -812,18 +812,29 @@ function reviewModule () {
     },
 
     // Confirmar cambio con precio manual (paso 2).
-    revisionConfirmarCambioConPrecio () {
+    // El número de este paso (tecleado o tomado de "precio en otro grupo")
+    // es precio_base (lista) — el backend aplica el descuento del cliente y
+    // devuelve precio_final, que es el que se usa en el carrito. Sin esto,
+    // tocar un precio de referencia de otro grupo cobraba el precio SIN
+    // descuento (ver Bugs y Patrones, patrón del 22 sep 2026).
+    async revisionConfirmarCambioConPrecio () {
       const prod   = this.revisionCambiarModal.productoSinPrecio
       const precio = parseFloat(this.revisionCambiarModal.precioManual)
       if (!prod || !precio || precio <= 0) return
+      let precioFinal = precio
       if (this.revisionIdGrupo) {
-        API.post('/api/productos/precio-rapido', {
-          id_producto: prod.id_producto,
-          id_grupo:    this.revisionIdGrupo,
-          precio_base: precio
-        }).catch(e => console.warn('No se pudo guardar el precio:', e.message))
+        try {
+          const r = await API.post('/api/productos/precio-rapido', {
+            id_producto: prod.id_producto,
+            id_grupo:    this.revisionIdGrupo,
+            precio_base: precio
+          })
+          if (r.ok && r.data?.precio_final > 0) precioFinal = r.data.precio_final
+        } catch (e) {
+          console.warn('No se pudo guardar el precio:', e.message)
+        }
       }
-      this.revisionAplicarCambio(prod, precio)
+      this.revisionAplicarCambio(prod, precioFinal)
     },
 
     // Aplica el cambio en el carrito y cierra el modal.
@@ -897,15 +908,33 @@ function reviewModule () {
       }
     },
 
-    revisionAgregarProductoAlCarrito (prod, cantidad, precioOverride) {
+    async revisionAgregarProductoAlCarrito (prod, cantidad, precioOverride) {
       const cant           = parseFloat(cantidad) || 1
       const precioExistente = parseFloat(prod.precio_final ?? prod.precio_base) || 0
       const precioManual   = parseFloat(precioOverride) || 0
-      const precio         = precioExistente > 0 ? precioExistente : precioManual
+      let precio           = precioExistente > 0 ? precioExistente : precioManual
 
       if (precio <= 0) {
         this.revisionAgregarModal.error = 'Ingresa el precio para este producto antes de agregarlo'
         return
+      }
+
+      // Precio nuevo para este grupo (no existía todavía) — el admin tecleó
+      // precio_base; el backend aplica el descuento del cliente y devuelve
+      // precio_final. Hay que esperar esa respuesta ANTES de armar el
+      // renglón del carrito, si no, el descuento nunca se aplica a esta
+      // primera compra (ver Bugs y Patrones, patrón del 22 sep 2026).
+      if (precioManual > 0 && precioExistente <= 0 && this.revisionIdGrupo) {
+        try {
+          const r = await API.post('/api/productos/precio-rapido', {
+            id_producto: prod.id_producto,
+            id_grupo:    this.revisionIdGrupo,
+            precio_base: precioManual
+          })
+          if (r.ok && r.data?.precio_final > 0) precio = r.data.precio_final
+        } catch (e) {
+          console.warn('No se pudo guardar el precio:', e.message)
+        }
       }
 
       // Buscar la sección donde insertar (General primero, si no la primera)
@@ -929,17 +958,6 @@ function reviewModule () {
       // Marcar como revisado automáticamente (esta instancia exacta)
       const key = this.revisionItemKey(nuevo)
       if (!this.revisionReviewedIds.includes(key)) this.revisionReviewedIds.push(key)
-
-      // Persistir el precio base en la DB cuando el usuario lo ingresó manualmente.
-      // El admin teclea el precio base; el backend aplica el descuento del grupo
-      // al momento de mostrar el precio al cliente.
-      if (precioManual > 0 && precioExistente <= 0 && this.revisionIdGrupo) {
-        API.post('/api/productos/precio-rapido', {
-          id_producto: prod.id_producto,
-          id_grupo:    this.revisionIdGrupo,
-          precio_base: precioManual
-        }).catch(e => console.warn('No se pudo guardar el precio:', e.message))
-      }
 
       this.revisionCerrarAgregar()
     },

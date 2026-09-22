@@ -236,14 +236,18 @@ function ordersModule() {
       if (!precio || precio <= 0) return
 
       // Guardar precio base en el grupo si el usuario lo pidió.
-      // El admin teclea el precio base; el backend aplica el descuento del grupo.
+      // El admin teclea el precio base; el backend aplica el descuento del
+      // grupo y devuelve precio_final — ese es el que va al carrito, no el
+      // que se tecleó (si no, el descuento nunca se aplica a este renglón).
+      let precioParaCarrito = precio
       if (this.agregarModal.guardarPrecio && this.ordenForm.id_grupo) {
         try {
-          await API.post('/api/productos/precio-rapido', {
+          const r = await API.post('/api/productos/precio-rapido', {
             id_producto: prod.id_producto,
             id_grupo:    this.ordenForm.id_grupo,
             precio_base: precio
           })
+          if (r.ok && r.data?.precio_final > 0) precioParaCarrito = r.data.precio_final
         } catch (e) {
           console.warn('No se pudo guardar el precio:', e.message)
         }
@@ -258,7 +262,7 @@ function ordersModule() {
         nombre_producto: prod.nombre_producto,
         unidad:          prod.unidad_producto,
         cantidad,
-        precio_unitario: precio,
+        precio_unitario: precioParaCarrito,
         seccion:         sec
       })
       this.agregarModal = { visible: false, producto: null, precio: '', cantidad: '1', guardarPrecio: true }

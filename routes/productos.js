@@ -164,7 +164,14 @@ router.post('/', requireAuth, async (req, res) => {
   }
 })
 
-// Asignar o actualizar precio rápido en un grupo
+// Asignar o actualizar precio rápido en un grupo.
+// El precio que llega aquí es precio_base (lista) — el caller lo usa para
+// fijar el precio de ESTE producto en ESTE grupo. Pero el descuento del
+// grupo (tc.descuento) nunca se le aplicó al primer renglón que se agrega
+// al carrito con ese precio recién fijado, solo a búsquedas futuras — así
+// se coló el bug de precio inflado (ver Bugs y Patrones, patrón del 22 sep
+// 2026). Por eso devolvemos precio_final ya calculado: el caller debe usar
+// ESTE valor para el item del carrito, no el precio_base que mandó.
 router.post('/precio-rapido', requireAuth, async (req, res) => {
   try {
     const { id_producto, id_grupo, precio_base } = req.body
@@ -177,7 +184,16 @@ router.post('/precio-rapido', requireAuth, async (req, res) => {
        ON DUPLICATE KEY UPDATE precio_base = VALUES(precio_base)`,
       [id_producto, id_grupo, precio_base]
     )
-    res.json({ ok: true })
+    const [g] = await q(
+      `SELECT COALESCE(tc.descuento, 0) AS descuento
+       FROM grupo g
+       LEFT JOIN tipo_cliente tc ON tc.id_tipo_cliente = g.id_tipo_cliente
+       WHERE g.id_grupo = ?`,
+      [id_grupo]
+    )
+    const descuento = g ? parseFloat(g.descuento) || 0 : 0
+    const precio_final = Math.round(precio_base * (1 - descuento / 100) * 100) / 100
+    res.json({ ok: true, data: { precio_final, descuento } })
   } catch (err) {
     console.error('[productos] POST /precio-rapido', err.message)
     res.status(500).json({ ok: false, error: 'Error interno' })
