@@ -26,7 +26,7 @@
       content: '';
       position: fixed; inset: 0; z-index: -2;
       background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(76,175,114,0.09), transparent 60%),
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(34,197,94,0.09), transparent 60%),
         radial-gradient(ellipse 60% 60% at 100% 100%, rgba(139,92,246,0.07), transparent 55%),
         radial-gradient(ellipse 50% 40% at 0% 80%, rgba(59,130,246,0.05), transparent 50%),
         #060608;
@@ -49,7 +49,7 @@
       transition: background .2s, border-color .2s;
     }
     .card-dash:hover { background: rgba(255,255,255,.075); }
-    .badge-ok   { background: rgba(76,175,114,.14);   color: #9EDBB8; border: 1px solid rgba(76,175,114,.28); }
+    .badge-ok   { background: rgba(34,197,94,.14);   color: #86EFAC; border: 1px solid rgba(34,197,94,.28); }
     .badge-low  { background: rgba(251,191,36,.14); color: #fde68a; border: 1px solid rgba(251,191,36,.28); }
     .badge-zero { background: rgba(248,113,113,.15); color: #fca5a5; border: 1px solid rgba(248,113,113,.3); }
     .dot-blink { animation: blink 2s ease-in-out infinite; }
@@ -61,7 +61,7 @@
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 999px; }
     .semaforo-vencida    { color: #f87171; }
     .semaforo-por_vencer { color: #fbbf24; }
-    .semaforo-al_dia     { color: #66CC8C; }
+    .semaforo-al_dia     { color: #4ADE80; }
     /* Stat numbers tabulares + tight */
     .stat-num {
       font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' on;
@@ -139,7 +139,7 @@
     <!-- Entradas hoy -->
     <div class="card-dash p-4">
       <div class="flex items-center gap-2 mb-2">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(58,148,96,.15)">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(22,163,74,.15)">
           <svg class="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
           </svg>
@@ -310,7 +310,7 @@ function renderStock(productos) {
           </span>
         </div>
         <div class="h-1 rounded-full bg-white/5 overflow-hidden">
-          <div class="h-full rounded-full transition-all" style="width:${pct}%; background:${esZero ? '#ef4444' : esBajo ? '#f59e0b' : '#4CAF72'}"></div>
+          <div class="h-full rounded-full transition-all" style="width:${pct}%; background:${esZero ? '#ef4444' : esBajo ? '#f59e0b' : '#22C55E'}"></div>
         </div>
       </div>`
   }).join('')
