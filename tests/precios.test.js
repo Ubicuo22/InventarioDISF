@@ -57,12 +57,15 @@ describe('GET /api/precios/grupos', () => {
     expect(sql).toMatch(/tipo_cliente/i)
   })
 
-  it('responde 500 con ok:false si la BD falla', async () => {
+  it('responde 500 con ok:false si la BD falla, sin filtrar el error de la BD', async () => {
     q.mockRejectedValue(new Error("Unknown column 'descuento' in 'field list'"))
     const res = await request(app).get('/api/precios/grupos')
     expect(res.status).toBe(500)
     expect(res.body.ok).toBe(false)
-    expect(res.body.error).toMatch(/descuento/)
+    // Desde la auditoría de seguridad (2a0dec2, 18 ago) las rutas no exponen
+    // mensajes internos de la BD al cliente.
+    expect(res.body.error).toBe('Error interno')
+    expect(res.body.error).not.toMatch(/column|descuento/i)
   })
 
   it('devuelve array vacío cuando no hay grupos', async () => {

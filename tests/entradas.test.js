@@ -253,9 +253,11 @@ describe('POST /api/entradas — validaciones', () => {
 // ─── POST /api/entradas — happy path ─────────────────────────
 
 describe('POST /api/entradas — registro exitoso', () => {
+  // Desde 2a0dec2 (18 ago) la verificación del producto se hace con q()
+  // antes de abrir la conexión — las respuestas de conn.execute empiezan
+  // directo en el INSERT de compra.
   it('crea compra + lote + actualiza stock y devuelve ok:true', async () => {
     const conn = mockConn([
-      [[{ id_producto: 1 }], []],   // producto check
       [{ insertId: 10 }, []],        // INSERT compra
       [{ insertId: 11 }, []],        // INSERT inventario_peps
       [[], []],                       // SELECT phantoms (sin phantoms)
@@ -278,7 +280,6 @@ describe('POST /api/entradas — registro exitoso', () => {
 
   it('descuenta deuda de phantoms cuando existen', async () => {
     const conn = mockConn([
-      [[{ id_producto: 1 }], []],            // producto check
       [{ insertId: 20 }, []],                 // INSERT compra
       [{ insertId: 21 }, []],                 // INSERT inventario_peps
       [[{                                     // SELECT phantoms → un phantom pendiente
@@ -303,10 +304,11 @@ describe('POST /api/entradas — registro exitoso', () => {
   })
 
   it('hace rollback si la BD falla durante la transacción', async () => {
-    const conn = mockConn([
-      [[{ id_producto: 1 }], []]  // producto check OK
-    ])
-    conn.execute.mockRejectedValueOnce(new Error('DB crash')) // siguiente falla
+    // La verificación del producto va por q() (antes de abrir conexión, fix
+    // del 18 ago); el primer execute de la transacción es el que falla.
+    q.mockResolvedValue([{ id_producto: 1 }])
+    const conn = mockConn([])
+    conn.execute.mockRejectedValueOnce(new Error('DB crash'))
 
     const res = await request(app).post('/api/entradas').send({
       idProducto: 1, cantidad: 5, precio: 10, fechaCompra: '2026-08-17'
@@ -319,7 +321,6 @@ describe('POST /api/entradas — registro exitoso', () => {
 
   it('calcula precio sin IVA correctamente cuando incluirIva=true', async () => {
     const conn = mockConn([
-      [[{ id_producto: 1 }], []],
       [{ insertId: 30 }, []],
       [{ insertId: 31 }, []],
       [[], []],
