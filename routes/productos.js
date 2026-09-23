@@ -87,6 +87,116 @@ router.get('/resumen', requireAuth, async (req, res) => {
   }
 })
 
+// Página informativa "Info de compra" — última compra, promedio ponderado y
+// margen aproximado contra el precio de venta general. Nunca carga el
+// catálogo completo: sin búsqueda, los 25 más vendidos (histórico); con
+// búsqueda, hasta 25 coincidencias por nombre. El enriquecimiento (compra,
+// precio de venta) siempre corre sobre ese conjunto acotado, nunca sobre
+// todo el catálogo — mismo criterio que ya se aplicó hoy en /api/ordenes.
+router.get('/info-compra', requireAuth, async (req, res) => {
+  try {
+    const busqueda = (req.query.busqueda || '').trim()
+
+    const base = busqueda
+      ? await q(`
+          SELECT p.id_producto, p.nombre_producto, p.unidad_producto, p.stock,
+                 NULL AS cantidad_vendida
+          FROM   producto p
+          WHERE  p.activo = 1 AND p.nombre_producto LIKE ?
+          ORDER  BY p.nombre_producto ASC
+          LIMIT  25
+        `, [`%${busqueda}%`])
+      : await q(`
+          SELECT p.id_producto, p.nombre_producto, p.unidad_producto, p.stock,
+                 COALESCE(SUM(df.cantidad_factura), 0) AS cantidad_vendida
+          FROM   producto p
+          LEFT JOIN detalle_factura df ON df.id_producto = p.id_producto
+          WHERE  p.activo = 1
+          GROUP  BY p.id_producto, p.nombre_producto, p.unidad_producto, p.stock
+          ORDER  BY cantidad_vendida DESC
+          LIMIT  25
+        `)
+
+    if (!base.length) return res.json({ ok: true, data: [] })
+
+    const ids = base.map(p => p.id_producto)
+    const placeholders = ids.map(() => '?').join(',')
+
+    const [ultimas, promedios, ventaGeneral] = await Promise.all([
+      // Última compra real por producto (excluye PHANTOM y precio en 0)
+      q(`
+        SELECT id_producto, fecha_compra, precio_unitario_compra, proveedor
+        FROM (
+          SELECT c.id_producto, c.fecha_compra, c.precio_unitario_compra,
+                 COALESCE(prov.nombre_proveedor, c.proveedor) AS proveedor,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY c.id_producto
+                   ORDER BY c.fecha_compra DESC, c.id_compra DESC
+                 ) AS rn
+          FROM   compra c
+          LEFT JOIN proveedor prov ON prov.id_proveedor = c.id_proveedor
+          WHERE  c.id_producto IN (${placeholders})
+            AND  c.precio_unitario_compra > 0.01
+            AND  (c.notas IS NULL OR c.notas NOT LIKE 'PHANTOM:%')
+        ) t
+        WHERE rn = 1
+      `, ids),
+      // Promedio ponderado por cantidad
+      q(`
+        SELECT id_producto,
+               SUM(precio_unitario_compra * cantidad_compra) / SUM(cantidad_compra) AS promedio,
+               COUNT(*) AS num_compras
+        FROM   compra
+        WHERE  id_producto IN (${placeholders})
+          AND  precio_unitario_compra > 0.01
+          AND  (notas IS NULL OR notas NOT LIKE 'PHANTOM:%')
+        GROUP  BY id_producto
+      `, ids),
+      // Precio de venta actual, grupo GENERAL como referencia
+      q(`
+        SELECT ppg.id_producto, ppg.precio_base
+        FROM   precio_por_grupo ppg
+        JOIN   grupo g ON g.id_grupo = ppg.id_grupo
+        WHERE  g.nombre_grupo = 'GENERAL' AND ppg.id_producto IN (${placeholders})
+      `, ids)
+    ])
+
+    const mapUltima   = new Map(ultimas.map(r => [r.id_producto, r]))
+    const mapPromedio = new Map(promedios.map(r => [r.id_producto, r]))
+    const mapVenta     = new Map(ventaGeneral.map(r => [r.id_producto, Number(r.precio_base)]))
+
+    const data = base.map(p => {
+      const ultima      = mapUltima.get(p.id_producto) || null
+      const prom        = mapPromedio.get(p.id_producto) || null
+      const promedio    = prom ? Number(prom.promedio) : null
+      const precioVenta = mapVenta.get(p.id_producto) ?? null
+      const margenPct   = (promedio != null && precioVenta) ? ((precioVenta - promedio) / precioVenta) * 100 : null
+
+      return {
+        id_producto:      p.id_producto,
+        nombre_producto:  p.nombre_producto,
+        unidad_producto:  p.unidad_producto,
+        stock:            p.stock,
+        cantidad_vendida: p.cantidad_vendida,
+        ultimaCompra:     ultima ? {
+          fecha_compra:           ultima.fecha_compra,
+          precio_unitario_compra: Number(ultima.precio_unitario_compra),
+          proveedor:               ultima.proveedor
+        } : null,
+        promedioCompra:   promedio,
+        numCompras:       prom ? prom.num_compras : 0,
+        precioVentaGeneral: precioVenta,
+        margenPct:          margenPct != null ? Math.round(margenPct * 10) / 10 : null
+      }
+    })
+
+    res.json({ ok: true, data })
+  } catch (err) {
+    console.error('[productos] GET /info-compra:', err.message)
+    res.status(500).json({ ok: false, error: 'Error interno' })
+  }
+})
+
 // Búsqueda de productos con precio por grupo (para módulo de pedidos)
 router.get('/buscar', requireAuth, async (req, res) => {
   try {

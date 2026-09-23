@@ -9,6 +9,7 @@ function entriesModule() {
     form: {},
     pepsDerivados: [],          // productos de venta que usan este como base (solo informativo)
     pepsEsDerivado: null,       // si el producto seleccionado ES un derivado (alerta)
+    historialPrecio: null,      // { ultimaCompra, promedioCompra, numCompras } del producto seleccionado
 
     abrirModal(prod = null) {
       this.resetForm()
@@ -20,6 +21,7 @@ function entriesModule() {
         this.form.unidad         = prod.unidad_producto || ''
         this.form.busqueda       = prod.nombre_producto
         this.cargarPepsInfo(prod.id_producto)
+        this.cargarHistorialPrecio(prod.id_producto)
       }
       this.modalAbierto = true
     },
@@ -44,6 +46,7 @@ function entriesModule() {
       this.dropdownVisible      = false
       this.pepsDerivados        = []
       this.pepsEsDerivado       = null
+      this.historialPrecio      = null
     },
 
     buscarProducto() {
@@ -70,6 +73,16 @@ function entriesModule() {
       } catch (_) {}
     },
 
+    async cargarHistorialPrecio(idProducto) {
+      this.historialPrecio = null
+      try {
+        const r = await API.get(`/api/entradas/historial-precio/${idProducto}`)
+        if (r.ok && (r.ultimaCompra || r.promedioCompra != null)) {
+          this.historialPrecio = r
+        }
+      } catch (_) {}
+    },
+
     async seleccionar(p) {
       this.form.idProducto     = p.id_producto
       this.form.nombreProducto = p.nombre_producto
@@ -79,6 +92,7 @@ function entriesModule() {
       this.dropdownVisible     = false
       this.dropResults         = []
       this.cargarPepsInfo(p.id_producto)
+      this.cargarHistorialPrecio(p.id_producto)
     },
 
     limpiarSeleccion() {
@@ -87,6 +101,7 @@ function entriesModule() {
       this.form.unidad         = ''
       this.pepsDerivados       = []
       this.pepsEsDerivado      = null
+      this.historialPrecio     = null
     },
 
     // ── Cálculos de peso del lote ─────────────────────────────

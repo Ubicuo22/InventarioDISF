@@ -62,6 +62,45 @@ router.get('/peps-info/:idProducto', requireAuth, async (req, res) => {
   }
 })
 
+// Historial de precio de compra de un producto — última compra real y
+// promedio ponderado por cantidad. Excluye reconciliaciones PHANTOM (no son
+// compras reales) y precios en 0 sin etiquetar (mismo criterio ya usado en
+// costosCompraProductos del lado Electron, ver Deuda Técnica).
+router.get('/historial-precio/:idProducto', requireAuth, async (req, res) => {
+  try {
+    const { idProducto } = req.params
+    const [ultima] = await q(`
+      SELECT fecha_compra, precio_unitario_compra, cantidad_compra
+      FROM   compra
+      WHERE  id_producto = ?
+        AND  precio_unitario_compra > 0.01
+        AND  (notas IS NULL OR notas NOT LIKE 'PHANTOM:%')
+      ORDER  BY fecha_compra DESC, id_compra DESC
+      LIMIT  1
+    `, [idProducto])
+
+    const [prom] = await q(`
+      SELECT
+        SUM(precio_unitario_compra * cantidad_compra) / SUM(cantidad_compra) AS promedio,
+        COUNT(*) AS num_compras
+      FROM   compra
+      WHERE  id_producto = ?
+        AND  precio_unitario_compra > 0.01
+        AND  (notas IS NULL OR notas NOT LIKE 'PHANTOM:%')
+    `, [idProducto])
+
+    res.json({
+      ok: true,
+      ultimaCompra: ultima || null,
+      promedioCompra: prom?.promedio != null ? Number(prom.promedio) : null,
+      numCompras: prom?.num_compras || 0
+    })
+  } catch (err) {
+    console.error('[entradas] GET /historial-precio:', err.message)
+    res.status(500).json({ ok: false, error: 'Error interno' })
+  }
+})
+
 // Lotes PEPS activos de un producto — orden PEPS (más antiguo primero)
 router.get('/lotes/:idProducto', requireAuth, async (req, res) => {
   try {

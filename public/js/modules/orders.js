@@ -1,15 +1,15 @@
-function _semanaActual() {
-  const hoy = new Date()
-  const dom = new Date(hoy); dom.setDate(hoy.getDate() - hoy.getDay())
-  const sab = new Date(dom); sab.setDate(dom.getDate() + 6)
-  return {
-    desde: dom.toISOString().slice(0, 10),
-    hasta: sab.toISOString().slice(0, 10)
-  }
+// La app está pensada para operar sobre las notas del día — el filtro por
+// defecto es "hoy", no una ventana amplia. Ver más requiere elegir un rango
+// explícito en Desde/Hasta (antes había un atajo "Ver todo" sin límite de
+// fecha que traía miles de notas de golpe — lento y va a empeorar con el
+// tiempo; se quitó a propósito).
+function _hoyComoRango() {
+  const hoy = new Date().toISOString().slice(0, 10)
+  return { desde: hoy, hasta: hoy }
 }
 
 function ordersModule() {
-  const _sem = _semanaActual()
+  const _sem = _hoyComoRango()
   return {
     ordenes: [],
     cargandoOrdenes: false,
@@ -49,21 +49,15 @@ function ordersModule() {
     },
 
     limpiarFiltrosPedidos() {
-      const sem = _semanaActual()
+      const sem = _hoyComoRango()
       this.filtroDesde = sem.desde
       this.filtroHasta = sem.hasta
       this.filtroClientePedidos = ''
     },
 
-    filtroEsSemanaActual() {
-      const sem = _semanaActual()
+    filtroEsHoy() {
+      const sem = _hoyComoRango()
       return this.filtroDesde === sem.desde && this.filtroHasta === sem.hasta
-    },
-
-    async verTodosLosPedidos() {
-      this.filtroDesde = ''
-      this.filtroHasta = ''
-      await this.cargarOrdenes()
     },
 
     async cargarOrdenes() {

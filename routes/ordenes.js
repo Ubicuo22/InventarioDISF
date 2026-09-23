@@ -78,16 +78,24 @@ function computarDiffCarrito (viejo, nuevo) {
 }
 
 /* ─── GET /api/ordenes?estado=guardada|registrada[&desde=YYYY-MM-DD&hasta=YYYY-MM-DD] ─── */
+// La app está pensada para operar sobre las notas del día — el default (sin
+// desde/hasta) es HOY, no todo el histórico. Antes, sin filtro, esto traía
+// miles de notas guardadas completas (con su datos_carrito entero) de golpe:
+// 8-11s de respuesta con ~2,400 notas activas, y empeora con el tiempo. El
+// frontend ya siempre manda un rango ahora, pero este default server-side
+// es la defensa real — cubre cualquier llamada directa a la API o un bundle
+// viejo en caché que no lo mande (ver Bugs y Patrones, patrón del 22 sep 2026).
 router.get('/', async (req, res) => {
   try {
     const estado = req.query.estado === 'registrada' ? 'registrada' : 'guardada'
-    const { desde, hasta } = req.query
+    const hoy = fechaMexico()
+    const desde = req.query.desde || hoy
+    const hasta = req.query.hasta || hoy
 
-    const conditions = ['o.estado = ?', 'o.activo = 1']
-    const params = [estado]
-
-    if (desde) { conditions.push('DATE(o.fecha_creacion) >= ?'); params.push(desde) }
-    if (hasta) { conditions.push('DATE(o.fecha_creacion) <= ?'); params.push(hasta) }
+    // Rango en UTC (no DATE(fecha_creacion)=?, que bloquea el índice) —
+    // mismo patrón que /pendientes-hoy.
+    const inicio = rangoUtcDelDia(desde).inicio
+    const fin    = rangoUtcDelDia(hasta).fin
 
     const rows = await q(`
       SELECT o.folio_numero, o.id_cliente, c.nombre_cliente,
@@ -99,10 +107,11 @@ router.get('/', async (req, res) => {
       FROM   ordenes_guardadas o
       INNER JOIN cliente c ON o.id_cliente = c.id_cliente
       INNER JOIN grupo   g ON c.id_grupo   = g.id_grupo
-      WHERE  ${conditions.join(' AND ')}
+      WHERE  o.estado = ? AND o.activo = 1
+        AND  o.fecha_creacion >= ? AND o.fecha_creacion < ?
       ORDER  BY o.folio_numero DESC
       LIMIT  10000
-    `, params)
+    `, [estado, inicio, fin])
     res.json({ ok: true, data: rows })
   } catch (e) {
     console.error('[ordenes] GET /', e.message)

@@ -1,4 +1,4 @@
-/* bodega-bundle.ed3d8d92.js — 2026-09-22T23:21:16.914Z */
+/* bodega-bundle.900f13e4.js — 2026-09-23T05:16:40.465Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -735,6 +735,7 @@ function entriesModule() {
     form: {},
     pepsDerivados: [],          // productos de venta que usan este como base (solo informativo)
     pepsEsDerivado: null,       // si el producto seleccionado ES un derivado (alerta)
+    historialPrecio: null,      // { ultimaCompra, promedioCompra, numCompras } del producto seleccionado
 
     abrirModal(prod = null) {
       this.resetForm()
@@ -746,6 +747,7 @@ function entriesModule() {
         this.form.unidad         = prod.unidad_producto || ''
         this.form.busqueda       = prod.nombre_producto
         this.cargarPepsInfo(prod.id_producto)
+        this.cargarHistorialPrecio(prod.id_producto)
       }
       this.modalAbierto = true
     },
@@ -770,6 +772,7 @@ function entriesModule() {
       this.dropdownVisible      = false
       this.pepsDerivados        = []
       this.pepsEsDerivado       = null
+      this.historialPrecio      = null
     },
 
     buscarProducto() {
@@ -796,6 +799,16 @@ function entriesModule() {
       } catch (_) {}
     },
 
+    async cargarHistorialPrecio(idProducto) {
+      this.historialPrecio = null
+      try {
+        const r = await API.get(`/api/entradas/historial-precio/${idProducto}`)
+        if (r.ok && (r.ultimaCompra || r.promedioCompra != null)) {
+          this.historialPrecio = r
+        }
+      } catch (_) {}
+    },
+
     async seleccionar(p) {
       this.form.idProducto     = p.id_producto
       this.form.nombreProducto = p.nombre_producto
@@ -805,6 +818,7 @@ function entriesModule() {
       this.dropdownVisible     = false
       this.dropResults         = []
       this.cargarPepsInfo(p.id_producto)
+      this.cargarHistorialPrecio(p.id_producto)
     },
 
     limpiarSeleccion() {
@@ -813,6 +827,7 @@ function entriesModule() {
       this.form.unidad         = ''
       this.pepsDerivados       = []
       this.pepsEsDerivado      = null
+      this.historialPrecio     = null
     },
 
     // ── Cálculos de peso del lote ─────────────────────────────
@@ -898,18 +913,18 @@ function entriesModule() {
 
 
 ;/* ── public/js/modules/orders.js ── */
-function _semanaActual() {
-  const hoy = new Date()
-  const dom = new Date(hoy); dom.setDate(hoy.getDate() - hoy.getDay())
-  const sab = new Date(dom); sab.setDate(dom.getDate() + 6)
-  return {
-    desde: dom.toISOString().slice(0, 10),
-    hasta: sab.toISOString().slice(0, 10)
-  }
+// La app está pensada para operar sobre las notas del día — el filtro por
+// defecto es "hoy", no una ventana amplia. Ver más requiere elegir un rango
+// explícito en Desde/Hasta (antes había un atajo "Ver todo" sin límite de
+// fecha que traía miles de notas de golpe — lento y va a empeorar con el
+// tiempo; se quitó a propósito).
+function _hoyComoRango() {
+  const hoy = new Date().toISOString().slice(0, 10)
+  return { desde: hoy, hasta: hoy }
 }
 
 function ordersModule() {
-  const _sem = _semanaActual()
+  const _sem = _hoyComoRango()
   return {
     ordenes: [],
     cargandoOrdenes: false,
@@ -949,21 +964,15 @@ function ordersModule() {
     },
 
     limpiarFiltrosPedidos() {
-      const sem = _semanaActual()
+      const sem = _hoyComoRango()
       this.filtroDesde = sem.desde
       this.filtroHasta = sem.hasta
       this.filtroClientePedidos = ''
     },
 
-    filtroEsSemanaActual() {
-      const sem = _semanaActual()
+    filtroEsHoy() {
+      const sem = _hoyComoRango()
       return this.filtroDesde === sem.desde && this.filtroHasta === sem.hasta
-    },
-
-    async verTodosLosPedidos() {
-      this.filtroDesde = ''
-      this.filtroHasta = ''
-      await this.cargarOrdenes()
     },
 
     async cargarOrdenes() {
@@ -4440,9 +4449,61 @@ function preciosModule() {
 }
 
 
+;/* ── public/js/modules/info-compra.js ── */
+/**
+ * info-compra.js — Página informativa: última compra, promedio de compra y
+ * margen aproximado por producto. Solo lectura por ahora.
+ *
+ * Por defecto muestra los 25 productos más vendidos (histórico) — nunca
+ * carga el catálogo completo. Buscar reemplaza esa lista por coincidencias
+ * de nombre (también acotado a 25).
+ */
+function infoCompraModule() {
+  return {
+    infoCompraProductos: [],
+    infoCompraBusqueda:  '',
+    infoCompraCargando:  false,
+    infoCompraCargado:   false,   // ya se hizo al menos una carga (para el empty-state inicial)
+    _infoCompraTimer:    null,
+
+    async cargarInfoCompra() {
+      this.infoCompraCargando = true
+      try {
+        const q = this.infoCompraBusqueda.trim()
+        const url = q ? `/api/productos/info-compra?busqueda=${encodeURIComponent(q)}` : '/api/productos/info-compra'
+        const r = await API.get(url)
+        this.infoCompraProductos = r.ok ? (r.data || []) : []
+        if (!r.ok) this.mostrarToast(r.error || 'Error al cargar', true)
+      } catch (e) {
+        this.infoCompraProductos = []
+        this.mostrarToast('Error de conexión', true)
+      } finally {
+        this.infoCompraCargando = false
+        this.infoCompraCargado  = true
+      }
+    },
+
+    infoCompraBuscarDebounced() {
+      clearTimeout(this._infoCompraTimer)
+      this._infoCompraTimer = setTimeout(() => this.cargarInfoCompra(), 350)
+    },
+
+    infoCompraFmtMoney(v) {
+      if (v == null) return '—'
+      return Number(v).toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
+    },
+
+    infoCompraFmtFecha(f) {
+      if (!f) return '—'
+      return new Date(f).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    },
+  }
+}
+
+
 ;/* ── public/js/bodega.js ── */
 // Composición del store Alpine.js.
-// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard → pendientes → conteo → prices
+// Orden: ui → auth → inventory → entries → orders → review → history → mermas → notifications → analytics → admin → cobranza → compras → dashboard → pendientes → conteo → prices → info-compra
 function bodega() {
   return {
     ...uiModule(),
@@ -4462,5 +4523,6 @@ function bodega() {
     ...pendientesModule(),
     ...conteoModule(),
     ...preciosModule(),
+    ...infoCompraModule(),
   }
 }

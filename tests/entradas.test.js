@@ -87,6 +87,45 @@ describe('GET /api/entradas/peps-info/:id', () => {
 
 // ─── GET /api/entradas/lotes/:id ─────────────────────────────
 
+describe('GET /api/entradas/historial-precio/:id', () => {
+  it('devuelve última compra y promedio ponderado', async () => {
+    q.mockResolvedValueOnce([{ fecha_compra: '2026-09-01', precio_unitario_compra: 25, cantidad_compra: 10 }])
+    q.mockResolvedValueOnce([{ promedio: '23.500000', num_compras: 4 }])
+    const res = await request(app).get('/api/entradas/historial-precio/871088')
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    expect(res.body.ultimaCompra.precio_unitario_compra).toBe(25)
+    expect(res.body.promedioCompra).toBe(23.5)
+    expect(res.body.numCompras).toBe(4)
+  })
+
+  it('excluye compras PHANTOM y precios en 0 del cálculo', async () => {
+    q.mockResolvedValue([])
+    await request(app).get('/api/entradas/historial-precio/1')
+    const primeraSql = q.mock.calls[0][0]
+    const segundaSql = q.mock.calls[1][0]
+    for (const sql of [primeraSql, segundaSql]) {
+      expect(sql).toContain('precio_unitario_compra > 0.01')
+      expect(sql).toContain("NOT LIKE 'PHANTOM:%'")
+    }
+  })
+
+  it('devuelve null cuando el producto nunca se ha comprado', async () => {
+    q.mockResolvedValueOnce([])
+    q.mockResolvedValueOnce([{ promedio: null, num_compras: 0 }])
+    const res = await request(app).get('/api/entradas/historial-precio/999')
+    expect(res.body.ultimaCompra).toBeNull()
+    expect(res.body.promedioCompra).toBeNull()
+    expect(res.body.numCompras).toBe(0)
+  })
+
+  it('responde 500 si la BD falla', async () => {
+    q.mockRejectedValue(new Error('DB error'))
+    const res = await request(app).get('/api/entradas/historial-precio/1')
+    expect(res.status).toBe(500)
+  })
+})
+
 describe('GET /api/entradas/lotes/:id', () => {
   it('devuelve los lotes en orden PEPS', async () => {
     q.mockResolvedValue([

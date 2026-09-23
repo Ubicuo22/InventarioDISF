@@ -91,18 +91,39 @@ describe('GET /api/ordenes', () => {
     )
   })
 
-  it('aplica filtro desde cuando se pasa', async () => {
+  // Regresión (22 sep 2026): sin desde/hasta, la ruta traía TODO el
+  // histórico activo (miles de notas, 8-11s de respuesta) — el default
+  // ahora es HOY, y la comparación es por rango UTC, no DATE(col)=?
+  // (eso último bloqueaba el índice). Ver Bugs y Patrones, patrón del
+  // 22 sep 2026.
+  it('sin filtro, limita a las notas creadas hoy (no trae todo el histórico)', async () => {
     q.mockResolvedValue([])
-    await request(app).get('/api/ordenes?desde=2026-08-01')
-    const [, params] = q.mock.calls[0]
-    expect(params).toContain('2026-08-01')
+    await request(app).get('/api/ordenes')
+    const [sql, params] = q.mock.calls[0]
+    expect(sql).not.toContain('DATE(o.fecha_creacion)')
+    expect(sql).toContain('o.fecha_creacion >= ?')
+    expect(sql).toContain('o.fecha_creacion < ?')
+    // Dos límites de rango (inicio/fin), no strings de fecha simples
+    const [, inicio, fin] = params
+    expect(inicio).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(fin).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
   })
 
-  it('aplica filtro hasta cuando se pasa', async () => {
+  it('aplica filtro desde cuando se pasa (como rango UTC, no DATE()=)', async () => {
     q.mockResolvedValue([])
-    await request(app).get('/api/ordenes?hasta=2026-08-31')
+    await request(app).get('/api/ordenes?desde=2026-08-01&hasta=2026-08-01')
+    const [sql, params] = q.mock.calls[0]
+    expect(sql).not.toContain('DATE(o.fecha_creacion)')
+    // El rango UTC de un día en CDMX empieza el día anterior en UTC
+    expect(params[1]).toMatch(/^2026-0[78]-3?1 \d{2}:\d{2}:\d{2}$|^2026-08-01 \d{2}:\d{2}:\d{2}$/)
+  })
+
+  it('aplica filtro hasta cuando se pasa (rango, no fecha exacta)', async () => {
+    q.mockResolvedValue([])
+    await request(app).get('/api/ordenes?desde=2026-08-31&hasta=2026-08-31')
     const [, params] = q.mock.calls[0]
-    expect(params).toContain('2026-08-31')
+    // fin es el inicio del día SIGUIENTE en UTC — nunca la fecha tal cual
+    expect(params[2]).not.toBe('2026-08-31')
   })
 
   it('devuelve filas con ok:true', async () => {

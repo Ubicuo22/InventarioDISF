@@ -41,7 +41,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.ed3d8d92.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.900f13e4.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -275,6 +275,14 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <span>Precios</span>
+      </button>
+
+      <button x-show="tienePermiso('compras')" @click="tab = 'infoCompra'; if (!infoCompraCargado) cargarInfoCompra()"
+        class="sidebar-item" :class="tab === 'infoCompra' ? 'active' : ''">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+        <span>Info compra</span>
       </button>
 
     </div>
@@ -1289,9 +1297,9 @@
           <input type="text" x-model="filtroClientePedidos" placeholder="Buscar cliente o grupo..."
             class="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500/50">
         </div>
-        <button x-show="filtroClientePedidos || !filtroEsSemanaActual()" @click="limpiarFiltrosPedidos()"
+        <button x-show="filtroClientePedidos || !filtroEsHoy()" @click="limpiarFiltrosPedidos()"
           class="flex-shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700/50 transition-colors mb-0.5"
-          title="Volver a semana actual">
+          title="Volver a hoy">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
           </svg>
@@ -1308,11 +1316,6 @@
           <input type="date" x-model="filtroHasta" @change="cargarOrdenes()"
             class="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50">
         </div>
-        <button @click="verTodosLosPedidos()"
-          class="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 border border-slate-700/50 transition-colors mb-0.5 whitespace-nowrap"
-          title="Cargar todas las notas activas">
-          Ver todo
-        </button>
       </div>
 
       <!-- Lista de órdenes -->
@@ -1344,16 +1347,16 @@
           </div>
           <div class="text-center">
             <p class="text-white text-sm font-medium"
-              x-text="(filtroClientePedidos || !filtroEsSemanaActual()) ? 'Sin resultados para el filtro' : (pedidosTab === 'activos' ? 'Sin pedidos activos' : pedidosTab === 'revisadas' ? 'Sin pedidos revisados' : 'Sin pedidos registrados')"></p>
-            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'activos' && !filtroClientePedidos && filtroEsSemanaActual()">Crea un pedido para empezar</p>
-            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'revisadas' && !filtroClientePedidos && filtroEsSemanaActual()">Los pedidos revisados sin pendientes aparecen aquí</p>
-            <p class="text-slate-500 text-xs mt-1" x-show="filtroClientePedidos || !filtroEsSemanaActual()">Intenta con otros criterios o limpia los filtros</p>
+              x-text="(filtroClientePedidos || !filtroEsHoy()) ? 'Sin resultados para el filtro' : (pedidosTab === 'activos' ? 'Sin pedidos activos hoy' : pedidosTab === 'revisadas' ? 'Sin pedidos revisados hoy' : 'Sin pedidos registrados hoy')"></p>
+            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'activos' && !filtroClientePedidos && filtroEsHoy()">Crea un pedido para empezar</p>
+            <p class="text-slate-500 text-xs mt-1" x-show="pedidosTab === 'revisadas' && !filtroClientePedidos && filtroEsHoy()">Los pedidos revisados sin pendientes aparecen aquí</p>
+            <p class="text-slate-500 text-xs mt-1" x-show="filtroClientePedidos || !filtroEsHoy()">Intenta con otros criterios, o cambia el rango de fechas para ver más días</p>
           </div>
-          <button x-show="filtroClientePedidos || !filtroEsSemanaActual()" @click="limpiarFiltrosPedidos()"
+          <button x-show="filtroClientePedidos || !filtroEsHoy()" @click="limpiarFiltrosPedidos()"
             class="btn-primary flex items-center gap-2 py-2.5 px-5 text-sm">
             Limpiar filtros
           </button>
-          <button x-show="pedidosTab === 'activos' && !filtroClientePedidos && filtroEsSemanaActual()" @click="abrirNuevaOrden()"
+          <button x-show="pedidosTab === 'activos' && !filtroClientePedidos && filtroEsHoy()" @click="abrirNuevaOrden()"
             class="btn-primary flex items-center gap-2 py-2.5 px-5 text-sm">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
@@ -2819,6 +2822,100 @@
 
     </div><!-- /tab precios -->
 
+    <!-- ══ TAB: INFO COMPRA (informativa, solo lectura) ═════════════════════ -->
+    <div x-show="tab === 'infoCompra'" x-cloak class="max-w-3xl md:max-w-4xl lg:max-w-6xl mx-auto pt-5 pb-28">
+
+      <!-- Cabecera -->
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <h2 class="text-lg font-bold text-white">Info de compra</h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            <span x-show="!infoCompraBusqueda">Los 25 productos más vendidos</span>
+            <span x-show="infoCompraBusqueda">Resultados de la búsqueda</span>
+          </p>
+        </div>
+        <button @click="cargarInfoCompra()" :disabled="infoCompraCargando"
+          class="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:sf-lo disabled:opacity-40">
+          <svg class="w-5 h-5" :class="{'animate-spin': infoCompraCargando}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Buscador -->
+      <div class="relative mb-4">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+        </svg>
+        <input x-model="infoCompraBusqueda" @input="infoCompraBuscarDebounced()" type="text"
+          placeholder="Buscar cualquier producto… (vacío = los 25 más vendidos)"
+          class="w-full bg-slate-800/60 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
+      </div>
+
+      <!-- Skeleton -->
+      <div x-show="infoCompraCargando" class="space-y-2">
+        <template x-for="i in 6" :key="i">
+          <div class="h-14 rounded-xl bg-slate-800/60 animate-pulse"></div>
+        </template>
+      </div>
+
+      <!-- Empty -->
+      <div x-show="!infoCompraCargando && infoCompraCargado && infoCompraProductos.length === 0"
+        class="py-14 flex flex-col items-center gap-2 text-slate-500">
+        <p class="text-sm">Sin resultados</p>
+      </div>
+
+      <!-- Tabla -->
+      <div x-show="!infoCompraCargando && infoCompraProductos.length > 0" class="card overflow-hidden overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b" style="border-color: var(--glass-border)">
+              <th class="px-4 py-2.5 text-left text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Producto</th>
+              <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold hidden sm:table-cell">Stock</th>
+              <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold hidden md:table-cell" x-show="!infoCompraBusqueda">Vendido</th>
+              <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Última compra</th>
+              <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold hidden sm:table-cell">Proveedor</th>
+              <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Promedio</th>
+              <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wide text-slate-500 font-semibold hidden md:table-cell">Margen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in infoCompraProductos" :key="p.id_producto">
+              <tr class="border-b hover:sf-lo transition-colors" style="border-color: var(--glass-border)">
+                <td class="px-4 py-3">
+                  <p class="text-slate-100 font-medium" x-text="p.nombre_producto"></p>
+                  <p class="text-xs text-slate-500" x-text="p.unidad_producto"></p>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums text-slate-400 hidden sm:table-cell" x-text="p.stock"></td>
+                <td class="px-4 py-3 text-right tabular-nums text-slate-400 hidden md:table-cell" x-show="!infoCompraBusqueda" x-text="p.cantidad_vendida"></td>
+                <td class="px-4 py-3 text-right">
+                  <template x-if="p.ultimaCompra">
+                    <div>
+                      <p class="tabular-nums text-slate-200 font-semibold" x-text="infoCompraFmtMoney(p.ultimaCompra.precio_unitario_compra)"></p>
+                      <p class="text-xs text-slate-500" x-text="infoCompraFmtFecha(p.ultimaCompra.fecha_compra)"></p>
+                    </div>
+                  </template>
+                  <span x-show="!p.ultimaCompra" class="text-slate-600">—</span>
+                </td>
+                <td class="px-4 py-3 text-right text-xs text-slate-500 hidden sm:table-cell" x-text="p.ultimaCompra?.proveedor || '—'"></td>
+                <td class="px-4 py-3 text-right">
+                  <p class="tabular-nums text-slate-200 font-semibold" x-text="infoCompraFmtMoney(p.promedioCompra)"></p>
+                  <p class="text-xs text-slate-500" x-show="p.numCompras > 0" x-text="p.numCompras + (p.numCompras === 1 ? ' compra' : ' compras')"></p>
+                </td>
+                <td class="px-4 py-3 text-right hidden md:table-cell">
+                  <span x-show="p.margenPct == null" class="text-slate-600">—</span>
+                  <span x-show="p.margenPct != null" class="font-semibold tabular-nums"
+                    :class="p.margenPct >= 20 ? 'text-emerald-400' : p.margenPct >= 0 ? 'text-amber-400' : 'text-red-400'"
+                    x-text="p.margenPct != null ? p.margenPct + '%' : ''"></span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+    </div><!-- /tab infoCompra -->
+
   </main>
 
   <!-- ── Bottom Nav Liquid Glass (flotante) ── -->
@@ -2922,6 +3019,13 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <span>Precios</span>
+      </button>
+      <button x-show="tienePermiso('compras')" @click="tab = 'infoCompra'; if (!infoCompraCargado) cargarInfoCompra(); navMas = false"
+        :class="tab === 'infoCompra' ? 'nav-mas-active' : ''">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+        <span>Info compra</span>
       </button>
     </div>
   </div>
@@ -3260,6 +3364,27 @@
           <p class="w-full text-[10px] text-emerald-700 mt-1">
             Stock automático vía conversión PEPS — no requiere acción
           </p>
+        </div>
+      </div>
+
+      <!-- ℹ️ Historial de precio de compra — última compra + promedio ponderado -->
+      <div x-show="historialPrecio && (historialPrecio.ultimaCompra || historialPrecio.promedioCompra != null)"
+        class="rounded-xl px-3 py-2.5 flex items-center gap-4"
+        style="background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.2)">
+        <div class="flex-1 min-w-0" x-show="historialPrecio?.ultimaCompra">
+          <p class="text-[10px] text-blue-400/80 uppercase tracking-wide font-semibold mb-0.5">Última compra</p>
+          <p class="text-sm font-bold text-blue-300 tabular-nums"
+            x-text="'$' + Number(historialPrecio?.ultimaCompra?.precio_unitario_compra || 0).toFixed(2)"></p>
+          <p class="text-[10px] text-blue-400/70"
+            x-text="historialPrecio?.ultimaCompra?.fecha_compra ? new Date(historialPrecio.ultimaCompra.fecha_compra).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : ''"></p>
+        </div>
+        <div class="w-px self-stretch bg-blue-500/20" x-show="historialPrecio?.ultimaCompra && historialPrecio?.promedioCompra != null"></div>
+        <div class="flex-1 min-w-0" x-show="historialPrecio?.promedioCompra != null">
+          <p class="text-[10px] text-blue-400/80 uppercase tracking-wide font-semibold mb-0.5">Promedio de compra</p>
+          <p class="text-sm font-bold text-blue-300 tabular-nums"
+            x-text="'$' + Number(historialPrecio?.promedioCompra || 0).toFixed(2)"></p>
+          <p class="text-[10px] text-blue-400/70"
+            x-text="(historialPrecio?.numCompras || 0) + (historialPrecio?.numCompras === 1 ? ' compra' : ' compras')"></p>
         </div>
       </div>
 
@@ -5969,10 +6094,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.ed3d8d92.js agrupa todos los módulos en 1 request.
+     bodega-bundle.900f13e4.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.ed3d8d92.js"></script>
+<script src="/js/bodega-bundle.900f13e4.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 <script>
