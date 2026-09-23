@@ -7,7 +7,6 @@
 
 function comprasModule() {
   const hoy    = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
-  const hace30 = () => new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
 
   return {
     // ── Estado ────────────────────────────────────────────────
@@ -15,7 +14,9 @@ function comprasModule() {
     comprasVista:       'historial',  // 'historial' | 'precios' (antes pantalla "Info compra")
     comprasDias:        [],          // array de { fecha, total_gasto, compras: [...], ... }
     comprasResumen:     {},          // { total_periodo, total_compras, dias_con_gasto }
-    comprasDesde:       hace30(),
+    // Por defecto solo hoy (23 sep 2026): el rango de 30 días traía ~2,000
+    // compras en cada visita. Ver más = filtros rápidos o Desde/Hasta.
+    comprasDesde:       hoy(),
     comprasHasta:       hoy(),
     comprasDiaOpen:     null,        // fecha del día expandido (null = todos cerrados)
     comprasError:       '',

@@ -13,9 +13,8 @@ const { fechaMexico } = require('../utils/fecha')
 router.get('/resumen', requireAuth, async (req, res) => {
   try {
     const hoy    = fechaMexico()
-    const hace30 = fechaMexico(-30)
 
-    const desde = req.query.desde || hace30
+    const desde = req.query.desde || hoy
     const hasta = req.query.hasta || hoy
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) {
       return res.status(400).json({ ok: false, error: 'Formato de fecha inválido, use YYYY-MM-DD' })
@@ -45,7 +44,9 @@ router.get('/resumen', requireAuth, async (req, res) => {
       FROM compra c
       INNER JOIN producto p   ON c.id_producto  = p.id_producto
       LEFT  JOIN proveedor prov ON c.id_proveedor = prov.id_proveedor
-      WHERE DATE(c.fecha_compra) BETWEEN ? AND ?
+      -- fecha_compra es DATE: comparar la columna directa deja usar
+      -- idx_fecha_compra (DATE() encima lo bloqueaba)
+      WHERE c.fecha_compra BETWEEN ? AND ?
         -- Excluir compras sintéticas (4.2.2): phantom, ajustes y bootstrap a $0.01
         -- no cuentan en totales de gasto ni promedios
         AND (c.notas IS NULL OR (

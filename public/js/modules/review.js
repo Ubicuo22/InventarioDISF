@@ -106,7 +106,7 @@ function reviewModule () {
     /** Color distintivo por unidad de medida (kg verde, caja morado, pz azul…) */
     unidadColor (u) {
       const m = {
-        kg: '#34d399', g: '#34d399',
+        kg: '#66CC8C', g: '#66CC8C',
         l: '#2dd4bf', lt: '#2dd4bf', lts: '#2dd4bf', litro: '#2dd4bf', litros: '#2dd4bf',
         caja: '#a78bfa', cajas: '#a78bfa',
         pz: '#60a5fa', pza: '#60a5fa', pzas: '#60a5fa', pieza: '#60a5fa', piezas: '#60a5fa',

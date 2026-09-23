@@ -1,4 +1,4 @@
-/* bodega-bundle.a16a9268.js — 2026-09-23T14:55:03.961Z */
+/* bodega-bundle.2ce1bc2c.js — 2026-09-23T15:01:57.721Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1394,7 +1394,7 @@ function reviewModule () {
     /** Color distintivo por unidad de medida (kg verde, caja morado, pz azul…) */
     unidadColor (u) {
       const m = {
-        kg: '#34d399', g: '#34d399',
+        kg: '#66CC8C', g: '#66CC8C',
         l: '#2dd4bf', lt: '#2dd4bf', lts: '#2dd4bf', litro: '#2dd4bf', litros: '#2dd4bf',
         caja: '#a78bfa', cajas: '#a78bfa',
         pz: '#60a5fa', pza: '#60a5fa', pzas: '#60a5fa', pieza: '#60a5fa', piezas: '#60a5fa',
@@ -3425,7 +3425,6 @@ function cobranzaModule() {
 
 function comprasModule() {
   const hoy    = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
-  const hace30 = () => new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
 
   return {
     // ── Estado ────────────────────────────────────────────────
@@ -3433,7 +3432,9 @@ function comprasModule() {
     comprasVista:       'historial',  // 'historial' | 'precios' (antes pantalla "Info compra")
     comprasDias:        [],          // array de { fecha, total_gasto, compras: [...], ... }
     comprasResumen:     {},          // { total_periodo, total_compras, dias_con_gasto }
-    comprasDesde:       hace30(),
+    // Por defecto solo hoy (23 sep 2026): el rango de 30 días traía ~2,000
+    // compras en cada visita. Ver más = filtros rápidos o Desde/Hasta.
+    comprasDesde:       hoy(),
     comprasHasta:       hoy(),
     comprasDiaOpen:     null,        // fecha del día expandido (null = todos cerrados)
     comprasError:       '',
