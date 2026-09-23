@@ -12,50 +12,63 @@ const { requireAuth } = require('../middleware/auth')
 const { enviarATodos } = require('../utils/push')
 const { registrar } = require('../utils/actividad')
 const { fechaMexico } = require('../utils/fecha')
+const { resolverCadenas } = require('peps-engine-core')
 
-// Conversiones PEPS activas cuyo BASE es este producto
-// Retorna los derivados que usan este producto como fuente de stock
+// Conversiones PEPS de este producto, resolviendo la cadena completa
+// (caja -> docena -> pieza), no solo un salto: mismo motor que mermas.js y
+// Electron (peps-engine-core). Con un solo salto, elegir "caja" mandaba a
+// registrar la compra en "docena" — que también es derivado — y "pieza" no
+// listaba a "caja" entre lo que alimenta. Mismo alcance que el consumo real:
+// solo conversiones globales (id_grupo IS NULL).
 router.get('/peps-info/:idProducto', requireAuth, async (req, res) => {
   try {
-    const { idProducto } = req.params
+    const idProducto = Number(req.params.idProducto)
 
-    const [derivados, esDerivado] = await Promise.all([
-      // ¿Este producto ES BASE de alguna conversión?
-      q(`
-        SELECT
-          c.factor,
-          c.notas,
-          pd.id_producto,
-          pd.nombre_producto,
-          pd.unidad_producto
-        FROM producto_conversion_peps c
-        JOIN producto pd ON pd.id_producto = c.id_producto_derivado
-        WHERE c.id_producto_base = ? AND c.activo = 1
-          AND c.id_producto_derivado != c.id_producto_base
-        ORDER BY pd.nombre_producto
-      `, [idProducto]),
+    const convRows = await q(`
+      SELECT id_producto_derivado, id_producto_base, factor
+      FROM producto_conversion_peps
+      WHERE activo = 1 AND id_grupo IS NULL AND id_producto_derivado != id_producto_base
+    `)
+    const baseDe = {}
+    for (const r of convRows) {
+      baseDe[r.id_producto_derivado] = { idBase: r.id_producto_base, factor: parseFloat(r.factor) }
+    }
+    const resuelto = { ...baseDe }
+    resolverCadenas(resuelto, baseDe)
 
-      // ¿Este producto ES DERIVADO de alguna conversión? (alerta: compra incorrecta)
-      q(`
-        SELECT
-          c.factor,
-          pb.id_producto,
-          pb.nombre_producto,
-          pb.unidad_producto
-        FROM producto_conversion_peps c
-        JOIN producto pb ON pb.id_producto = c.id_producto_base
-        WHERE c.id_producto_derivado = ? AND c.activo = 1
-          AND c.id_producto_derivado != c.id_producto_base
-        LIMIT 1
-      `, [idProducto])
-    ])
+    // Productos de venta cuyo stock sale, al final de su cadena, de este producto
+    const derivadosIds = Object.keys(resuelto)
+      .map(Number)
+      .filter(id => id !== idProducto && resuelto[id].idBase === idProducto)
+    // Si este producto es a su vez derivado: la base FINAL donde se debe comprar
+    const baseFinal = resuelto[idProducto] && resuelto[idProducto].idBase !== idProducto
+      ? resuelto[idProducto]
+      : null
+
+    const ids = [...derivadosIds, ...(baseFinal ? [baseFinal.idBase] : [])]
+    const prods = ids.length
+      ? await q(
+          `SELECT id_producto, nombre_producto, unidad_producto FROM producto WHERE id_producto IN (${ids.map(() => '?').join(',')})`,
+          ids
+        )
+      : []
+    const prodDe = Object.fromEntries(prods.map(p => [Number(p.id_producto), p]))
+
+    const derivados = derivadosIds
+      .filter(id => prodDe[id])
+      .map(id => ({ ...prodDe[id], factor: resuelto[id].factor }))
+      .sort((a, b) => a.nombre_producto.localeCompare(b.nombre_producto))
+
+    const esDerivado = baseFinal && prodDe[baseFinal.idBase]
+      ? { ...prodDe[baseFinal.idBase], factor: baseFinal.factor }
+      : null
 
     res.json({
       ok: true,
       // Productos de venta que consumen el stock de este producto base
       derivados,
       // Si este producto es en realidad un derivado, advertir y mostrar cuál es el base correcto
-      esDerivado: esDerivado.length > 0 ? esDerivado[0] : null
+      esDerivado
     })
   } catch (err) {
     res.status(500).json({ ok: false, error: 'Error interno' })

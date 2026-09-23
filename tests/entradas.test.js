@@ -58,24 +58,46 @@ beforeEach(() => jest.clearAllMocks())
 // ─── GET /api/entradas/peps-info/:id ─────────────────────────
 
 describe('GET /api/entradas/peps-info/:id', () => {
-  it('devuelve derivados y esDerivado null cuando no hay conversión inversa', async () => {
-    q
-      .mockResolvedValueOnce([{ id_producto: 5, nombre_producto: 'Jugo Naranja', factor: 4 }])
-      .mockResolvedValueOnce([])
+  // Cadena real: caja(3) -> docena(2) x12 -> pieza(1) x12; jugo(5) -> pieza(1) x4
+  const CONV = [
+    { id_producto_derivado: 3, id_producto_base: 2, factor: 12 },
+    { id_producto_derivado: 2, id_producto_base: 1, factor: 12 },
+    { id_producto_derivado: 5, id_producto_base: 1, factor: 4 },
+  ]
+  const PRODS = {
+    1: { id_producto: 1, nombre_producto: 'Pieza', unidad_producto: 'PZ' },
+    2: { id_producto: 2, nombre_producto: 'Docena', unidad_producto: 'DOC' },
+    3: { id_producto: 3, nombre_producto: 'Caja', unidad_producto: 'CJA' },
+    5: { id_producto: 5, nombre_producto: 'Jugo', unidad_producto: 'LT' },
+  }
+  const mockQ = () => q.mockImplementation(async (sql, params) => {
+    if (sql.includes('producto_conversion_peps')) return CONV
+    return params.map(id => PRODS[id]).filter(Boolean)
+  })
+
+  it('base final: lista todos los derivados de la cadena con factor acumulado', async () => {
+    mockQ()
     const res = await request(app).get('/api/entradas/peps-info/1')
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
-    expect(res.body.derivados).toHaveLength(1)
+    expect(res.body.derivados.map(d => [d.nombre_producto, d.factor])).toEqual([
+      ['Caja', 144], ['Docena', 12], ['Jugo', 4],
+    ])
     expect(res.body.esDerivado).toBeNull()
   })
 
-  it('devuelve esDerivado cuando el producto es derivado de otro', async () => {
-    q
-      .mockResolvedValueOnce([])  // no tiene derivados
-      .mockResolvedValueOnce([{ id_producto: 10, nombre_producto: 'Naranja Base', factor: 0.25 }])
-    const res = await request(app).get('/api/entradas/peps-info/5')
+  it('derivado de 2 saltos: manda a la base FINAL, no a la intermedia', async () => {
+    mockQ()
+    const res = await request(app).get('/api/entradas/peps-info/3')
+    expect(res.body.esDerivado).toMatchObject({ id_producto: 1, nombre_producto: 'Pieza', factor: 144 })
     expect(res.body.derivados).toHaveLength(0)
-    expect(res.body.esDerivado).toMatchObject({ id_producto: 10, nombre_producto: 'Naranja Base' })
+  })
+
+  it('producto sin conversiones: nada que advertir ni listar', async () => {
+    mockQ()
+    const res = await request(app).get('/api/entradas/peps-info/99')
+    expect(res.body.derivados).toHaveLength(0)
+    expect(res.body.esDerivado).toBeNull()
   })
 
   it('responde 500 si la BD falla', async () => {
