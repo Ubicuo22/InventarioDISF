@@ -576,18 +576,33 @@ router.post('/', async (req, res) => {
       res.json({ ok: true, folio_numero })
     } else {
       // — INSERT nueva orden
-      // folio_numero es AUTO_INCREMENT — se deja que MySQL lo asigne en vez
-      // de calcularlo a mano (MAX+1, sin candado: además de poder chocar
-      // con lo que ya asignaba disfruleg-electron por su propio camino,
-      // era inseguro entre sí ante dos altas simultáneas). Ver
-      // disfruleg-electron/src/main/database/DOCUMENTACION_DEFINITIVA_BD.md
-      // — folio_sequence, y el incidente del 22 sep 2026.
-      const [result] = await pool.execute(`
-        INSERT INTO ordenes_guardadas
-          (id_cliente, usuario_creador, datos_carrito, total_estimado, estado, activo)
-        VALUES (?, ?, ?, ?, 'guardada', 1)
-      `, [id_cliente, usuario, JSON.stringify(datos_carrito), total])
-      const nextFolio = result.insertId
+      // folio_numero NO es AUTO_INCREMENT (lo es id_orden) y es NOT NULL sin
+      // default: hay que asignarlo. El 22 sep 2026 se quitó la asignación
+      // creyendo lo contrario y toda alta falló ("Field 'folio_numero'
+      // doesn't have a default value"). Mismo mecanismo que
+      // disfruleg-electron (asignarSiguienteFolio en ordenes.handler.ts):
+      // folio_sequence con FOR UPDATE, nunca por debajo de MAX+1 — así ambos
+      // caminos comparten contador y se autocorrige si se desfasa.
+      const conn = await pool.getConnection()
+      let nextFolio
+      try {
+        await conn.beginTransaction()
+        const [[seqRow]] = await conn.execute('SELECT next_val FROM folio_sequence WHERE id = 1 FOR UPDATE')
+        const [[maxRow]] = await conn.execute('SELECT COALESCE(MAX(folio_numero), 0) AS max_folio FROM ordenes_guardadas')
+        nextFolio = Math.max(Number(seqRow?.next_val ?? 1), Number(maxRow.max_folio) + 1)
+        await conn.execute('UPDATE folio_sequence SET next_val = ? WHERE id = 1', [nextFolio + 1])
+        await conn.execute(`
+          INSERT INTO ordenes_guardadas
+            (folio_numero, id_cliente, usuario_creador, datos_carrito, total_estimado, estado, activo)
+          VALUES (?, ?, ?, ?, ?, 'guardada', 1)
+        `, [nextFolio, id_cliente, usuario, JSON.stringify(datos_carrito), total])
+        await conn.commit()
+      } catch (err) {
+        await conn.rollback().catch(() => {})
+        throw err
+      } finally {
+        conn.release()
+      }
 
       registrar(req, 'pedidos', 'orden_nueva', { folio: nextFolio, total })
       res.json({ ok: true, folio_numero: nextFolio })

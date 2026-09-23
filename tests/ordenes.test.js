@@ -16,8 +16,23 @@
 
 jest.mock('../db/pool', () => ({
   q:    jest.fn(),
-  pool: { execute: jest.fn() }
+  pool: { execute: jest.fn(), getConnection: jest.fn() }
 }))
+
+// Conexión transaccional simulada para el alta de notas: folio_sequence
+// (FOR UPDATE) + MAX(folio_numero), y registra el INSERT.
+function mockConnAlta ({ nextVal, maxFolio }) {
+  const conn = {
+    beginTransaction: jest.fn(), commit: jest.fn(), rollback: jest.fn(), release: jest.fn(),
+    execute: jest.fn(async (sql) => {
+      if (sql.includes('FROM folio_sequence')) return [[{ next_val: nextVal }]]
+      if (sql.includes('MAX(folio_numero)'))   return [[{ max_folio: maxFolio }]]
+      return [{ affectedRows: 1, insertId: 999999 }]
+    })
+  }
+  pool.getConnection.mockResolvedValueOnce(conn)
+  return conn
+}
 
 jest.mock('../middleware/auth', () => ({
   requireAuth:   (req, res, next) => { req.user = { rol: 'admin', username: 'test', nombre_completo: 'Tester' }; next() },
@@ -231,8 +246,8 @@ describe('POST /api/ordenes', () => {
   })
 
   it('crea nueva orden — calcTotal suma cantidad×precio correctamente', async () => {
-    // folio_numero es AUTO_INCREMENT — MySQL lo asigna solo, se lee de insertId
-    pool.execute.mockResolvedValueOnce([{ insertId: 7 }])
+    // folio_numero NO es AUTO_INCREMENT: sale de folio_sequence (con piso MAX+1)
+    const conn = mockConnAlta({ nextVal: 7, maxFolio: 6 })
 
     const res = await request(app).post('/api/ordenes').send({
       id_cliente: 1,
@@ -248,14 +263,28 @@ describe('POST /api/ordenes', () => {
     expect(res.status).toBe(200)
     expect(res.body.folio_numero).toBe(7)
 
-    // INSERT debe recibir total = 2×10 + 3×5 = 35, y ya no incluye folio_numero
-    const insertCall = pool.execute.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
-    expect(insertCall[0]).not.toContain('folio_numero')
+    // INSERT debe incluir folio_numero explícito y total = 2×10 + 3×5 = 35
+    const insertCall = conn.execute.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
+    expect(insertCall[0]).toContain('folio_numero')
+    expect(insertCall[1][0]).toBe(7)
     expect(insertCall[1]).toContain(35)
+    expect(conn.commit).toHaveBeenCalled()
+    expect(conn.release).toHaveBeenCalled()
+  })
+
+  it('contador atrasado: usa MAX(folio_numero)+1 en vez de chocar', async () => {
+    const conn = mockConnAlta({ nextVal: 100, maxFolio: 150 })
+    const res = await request(app).post('/api/ordenes').send({
+      id_cliente: 1,
+      datos_carrito: { Frutas: [{ id_producto: 1, nombre_producto: 'Mango', cantidad: 1, precio_unitario: 8 }] }
+    })
+    expect(res.body.folio_numero).toBe(151)
+    const upd = conn.execute.mock.calls.find(c => c[0].includes('UPDATE folio_sequence'))
+    expect(upd[1]).toEqual([152])
   })
 
   it('no suma claves que empiezan con __ al total', async () => {
-    pool.execute.mockResolvedValueOnce([{ insertId: 1 }])
+    const conn = mockConnAlta({ nextVal: 1, maxFolio: 0 })
 
     await request(app).post('/api/ordenes').send({
       id_cliente: 1,
@@ -265,7 +294,7 @@ describe('POST /api/ordenes', () => {
       }
     })
 
-    const insertCall = pool.execute.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
+    const insertCall = conn.execute.mock.calls.find(c => c[0].includes('INSERT INTO ordenes_guardadas'))
     expect(insertCall[1]).toContain(8) // solo 1×8, no procesa __historial__
   })
 
