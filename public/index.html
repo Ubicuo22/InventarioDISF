@@ -41,7 +41,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.3987f254.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.2caceca6.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -3480,7 +3480,7 @@
 ══════════════════════════════════════════════════════════ -->
 <div x-show="modalOrdenAbierto" x-cloak
   class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-  @keydown.escape.window="cerrarOrden()">
+  @keydown.escape.window="quitarItemModal.visible || confirmarGuardadoModal.visible ? null : cerrarOrden()">
   <div class="modal-backdrop absolute inset-0" @click="cerrarOrden()"></div>
 
   <div class="relative w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl sm:mx-4 slide-up bg-modal"
@@ -3657,27 +3657,13 @@
                   x-text="`(${(ordenCarrito[secName]||[]).length})`"></span>
               </div>
 
-              <!-- Items con swipe-to-delete -->
+              <!-- Items — quitar solo con el tache y confirmación (antes un
+                   deslizamiento a la izquierda borraba sin preguntar) -->
               <template x-for="(item, idx) in (ordenCarrito[secName] || [])" :key="idx">
-                <div x-data="{ _tx: 0, _x0: null }"
-                  class="relative overflow-hidden border-b bd glass-divider"
-                  :class="idx % 2 !== 0 ? 'bg-slate-800/40' : ''"
-                  @touchstart.passive="_x0 = $event.touches[0].clientX"
-                  @touchmove.passive="if(_x0 !== null) { const dx = $event.touches[0].clientX - _x0; _tx = Math.max(-72, Math.min(0, dx)) }"
-                  @touchend.passive="_tx < -44 ? (quitarDelCarrito(secName, idx), _tx=0, _x0=null) : (_tx=0, _x0=null)">
+                <div class="relative border-b bd glass-divider"
+                  :class="idx % 2 !== 0 ? 'bg-slate-800/40' : ''">
 
-                  <!-- Fondo rojo que se revela al deslizar -->
-                  <div class="absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center"
-                    style="background:#ef4444"
-                    :style="`opacity: ${Math.min(1, -_tx / 40)}`">
-                    <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                  </div>
-
-                  <!-- Contenido de la fila (deslizable) -->
-                  <div class="flex items-center gap-1 px-3 py-2"
-                    :style="`transform: translateX(${_tx}px); transition: ${_x0 === null ? 'transform .18s ease' : 'none'}`">
+                  <div class="flex items-center gap-1 px-3 py-2">
                     <div class="flex-1 min-w-0">
                       <p class="text-white text-xs font-medium leading-snug truncate" x-text="item.nombre_producto"></p>
                       <p class="text-[10px] text-slate-600" x-text="item.unidad"></p>
@@ -3690,8 +3676,9 @@
                       class="w-16 text-center text-xs font-medium rounded-lg py-1.5 px-1 text-green-400 input-inline" />
                     <span class="w-16 text-right text-xs text-slate-300 font-medium flex-shrink-0"
                       x-text="`$${((item.cantidad||0)*(item.precio_unitario||0)).toFixed(2)}`"></span>
-                    <button @click="quitarDelCarrito(secName, idx)"
-                      class="w-6 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0 flex items-center justify-center">
+                    <button type="button" @click="pedirQuitarDelCarrito(secName, idx)"
+                      :title="`Quitar ${item.nombre_producto}`"
+                      class="w-8 h-8 -mr-1 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0 flex items-center justify-center">
                       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                       </svg>
@@ -3769,6 +3756,34 @@
         </button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CONFIRMAR QUITAR PRODUCTO DEL CARRITO
+══════════════════════════════════════════════════════════ -->
+<div x-show="quitarItemModal.visible" x-cloak
+  class="fixed inset-0 z-[70] flex items-end sm:items-center justify-center"
+  @keydown.escape.window="quitarItemModal.visible = false">
+  <div class="modal-backdrop absolute inset-0" @click="quitarItemModal.visible = false"></div>
+
+  <div class="relative w-full sm:max-w-sm mx-auto rounded-t-2xl sm:rounded-2xl shadow-2xl glass-card">
+    <div class="px-5 pt-5 pb-4">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Quitar producto</p>
+      <p class="text-base font-bold text-white" x-text="quitarItemModal.nombre"></p>
+      <p class="text-sm text-slate-400 mt-0.5"
+        x-text="`${quitarItemModal.cantidad} ${quitarItemModal.unidad || ''} · sección ${quitarItemModal.seccion}`"></p>
+    </div>
+    <div class="px-5 pb-5 flex gap-3">
+      <button type="button" @click="quitarItemModal.visible = false"
+        class="btn-ghost flex-1">Cancelar</button>
+      <button type="button" @click="confirmarQuitarDelCarrito()"
+        class="flex-1 rounded-xl py-3 text-sm font-semibold bg-red-600 hover:bg-red-700 active:scale-95 transition-all"
+        style="color:#fff">
+        Quitar
+      </button>
     </div>
   </div>
 </div>
@@ -5989,10 +6004,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.3987f254.js agrupa todos los módulos en 1 request.
+     bodega-bundle.2caceca6.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.3987f254.js"></script>
+<script src="/js/bodega-bundle.2caceca6.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 <script>

@@ -1,4 +1,4 @@
-/* bodega-bundle.3987f254.js — 2026-09-23T16:44:53.384Z */
+/* bodega-bundle.2caceca6.js — 2026-09-23T16:53:29.863Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1222,6 +1222,31 @@ function ordersModule() {
     quitarDelCarrito(seccion, idx) {
       if (!this.ordenCarrito[seccion]) return
       this.ordenCarrito[seccion].splice(idx, 1)
+    },
+
+    // Quitar un producto siempre pide confirmación (antes bastaba deslizar
+    // la fila a la izquierda y se borraba sin aviso — fácil por accidente).
+    quitarItemModal: { visible: false, seccion: '', idx: -1, nombre: '', cantidad: 0, unidad: '' },
+
+    pedirQuitarDelCarrito(seccion, idx) {
+      const item = this.ordenCarrito[seccion]?.[idx]
+      if (!item) return
+      this.quitarItemModal = {
+        visible: true, seccion, idx,
+        nombre:   item.nombre_producto,
+        cantidad: item.cantidad,
+        unidad:   item.unidad
+      }
+    },
+
+    confirmarQuitarDelCarrito() {
+      const { seccion, idx, nombre } = this.quitarItemModal
+      // Verificar que el renglón siga siendo el mismo (por si el carrito cambió
+      // mientras el diálogo estaba abierto)
+      if (this.ordenCarrito[seccion]?.[idx]?.nombre_producto === nombre) {
+        this.quitarDelCarrito(seccion, idx)
+      }
+      this.quitarItemModal = { visible: false, seccion: '', idx: -1, nombre: '', cantidad: 0, unidad: '' }
     },
 
     agregarSeccion() {
