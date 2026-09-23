@@ -36,7 +36,8 @@
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.9.7",
     "peps-engine-core": "github:Ubicuo22/peps-engine-core#main",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "extract-zip": "file:shims/extract-zip"
   },
   "devDependencies": {
     "jest": "^30.4.2",
@@ -47,6 +48,7 @@
   "overrides": {
     "qs": "^6.16.0",
     "sharp": "^0.35.4",
-    "js-yaml": "^3.15.2"
+    "js-yaml": "^3.15.2",
+    "extract-zip": "$extract-zip"
   }
 }
