@@ -42,7 +42,6 @@ function notificationsModule() {
             if (event.data.tab !== 'home') {
               // Cargar datos del módulo al que navegamos
               if (event.data.tab === 'pedidos')    this.cargarOrdenes?.()
-              if (event.data.tab === 'entradas')   this.cargarEntradasRecientes?.()
               if (event.data.tab === 'inventario') this.cargarProductos?.()
             }
           }

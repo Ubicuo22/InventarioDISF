@@ -166,6 +166,7 @@ function entriesModule() {
         }
         this.filtrar()
         await this.cargarResumen()
+        if (this.tab === 'compras' && this.comprasVista === 'historial') this.cargarCompras()
 
         const msg = `${this.form.cantidad} × ${this.form.nombreProducto}`
 

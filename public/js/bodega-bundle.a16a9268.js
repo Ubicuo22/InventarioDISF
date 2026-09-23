@@ -1,4 +1,4 @@
-/* bodega-bundle.900f13e4.js — 2026-09-23T05:16:40.465Z */
+/* bodega-bundle.a16a9268.js — 2026-09-23T14:55:03.961Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -303,12 +303,9 @@ function uiModule() {
       if (this.tab === 'home')       return this.cargarDashboard()
       if (this.tab === 'inventario') return this.recargar()
       if (this.tab === 'pedidos')    return this.cargarOrdenes()
-      if (this.tab === 'entradas')   return this.historialTab === 'entradas'
-        ? this.cargarEntradasRecientes()
-        : this.cargarPedidosHistorial()
       if (this.tab === 'analytics')  return this.cargarVentasHoy()
       if (this.tab === 'cobranza')   return this.cargarDeudas()
-      if (this.tab === 'compras')    return this.cargarCompras()
+      if (this.tab === 'compras')    return this.comprasVista === 'precios' ? this.cargarInfoCompra() : this.cargarCompras()
       return Promise.resolve()
     }
   }
@@ -326,6 +323,14 @@ function authModule() {
 
     async init() {
       this.resetForm()
+
+      // "Historial" e "Info compra" se fusionaron en Compras (23 sep 2026).
+      // Los enlaces viejos (push de Electron, ?tab=, favoritos) siguen
+      // llegando con esos nombres — se redirigen a la sub-vista equivalente.
+      this.$watch('tab', t => {
+        if (t === 'entradas')   { this.comprasVista = 'historial'; this.tab = 'compras'; this.cargarCompras() }
+        if (t === 'infoCompra') { this.comprasVista = 'precios';   this.tab = 'compras'; if (!this.infoCompraCargado) this.cargarInfoCompra() }
+      })
 
       // Asegura que el atributo data-theme y meta theme-color reflejen el estado
       // actual de this.theme (resuelto en uiModule). El script anti-flash en <head>
@@ -523,7 +528,6 @@ function authModule() {
       this.session   = null
       this.productos = []
       this.filtrados = []
-      this.entradas  = []
       this.resumen   = {}
     },
 
@@ -892,6 +896,7 @@ function entriesModule() {
         }
         this.filtrar()
         await this.cargarResumen()
+        if (this.tab === 'compras' && this.comprasVista === 'historial') this.cargarCompras()
 
         const msg = `${this.form.cantidad} × ${this.form.nombreProducto}`
 
@@ -2319,49 +2324,10 @@ function reviewModule () {
 ;/* ── public/js/modules/history.js ── */
 function historyModule() {
   return {
-    // ── Entradas de inventario ────────────────────────────────
-    entradas: [],
-    cargandoEntradas: false,
-
-    // ── Sub-tabs del historial ────────────────────────────────
-    historialTab: 'entradas',   // 'entradas' | 'pedidos'
-
-    // ── Pedidos registrados (historial) ───────────────────────
-    pedidosHistorial: [],
-    cargandoPedidosHistorial: false,
-
     // ── Modal de detalle de pedido (solo lectura) ─────────────
     modalDetalleOrden: false,
     ordenDetalle: null,
     cargandoDetalle: false,
-
-    // ── Cargar entradas recientes ─────────────────────────────
-    async cargarEntradasRecientes() {
-      this.cargandoEntradas = true
-      try {
-        const r = await API.get('/api/entradas/recientes')
-        this.entradas = r.data || []
-      } catch (err) {
-        this.entradas = []
-        this.mostrarToast(err.message || 'Error al cargar historial', true)
-      } finally {
-        this.cargandoEntradas = false
-      }
-    },
-
-    // ── Cargar pedidos registrados ────────────────────────────
-    async cargarPedidosHistorial() {
-      this.cargandoPedidosHistorial = true
-      try {
-        const r = await API.get('/api/ordenes?estado=registrada')
-        this.pedidosHistorial = r.data || []
-      } catch (err) {
-        this.pedidosHistorial = []
-        this.mostrarToast(err.message || 'Error al cargar pedidos', true)
-      } finally {
-        this.cargandoPedidosHistorial = false
-      }
-    },
 
     // ── Abrir modal de detalle ────────────────────────────────
     async abrirDetalleOrden(orden) {
@@ -2655,7 +2621,6 @@ function notificationsModule() {
             if (event.data.tab !== 'home') {
               // Cargar datos del módulo al que navegamos
               if (event.data.tab === 'pedidos')    this.cargarOrdenes?.()
-              if (event.data.tab === 'entradas')   this.cargarEntradasRecientes?.()
               if (event.data.tab === 'inventario') this.cargarProductos?.()
             }
           }
@@ -3465,6 +3430,7 @@ function comprasModule() {
   return {
     // ── Estado ────────────────────────────────────────────────
     comprasCargando:    false,
+    comprasVista:       'historial',  // 'historial' | 'precios' (antes pantalla "Info compra")
     comprasDias:        [],          // array de { fecha, total_gasto, compras: [...], ... }
     comprasResumen:     {},          // { total_periodo, total_compras, dias_con_gasto }
     comprasDesde:       hace30(),

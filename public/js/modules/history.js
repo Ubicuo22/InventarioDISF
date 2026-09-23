@@ -1,48 +1,9 @@
 function historyModule() {
   return {
-    // ── Entradas de inventario ────────────────────────────────
-    entradas: [],
-    cargandoEntradas: false,
-
-    // ── Sub-tabs del historial ────────────────────────────────
-    historialTab: 'entradas',   // 'entradas' | 'pedidos'
-
-    // ── Pedidos registrados (historial) ───────────────────────
-    pedidosHistorial: [],
-    cargandoPedidosHistorial: false,
-
     // ── Modal de detalle de pedido (solo lectura) ─────────────
     modalDetalleOrden: false,
     ordenDetalle: null,
     cargandoDetalle: false,
-
-    // ── Cargar entradas recientes ─────────────────────────────
-    async cargarEntradasRecientes() {
-      this.cargandoEntradas = true
-      try {
-        const r = await API.get('/api/entradas/recientes')
-        this.entradas = r.data || []
-      } catch (err) {
-        this.entradas = []
-        this.mostrarToast(err.message || 'Error al cargar historial', true)
-      } finally {
-        this.cargandoEntradas = false
-      }
-    },
-
-    // ── Cargar pedidos registrados ────────────────────────────
-    async cargarPedidosHistorial() {
-      this.cargandoPedidosHistorial = true
-      try {
-        const r = await API.get('/api/ordenes?estado=registrada')
-        this.pedidosHistorial = r.data || []
-      } catch (err) {
-        this.pedidosHistorial = []
-        this.mostrarToast(err.message || 'Error al cargar pedidos', true)
-      } finally {
-        this.cargandoPedidosHistorial = false
-      }
-    },
 
     // ── Abrir modal de detalle ────────────────────────────────
     async abrirDetalleOrden(orden) {

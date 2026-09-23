@@ -12,6 +12,7 @@ function comprasModule() {
   return {
     // ── Estado ────────────────────────────────────────────────
     comprasCargando:    false,
+    comprasVista:       'historial',  // 'historial' | 'precios' (antes pantalla "Info compra")
     comprasDias:        [],          // array de { fecha, total_gasto, compras: [...], ... }
     comprasResumen:     {},          // { total_periodo, total_compras, dias_con_gasto }
     comprasDesde:       hace30(),

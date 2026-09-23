@@ -9,6 +9,14 @@ function authModule() {
     async init() {
       this.resetForm()
 
+      // "Historial" e "Info compra" se fusionaron en Compras (23 sep 2026).
+      // Los enlaces viejos (push de Electron, ?tab=, favoritos) siguen
+      // llegando con esos nombres — se redirigen a la sub-vista equivalente.
+      this.$watch('tab', t => {
+        if (t === 'entradas')   { this.comprasVista = 'historial'; this.tab = 'compras'; this.cargarCompras() }
+        if (t === 'infoCompra') { this.comprasVista = 'precios';   this.tab = 'compras'; if (!this.infoCompraCargado) this.cargarInfoCompra() }
+      })
+
       // Asegura que el atributo data-theme y meta theme-color reflejen el estado
       // actual de this.theme (resuelto en uiModule). El script anti-flash en <head>
       // ya lo aplicó antes de la primera pintura, esto es defensa en profundidad
@@ -205,7 +213,6 @@ function authModule() {
       this.session   = null
       this.productos = []
       this.filtrados = []
-      this.entradas  = []
       this.resumen   = {}
     },
 
