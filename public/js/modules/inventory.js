@@ -131,7 +131,7 @@ function inventoryModule() {
 
     // Color de la barra de progreso según antigüedad del lote
     loteBarColor(dias, idx) {
-      if (idx === 0) return 'bg-emerald-400'   // el que se consume primero
+      if (idx === 0) return 'bg-green-400'   // el que se consume primero
       if (dias === null || dias <= 30) return 'bg-slate-500'
       if (dias <= 75) return 'bg-amber-500'
       return 'bg-red-500'

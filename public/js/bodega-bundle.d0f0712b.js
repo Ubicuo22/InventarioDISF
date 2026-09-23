@@ -1,4 +1,4 @@
-/* bodega-bundle.2ce1bc2c.js — 2026-09-23T15:01:57.721Z */
+/* bodega-bundle.d0f0712b.js — 2026-09-23T15:06:38.929Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -684,7 +684,7 @@ function inventoryModule() {
 
     // Color de la barra de progreso según antigüedad del lote
     loteBarColor(dias, idx) {
-      if (idx === 0) return 'bg-emerald-400'   // el que se consume primero
+      if (idx === 0) return 'bg-green-400'   // el que se consume primero
       if (dias === null || dias <= 30) return 'bg-slate-500'
       if (dias <= 75) return 'bg-amber-500'
       return 'bg-red-500'
@@ -3171,7 +3171,7 @@ function adminModule() {
       const map = {
         auth:       'text-violet-400 bg-violet-400/10',
         inventario: 'text-blue-400 bg-blue-400/10',
-        pedidos:    'text-emerald-400 bg-emerald-400/10',
+        pedidos:    'text-green-400 bg-green-400/10',
         mermas:     'text-orange-400 bg-orange-400/10',
         cobranza:   'text-yellow-400 bg-yellow-400/10',
       }
@@ -3371,7 +3371,7 @@ function cobranzaModule() {
       switch (semaforo) {
         case 'vencida':     return 'text-red-400 bg-red-400/10 border-red-400/30'
         case 'por_vencer':  return 'text-amber-400 bg-amber-400/10 border-amber-400/30'
-        case 'al_dia':      return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30'
+        case 'al_dia':      return 'text-green-400 bg-green-400/10 border-green-400/30'
         default:            return 'text-slate-400 bg-slate-400/10 border-slate-400/20'
       }
     },
@@ -3380,7 +3380,7 @@ function cobranzaModule() {
       switch (semaforo) {
         case 'vencida':     return 'bg-red-400'
         case 'por_vencer':  return 'bg-amber-400'
-        case 'al_dia':      return 'bg-emerald-400'
+        case 'al_dia':      return 'bg-green-400'
         default:            return 'bg-slate-500'
       }
     },

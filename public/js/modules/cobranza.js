@@ -187,7 +187,7 @@ function cobranzaModule() {
       switch (semaforo) {
         case 'vencida':     return 'text-red-400 bg-red-400/10 border-red-400/30'
         case 'por_vencer':  return 'text-amber-400 bg-amber-400/10 border-amber-400/30'
-        case 'al_dia':      return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30'
+        case 'al_dia':      return 'text-green-400 bg-green-400/10 border-green-400/30'
         default:            return 'text-slate-400 bg-slate-400/10 border-slate-400/20'
       }
     },
@@ -196,7 +196,7 @@ function cobranzaModule() {
       switch (semaforo) {
         case 'vencida':     return 'bg-red-400'
         case 'por_vencer':  return 'bg-amber-400'
-        case 'al_dia':      return 'bg-emerald-400'
+        case 'al_dia':      return 'bg-green-400'
         default:            return 'bg-slate-500'
       }
     },

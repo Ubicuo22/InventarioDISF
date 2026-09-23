@@ -19,12 +19,12 @@
   .row .lbl{font-size:12px;color:#6b7280}
   .row .val{font-size:13px;font-weight:600;text-align:right;max-width:60%;word-break:break-all}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
-  .dot.ok{background:#34d399;box-shadow:0 0 6px #34d399}
+  .dot.ok{background:#66CC8C;box-shadow:0 0 6px #66CC8C}
   .dot.warn{background:#fbbf24}
   .dot.err{background:#f87171}
   .dot.idle{background:#6b7280}
   .ping-bar{height:4px;border-radius:2px;background:#1f2937;overflow:hidden;margin-top:12px}
-  .ping-fill{height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#34d399);transition:width .3s,background .3s;border-radius:2px}
+  .ping-fill{height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#66CC8C);transition:width .3s,background .3s;border-radius:2px}
   button{width:100%;max-width:380px;padding:16px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .2s}
   .btn-primary{background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff}
   .btn-danger{background:linear-gradient(135deg,#f87171,#ef4444);color:#fff}
@@ -42,11 +42,11 @@
   .wake-banner strong{display:block;margin-bottom:2px}
   /* ── Radar ── */
   .radar-wrap{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center}
-  .radar-ring{position:absolute;border-radius:50%;border:1.5px solid var(--rc,#34d399);opacity:0;animation:ripple 2.4s ease-out infinite}
+  .radar-ring{position:absolute;border-radius:50%;border:1.5px solid var(--rc,#66CC8C);opacity:0;animation:ripple 2.4s ease-out infinite}
   .r1{width:160px;height:160px;animation-delay:0s}
   .r2{width:160px;height:160px;animation-delay:.8s}
   .r3{width:160px;height:160px;animation-delay:1.6s}
-  .radar-core{width:72px;height:72px;border-radius:50%;background:rgba(52,211,153,.12);border:2px solid var(--rc,#34d399);display:flex;align-items:center;justify-content:center;color:var(--rc,#34d399);transition:background .4s,border-color .4s,color .4s;box-shadow:0 0 24px rgba(52,211,153,.2)}
+  .radar-core{width:72px;height:72px;border-radius:50%;background:rgba(102,204,140,.12);border:2px solid var(--rc,#66CC8C);display:flex;align-items:center;justify-content:center;color:var(--rc,#66CC8C);transition:background .4s,border-color .4s,color .4s;box-shadow:0 0 24px rgba(102,204,140,.2)}
   @keyframes ripple{0%{transform:scale(.45);opacity:.7}100%{transform:scale(1);opacity:0}}
   .radar-wrap.warn .radar-ring,.radar-wrap.warn .radar-core{--rc:#fbbf24}
   .radar-wrap.warn .radar-core{background:rgba(251,191,36,.1);box-shadow:0 0 24px rgba(251,191,36,.2)}
@@ -104,7 +104,7 @@
       <div class="step-num">3</div>
       <div class="step-txt">
         <strong>Batería → Sin restricciones</strong>
-        En Samsung: "Optimización de batería" → Chrome → <em style="color:#34d399">No optimizar</em>
+        En Samsung: "Optimización de batería" → Chrome → <em style="color:#66CC8C">No optimizar</em>
       </div>
     </div>
     <div class="step">

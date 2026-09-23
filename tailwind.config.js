@@ -1,11 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 
 // Un solo verde de marca (23 sep 2026). Antes competían tres: --accent
-// (#4CAF72 / #1E5C3A en style.css), emerald-* y green-* de Tailwind, con
+// (#4CAF72 / #1E5C3A en style.css), el esmeralda y el green de Tailwind, con
 // overrides de CSS encimados que además volvían sólidos los fondos
-// translúcidos (bg-emerald-500/15 → 100% opaco). Ahora emerald y green SON
-// la paleta de marca: Tailwind genera bien cada tono y cada opacidad, sin
-// parches. El 500 es --accent-dark y el 800 es --accent (modo claro).
+// translúcidos. Ahora `green` ES la paleta de marca: Tailwind genera bien
+// cada tono y cada opacidad, sin parches. El 500 es --accent-dark y el 800
+// es --accent (modo claro). No usar la paleta esmeralda de Tailwind — lo
+// vigila tests/verde-marca.test.js.
 const verdeMarca = {
   50:  '#EEF8F2',
   100: '#D5EFDF',
@@ -28,7 +29,6 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        emerald: verdeMarca,
         green:   verdeMarca,
       },
     },

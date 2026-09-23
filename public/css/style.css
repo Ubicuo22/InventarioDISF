@@ -343,9 +343,9 @@ body {
   .border-slate-800\/40,
   .border-slate-800\/50 { border-color: var(--glass-border); }
 
-  /* Indicador del puntito de DB: bg-emerald-400 ya contrasta solo */
+  /* Indicador del puntito de DB: bg-green-400 ya contrasta solo */
 
-  /* Acentos brillantes (text-emerald-400, text-violet-300, etc.) los dejamos
+  /* Acentos brillantes (text-green-400, text-violet-300, etc.) los dejamos
      iguales — funcionan tanto en dark como en light por su saturación. Si
      alguno se ve mal en pruebas, lo overrideamos puntualmente abajo. */
 
@@ -1472,16 +1472,15 @@ select option { background: #141418; }
 [data-theme="light"] .text-cyan-300   { color: #0e7490 !important; }
 [data-theme="light"] .text-slate-300  { color: #374151 !important; }
 
-/* ── Verde de marca en modo claro: emerald y green son la misma paleta
-      (tailwind.config.js), así que comparten regla. 300/400 → 700 (5.0:1
-      sobre blanco); 500/600 → 800; 700 → 900. ── */
-[data-theme="light"] .text-emerald-300, [data-theme="light"] .text-green-300,
-[data-theme="light"] .text-emerald-400, [data-theme="light"] .text-green-400,
-[data-theme="light"] .hover\:text-emerald-400:hover, [data-theme="light"] .hover\:text-green-400:hover,
-[data-theme="light"] .hover\:text-green-300:hover { color: #2E7D52 !important; }
-[data-theme="light"] .text-emerald-500, [data-theme="light"] .text-green-500,
-[data-theme="light"] .text-emerald-600, [data-theme="light"] .text-green-600 { color: #1E5C3A !important; }
-[data-theme="light"] .text-emerald-700, [data-theme="light"] .text-green-700 { color: #143D28 !important; }
+/* ── Verde de marca en modo claro (paleta green = marca, tailwind.config.js).
+      300/400 → 700 (5.0:1 sobre blanco); 500/600 → 800; 700 → 900. ── */
+[data-theme="light"] .text-green-300,
+[data-theme="light"] .text-green-400,
+[data-theme="light"] .hover\:text-green-300:hover,
+[data-theme="light"] .hover\:text-green-400:hover { color: #2E7D52 !important; }
+[data-theme="light"] .text-green-500,
+[data-theme="light"] .text-green-600 { color: #1E5C3A !important; }
+[data-theme="light"] .text-green-700 { color: #143D28 !important; }
 [data-theme="light"] .text-rose-400    { color: #be123c !important; }
 [data-theme="light"] .text-yellow-400  { color: #854d0e !important; }
 
@@ -1535,7 +1534,7 @@ select option { background: #141418; }
 /* ── Iconos decorativos en icon-bubble — oscurecer pasteles para contraste en claro ── */
 /* Los SVG usan currentColor con colores pastel (#66CC8C, #fbbf24, etc.)
    que son invisibles sobre fondo blanco. brightness(0.50) los lleva a
-   tonos oscuros manteniendo el hue: emerald→forest, amber→dorado, etc. */
+   tonos oscuros manteniendo el hue: verde→bosque, amber→dorado, etc. */
 [data-theme="light"] .icon-bubble > svg {
   filter: brightness(0.50) saturate(1.15);
 }

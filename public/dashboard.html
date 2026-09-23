@@ -26,7 +26,7 @@
       content: '';
       position: fixed; inset: 0; z-index: -2;
       background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(34,197,94,0.09), transparent 60%),
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(76,175,114,0.09), transparent 60%),
         radial-gradient(ellipse 60% 60% at 100% 100%, rgba(139,92,246,0.07), transparent 55%),
         radial-gradient(ellipse 50% 40% at 0% 80%, rgba(59,130,246,0.05), transparent 50%),
         #060608;
@@ -49,7 +49,7 @@
       transition: background .2s, border-color .2s;
     }
     .card-dash:hover { background: rgba(255,255,255,.075); }
-    .badge-ok   { background: rgba(34,197,94,.14);   color: #86efac; border: 1px solid rgba(34,197,94,.28); }
+    .badge-ok   { background: rgba(76,175,114,.14);   color: #9EDBB8; border: 1px solid rgba(76,175,114,.28); }
     .badge-low  { background: rgba(251,191,36,.14); color: #fde68a; border: 1px solid rgba(251,191,36,.28); }
     .badge-zero { background: rgba(248,113,113,.15); color: #fca5a5; border: 1px solid rgba(248,113,113,.3); }
     .dot-blink { animation: blink 2s ease-in-out infinite; }
@@ -61,7 +61,7 @@
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 999px; }
     .semaforo-vencida    { color: #f87171; }
     .semaforo-por_vencer { color: #fbbf24; }
-    .semaforo-al_dia     { color: #4ade80; }
+    .semaforo-al_dia     { color: #66CC8C; }
     /* Stat numbers tabulares + tight */
     .stat-num {
       font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' on;
@@ -94,7 +94,7 @@
       </div>
       <!-- DB status -->
       <div class="flex items-center gap-1.5 text-xs" id="db-status">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 dot-blink"></span>
+        <span class="w-2 h-2 rounded-full bg-green-400 dot-blink"></span>
         <span class="text-slate-500">Conectado</span>
       </div>
       <!-- Hora -->
@@ -139,14 +139,14 @@
     <!-- Entradas hoy -->
     <div class="card-dash p-4">
       <div class="flex items-center gap-2 mb-2">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(22,163,74,.15)">
-          <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(58,148,96,.15)">
+          <svg class="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
           </svg>
         </div>
         <span class="text-slate-400 text-xs font-medium uppercase tracking-wide">Entradas hoy</span>
       </div>
-      <p class="text-2xl font-bold text-emerald-400 num" id="stat-entradas">—</p>
+      <p class="text-2xl font-bold text-green-400 num" id="stat-entradas">—</p>
       <p class="text-slate-500 text-xs mt-1 num">Costo: <span id="stat-costo">—</span></p>
     </div>
 
@@ -286,11 +286,11 @@ function renderPedidos(pedidos) {
 function renderStock(productos) {
   const el = document.getElementById('stock-list')
   if (!productos.length) {
-    el.innerHTML = `<div class="flex flex-col items-center justify-center h-full gap-2 text-emerald-600">
+    el.innerHTML = `<div class="flex flex-col items-center justify-center h-full gap-2 text-green-600">
       <svg class="w-10 h-10 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
       </svg>
-      <span class="text-sm text-emerald-700">Stock en orden</span>
+      <span class="text-sm text-green-700">Stock en orden</span>
     </div>`
     return
   }
@@ -310,7 +310,7 @@ function renderStock(productos) {
           </span>
         </div>
         <div class="h-1 rounded-full bg-white/5 overflow-hidden">
-          <div class="h-full rounded-full transition-all" style="width:${pct}%; background:${esZero ? '#ef4444' : esBajo ? '#f59e0b' : '#22c55e'}"></div>
+          <div class="h-full rounded-full transition-all" style="width:${pct}%; background:${esZero ? '#ef4444' : esBajo ? '#f59e0b' : '#4CAF72'}"></div>
         </div>
       </div>`
   }).join('')
@@ -348,7 +348,7 @@ async function cargarDatos() {
 
     // DB ok
     document.getElementById('db-status').innerHTML = `
-      <span class="w-2 h-2 rounded-full bg-emerald-400 dot-blink"></span>
+      <span class="w-2 h-2 rounded-full bg-green-400 dot-blink"></span>
       <span class="text-slate-500">Conectado</span>`
   } catch (e) {
     document.getElementById('db-status').innerHTML = `

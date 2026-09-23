@@ -234,7 +234,7 @@ function adminModule() {
       const map = {
         auth:       'text-violet-400 bg-violet-400/10',
         inventario: 'text-blue-400 bg-blue-400/10',
-        pedidos:    'text-emerald-400 bg-emerald-400/10',
+        pedidos:    'text-green-400 bg-green-400/10',
         mermas:     'text-orange-400 bg-orange-400/10',
         cobranza:   'text-yellow-400 bg-yellow-400/10',
       }
