@@ -146,10 +146,26 @@ function ordersModule() {
         this.seccionActual      = this.sectionNames()[0] || 'General'
         this.observacion        = cart.__observacion__ || ''
         this.mostrarObservacion = !!cart.__observacion__
+        this._ordenFoto         = this._fotoOrden()
+        this.notaPdfLista       = null
         this.modalOrdenAbierto  = true
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar el pedido', true)
       }
+    },
+
+    // Foto del contenido editable al abrir — para no compartir un PDF (que sale
+    // de lo guardado) distinto a lo que se ve en pantalla.
+    _fotoOrden() {
+      return JSON.stringify({ c: this.ordenCarrito, o: (this.observacion || '').trim() })
+    },
+
+    compartirNotaDesdeEdicion() {
+      if (!this.ordenReadOnly && this._fotoOrden() !== this._ordenFoto) {
+        this.mostrarToast('Guarda los cambios antes de compartir la nota', true)
+        return
+      }
+      this.compartirNotaPDF(this.ordenForm.folio_numero)
     },
 
     cerrarOrden() {

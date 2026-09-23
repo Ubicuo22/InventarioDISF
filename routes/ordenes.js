@@ -3,6 +3,7 @@ const { q, pool } = require('../db/pool')
 const { requireAuth, requireModulo } = require('../middleware/auth')
 const { registrar } = require('../utils/actividad')
 const { fechaMexico, rangoUtcDelDia } = require('../utils/fecha')
+const { prepararNota, renderizarPDF } = require('../utils/nota-pdf')
 
 router.use(requireAuth)
 
@@ -510,6 +511,37 @@ router.patch('/:folio/resolver-todos', requireModulo('pedidos'), async (req, res
 })
 
 /* ─── GET /api/ordenes/:folio ───────────────────────── */
+/* ─── GET /api/ordenes/:folio/pdf — nota de impresión en PDF ───
+ * Mismo formato que la nota que se imprime en Electron (utils/nota-pdf.js).
+ * ?formato=html devuelve el HTML (útil en local, donde no hay Chromium). */
+router.get('/:folio/pdf', async (req, res) => {
+  const folio = parseInt(req.params.folio, 10)
+  if (!folio) return res.status(400).json({ ok: false, error: 'folio inválido' })
+  try {
+    const nota = await prepararNota(folio)
+    if (!nota) return res.status(404).json({ ok: false, error: 'Orden no encontrada' })
+
+    if (req.query.formato === 'html') {
+      res.set('Content-Type', 'text/html; charset=utf-8')
+      return res.send(nota.html)
+    }
+
+    const pdf = await renderizarPDF(nota.html, folio)
+    registrar(req, 'pedidos', 'nota_pdf', { folio })
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${nota.nombreArchivo}"`,
+      'X-Nombre-Archivo': nota.nombreArchivo,
+      'Cache-Control': 'no-store'
+    })
+    res.send(Buffer.from(pdf))
+  } catch (e) {
+    if (e.code === 'SIN_NAVEGADOR') return res.status(501).json({ ok: false, error: e.message })
+    console.error('[ordenes] GET /:folio/pdf', e.message)
+    res.status(500).json({ ok: false, error: 'No se pudo generar el PDF de la nota' })
+  }
+})
+
 router.get('/:folio', async (req, res) => {
   try {
     const [row] = await q(`

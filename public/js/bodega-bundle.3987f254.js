@@ -1,4 +1,4 @@
-/* bodega-bundle.d0f0712b.js — 2026-09-23T15:06:38.929Z */
+/* bodega-bundle.3987f254.js — 2026-09-23T16:44:53.384Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -1066,10 +1066,26 @@ function ordersModule() {
         this.seccionActual      = this.sectionNames()[0] || 'General'
         this.observacion        = cart.__observacion__ || ''
         this.mostrarObservacion = !!cart.__observacion__
+        this._ordenFoto         = this._fotoOrden()
+        this.notaPdfLista       = null
         this.modalOrdenAbierto  = true
       } catch (err) {
         this.mostrarToast(err.message || 'Error al cargar el pedido', true)
       }
+    },
+
+    // Foto del contenido editable al abrir — para no compartir un PDF (que sale
+    // de lo guardado) distinto a lo que se ve en pantalla.
+    _fotoOrden() {
+      return JSON.stringify({ c: this.ordenCarrito, o: (this.observacion || '').trim() })
+    },
+
+    compartirNotaDesdeEdicion() {
+      if (!this.ordenReadOnly && this._fotoOrden() !== this._ordenFoto) {
+        this.mostrarToast('Guarda los cambios antes de compartir la nota', true)
+        return
+      }
+      this.compartirNotaPDF(this.ordenForm.folio_numero)
     },
 
     cerrarOrden() {
@@ -1394,7 +1410,7 @@ function reviewModule () {
     /** Color distintivo por unidad de medida (kg verde, caja morado, pz azul…) */
     unidadColor (u) {
       const m = {
-        kg: '#66CC8C', g: '#66CC8C',
+        kg: '#4ADE80', g: '#4ADE80',
         l: '#2dd4bf', lt: '#2dd4bf', lts: '#2dd4bf', litro: '#2dd4bf', litros: '#2dd4bf',
         caja: '#a78bfa', cajas: '#a78bfa',
         pz: '#60a5fa', pza: '#60a5fa', pzas: '#60a5fa', pieza: '#60a5fa', piezas: '#60a5fa',
@@ -2329,8 +2345,78 @@ function historyModule() {
     ordenDetalle: null,
     cargandoDetalle: false,
 
+    // ── Nota en PDF (mismo formato que la impresión de Electron) ──────
+    compartiendoNota: false,
+    notaPdfLista:     null,   // { folio, file } si el navegador pidió un 2º toque
+
+    /**
+     * Genera el PDF de la nota en el servidor y abre el menú de compartir del
+     * sistema (WhatsApp con el archivo adjunto). Si el navegador no comparte
+     * archivos, se descarga.
+     *
+     * Safari (iPhone) solo permite compartir justo después de un toque; si
+     * generar el PDF tardó más, share() lanza NotAllowedError — el archivo se
+     * queda listo en notaPdfLista y el botón pasa a "Compartir ahora".
+     */
+    async compartirNotaPDF(folio) {
+      if (this.compartiendoNota) return
+      const lista = this.notaPdfLista
+      if (lista && lista.folio === folio) return this._compartirArchivoNota(lista.file)
+
+      this.compartiendoNota = true
+      this.notaPdfLista = null
+      try {
+        const res = await fetch(`/api/ordenes/${folio}/pdf`, {
+          headers: { Authorization: `Bearer ${API._token()}` }
+        })
+        if (!res.ok) {
+          if (res.status === 401) window.dispatchEvent(new CustomEvent('session-expired'))
+          const j = await res.json().catch(() => ({}))
+          throw new Error(j.error || `No se pudo generar el PDF (${res.status})`)
+        }
+        const blob   = await res.blob()
+        const nombre = res.headers.get('X-Nombre-Archivo') || `nota_${String(folio).padStart(6, '0')}.pdf`
+        const file   = new File([blob], nombre, { type: 'application/pdf' })
+        await this._compartirArchivoNota(file, folio)
+      } catch (e) {
+        this.mostrarToast(e.message || 'No se pudo generar el PDF', true)
+      } finally {
+        this.compartiendoNota = false
+      }
+    },
+
+    async _compartirArchivoNota(file, folio) {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: file.name })
+          this.notaPdfLista = null
+        } catch (e) {
+          if (e.name === 'AbortError') { this.notaPdfLista = null; return }   // el usuario cerró el menú
+          if (e.name === 'NotAllowedError' && folio != null) {
+            this.notaPdfLista = { folio, file }
+            this.mostrarToast('PDF listo — toca "Compartir ahora"')
+            return
+          }
+          throw e
+        }
+        return
+      }
+      // Sin Web Share de archivos (p. ej. Firefox de escritorio): descargar
+      const url = URL.createObjectURL(file)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      this.notaPdfLista = null
+      this.mostrarToast('PDF descargado')
+    },
+
     // ── Abrir modal de detalle ────────────────────────────────
     async abrirDetalleOrden(orden) {
+      this.notaPdfLista = null
       this.cargandoDetalle = true
       this.modalDetalleOrden = true
       this.ordenDetalle = null

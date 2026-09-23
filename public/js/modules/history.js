@@ -5,8 +5,78 @@ function historyModule() {
     ordenDetalle: null,
     cargandoDetalle: false,
 
+    // ── Nota en PDF (mismo formato que la impresión de Electron) ──────
+    compartiendoNota: false,
+    notaPdfLista:     null,   // { folio, file } si el navegador pidió un 2º toque
+
+    /**
+     * Genera el PDF de la nota en el servidor y abre el menú de compartir del
+     * sistema (WhatsApp con el archivo adjunto). Si el navegador no comparte
+     * archivos, se descarga.
+     *
+     * Safari (iPhone) solo permite compartir justo después de un toque; si
+     * generar el PDF tardó más, share() lanza NotAllowedError — el archivo se
+     * queda listo en notaPdfLista y el botón pasa a "Compartir ahora".
+     */
+    async compartirNotaPDF(folio) {
+      if (this.compartiendoNota) return
+      const lista = this.notaPdfLista
+      if (lista && lista.folio === folio) return this._compartirArchivoNota(lista.file)
+
+      this.compartiendoNota = true
+      this.notaPdfLista = null
+      try {
+        const res = await fetch(`/api/ordenes/${folio}/pdf`, {
+          headers: { Authorization: `Bearer ${API._token()}` }
+        })
+        if (!res.ok) {
+          if (res.status === 401) window.dispatchEvent(new CustomEvent('session-expired'))
+          const j = await res.json().catch(() => ({}))
+          throw new Error(j.error || `No se pudo generar el PDF (${res.status})`)
+        }
+        const blob   = await res.blob()
+        const nombre = res.headers.get('X-Nombre-Archivo') || `nota_${String(folio).padStart(6, '0')}.pdf`
+        const file   = new File([blob], nombre, { type: 'application/pdf' })
+        await this._compartirArchivoNota(file, folio)
+      } catch (e) {
+        this.mostrarToast(e.message || 'No se pudo generar el PDF', true)
+      } finally {
+        this.compartiendoNota = false
+      }
+    },
+
+    async _compartirArchivoNota(file, folio) {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: file.name })
+          this.notaPdfLista = null
+        } catch (e) {
+          if (e.name === 'AbortError') { this.notaPdfLista = null; return }   // el usuario cerró el menú
+          if (e.name === 'NotAllowedError' && folio != null) {
+            this.notaPdfLista = { folio, file }
+            this.mostrarToast('PDF listo — toca "Compartir ahora"')
+            return
+          }
+          throw e
+        }
+        return
+      }
+      // Sin Web Share de archivos (p. ej. Firefox de escritorio): descargar
+      const url = URL.createObjectURL(file)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      this.notaPdfLista = null
+      this.mostrarToast('PDF descargado')
+    },
+
     // ── Abrir modal de detalle ────────────────────────────────
     async abrirDetalleOrden(orden) {
+      this.notaPdfLista = null
       this.cargandoDetalle = true
       this.modalDetalleOrden = true
       this.ordenDetalle = null
