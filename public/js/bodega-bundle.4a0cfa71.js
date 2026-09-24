@@ -1,4 +1,4 @@
-/* bodega-bundle.2caceca6.js — 2026-09-23T16:53:29.863Z */
+/* bodega-bundle.4a0cfa71.js — 2026-09-24T16:03:39.739Z */
 
 ;/* ── public/js/api.js ── */
 /**
@@ -933,7 +933,6 @@ function ordersModule() {
   return {
     ordenes: [],
     cargandoOrdenes: false,
-    ordenesFiltroRevision: 'todas',  // 'todas' | 'pendientes' | 'revisadas'
     filtroDesde: _sem.desde,
     filtroHasta: _sem.hasta,
     filtroClientePedidos: '',
@@ -2343,7 +2342,16 @@ function reviewModule () {
         for (let i = hist.length - 1; i >= 0; i--) {
           const e = hist[i]
           if (e.tipoEvento === 'revision') {
-            if (i !== hist.length - 1) return null  // hubo cambios después de la revisión
+            // Misma regla que getReviewInfo() de Electron y que el home
+            // (routes/dashboard.js): solo un CAMBIO de carrito posterior
+            // invalida la revisión. Eventos administrativos (impresión,
+            // procesamiento, reversión) no. Antes cualquier evento posterior
+            // la anulaba — imprimir una nota revisada la devolvía a
+            // "Activos" (24 sep 2026: 17 de 26 notas del día).
+            const hayCambiosPosteriores = hist
+              .slice(i + 1)
+              .some(x => !x.tipoEvento || x.tipoEvento === 'cambios')
+            if (hayCambiosPosteriores) return null
             const pendientes = e.pendientes || []
             return {
               reviewed: pendientes.length === 0,  // solo "revisada" si no hay pendientes
@@ -3834,17 +3842,9 @@ function dashboardModule() {
         })
       }
 
-      // 4. Pedidos atrasados (medio)
-      if ((m.pedidos?.atrasados || 0) > 0) {
-        out.push({
-          tipo: 'atrasados',
-          color: 'amber',
-          mensaje: `${m.pedidos.atrasados} ${m.pedidos.atrasados === 1 ? 'pedido pendiente hace más de 1 día' : 'pedidos pendientes hace más de 1 día'}`,
-          monto: '',
-          accion: 'Ver',
-          onClick: () => { this.tab = 'pedidos'; this.pedidosTab = 'activos'; this.cargarOrdenes?.() }
-        })
-      }
+      // (Alerta de "pedidos pendientes hace más de 1 día" retirada el 23 sep
+      //  2026: por proceso interno las notas entregadas se procesan días
+      //  después, así que siempre marcaba ~2,400 — ruido, no alerta.)
 
       return out
     },

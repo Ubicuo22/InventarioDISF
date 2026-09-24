@@ -1014,7 +1014,16 @@ function reviewModule () {
         for (let i = hist.length - 1; i >= 0; i--) {
           const e = hist[i]
           if (e.tipoEvento === 'revision') {
-            if (i !== hist.length - 1) return null  // hubo cambios después de la revisión
+            // Misma regla que getReviewInfo() de Electron y que el home
+            // (routes/dashboard.js): solo un CAMBIO de carrito posterior
+            // invalida la revisión. Eventos administrativos (impresión,
+            // procesamiento, reversión) no. Antes cualquier evento posterior
+            // la anulaba — imprimir una nota revisada la devolvía a
+            // "Activos" (24 sep 2026: 17 de 26 notas del día).
+            const hayCambiosPosteriores = hist
+              .slice(i + 1)
+              .some(x => !x.tipoEvento || x.tipoEvento === 'cambios')
+            if (hayCambiosPosteriores) return null
             const pendientes = e.pendientes || []
             return {
               reviewed: pendientes.length === 0,  // solo "revisada" si no hay pendientes
