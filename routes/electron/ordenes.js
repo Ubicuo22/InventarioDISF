@@ -26,8 +26,11 @@ const { requireRoleElectron } = require('../../middleware/auth-electron')
 const {
   resolverCadenas,
   construirFuentes,
+  agregarFuentesDeGrupo,
   consumirDeFuentes,
   factoresGrupoEquivalencia,
+  construirGrafoFactores,
+  factoresDesde,
 } = require('peps-engine-core')
 const { consumirPepsParaOrden, revertirConsumoOrden, tieneConsumoOrden } = require('./orden-consumo')
 const { costosPromedioHistorico } = require('./costo-promedio')
@@ -460,9 +463,22 @@ async function validarStockCarrito(datosCarrito, folioExcluir) {
     }
   }
 
+  // Grupo de equivalencia completo como respaldo — mismo criterio que el
+  // consumo al guardar (orden-consumo.js, equivalencias mixtas).
+  const vecinosGrupo = construirGrafoFactores(allConvRows.map(r => ({
+    id_producto_derivado: Number(r.id_producto_derivado),
+    id_producto_base:     Number(r.id_producto_base),
+    factor:               parseFloat(String(r.factor)),
+  })))
+  const fuentesDe = (idProducto) => agregarFuentesDeGrupo(
+    construirFuentes(idProducto, convMap[idProducto], ownLotesConvs[idProducto]),
+    idProducto,
+    factoresDesde(idProducto, vecinosGrupo)
+  )
+
   const idsLotesVal = new Set()
   for (const item of itemsAValidar) {
-    for (const fuente of construirFuentes(item.id_producto, convMap[item.id_producto], ownLotesConvs[item.id_producto])) {
+    for (const fuente of fuentesDe(item.id_producto)) {
       idsLotesVal.add(fuente.idProd)
     }
   }
@@ -511,7 +527,7 @@ async function validarStockCarrito(datosCarrito, folioExcluir) {
     const cantidadEfectiva = item.cantidad - sinDesc
     if (cantidadEfectiva <= 0) continue
 
-    const fuentes = construirFuentes(item.id_producto, convMap[item.id_producto], ownLotesConvs[item.id_producto])
+    const fuentes = fuentesDe(item.id_producto)
     const { pendiente } = consumirDeFuentes(cantidadEfectiva, fuentes, lotesValPorProducto)
 
     if (pendiente > 0) {
@@ -1032,6 +1048,19 @@ router.post('/procesar-venta/:folio', async (req, res) => {
     }
     resolverCadenas(convMap, allConvMap)
 
+    // Grupo de equivalencia completo de cada producto — respaldo para
+    // equivalencias mixtas (mismo criterio que el consumo al guardar).
+    const vecinosGrupo = construirGrafoFactores(allConvRows.map(r => ({
+      id_producto_derivado: Number(r.id_producto_derivado),
+      id_producto_base:     Number(r.id_producto_base),
+      factor:               parseFloat(String(r.factor)),
+    })))
+    const gruposPorProducto = {}
+    for (const id of idsProductos) {
+      const g = factoresDesde(id, vecinosGrupo)
+      if (g.size > 1) gruposPorProducto[id] = g
+    }
+
     let costoPromMap = {}
     if (!esPreInventario) {
       try {
@@ -1053,7 +1082,8 @@ router.post('/procesar-venta/:folio', async (req, res) => {
     if (!esPreInventario && !flujoNuevo) {
       const idsParaPeps = [...new Set(idsProductos.flatMap(id => {
         const baseId = convMap[id]?.idBase
-        return (baseId && baseId !== id) ? [baseId, id] : [id]
+        const ids = (baseId && baseId !== id) ? [baseId, id] : [id]
+        return [...ids, ...(gruposPorProducto[id] ? [...gruposPorProducto[id].keys()] : [])]
       }))]
       const phProd = idsParaPeps.map(() => '?').join(',')
       const lotesRows = await q(
@@ -1093,7 +1123,11 @@ router.post('/procesar-venta/:folio', async (req, res) => {
     let utilidadTotalVenta = 0
 
     for (const item of todosLosItems) {
-      const fuentes = construirFuentes(item.id_producto, convMap[item.id_producto], ownConvs[item.id_producto])
+      const fuentes = agregarFuentesDeGrupo(
+        construirFuentes(item.id_producto, convMap[item.id_producto], ownConvs[item.id_producto]),
+        item.id_producto,
+        gruposPorProducto[item.id_producto]
+      )
       const sinDesc = Math.min(Number(item.cantidad_sin_descuento) || 0, item.cantidad)
 
       deltaStock[fuentes[0].idProd] = deltaStock[fuentes[0].idProd] || 0

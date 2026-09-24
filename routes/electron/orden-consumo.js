@@ -14,7 +14,7 @@
  * Worker (los isolates no garantizan vida útil para una caché en memoria).
  */
 
-const { resolverCadenas, construirFuentes, consumirDeFuentes } = require('peps-engine-core')
+const { resolverCadenas, construirFuentes, agregarFuentesDeGrupo, consumirDeFuentes, construirGrafoFactores, factoresDesde } = require('peps-engine-core')
 
 /**
  * Extrae los ítems del carrito en el MISMO orden de enumeración que
@@ -47,14 +47,21 @@ function extraerItemsOrdenados(datosCarrito) {
  * Cálculo puro del consumo: mismas reglas que procesarVenta (propios primero,
  * base de respaldo, cantidad_sin_descuento no toca stock). MUTA los lotes.
  */
-function calcularConsumoOrden(items, convMap, ownConvs, lotesPorProducto) {
+// gruposPorProducto: grupo de equivalencia de cada producto (factoresDesde) —
+// el resto del grupo entra como respaldo cuando la base no alcanza
+// (equivalencias mixtas; mismo cambio que disfruleg-electron/orden-consumo.ts).
+function calcularConsumoOrden(items, convMap, ownConvs, lotesPorProducto, gruposPorProducto = {}) {
   const consumos = []
   const deltaLotes = {}
   const deltaStock = {}
   const pendientes = {}
 
   items.forEach((item, itemIdx) => {
-    const fuentes = construirFuentes(item.id_producto, convMap[item.id_producto], ownConvs[item.id_producto])
+    const fuentes = agregarFuentesDeGrupo(
+      construirFuentes(item.id_producto, convMap[item.id_producto], ownConvs[item.id_producto]),
+      item.id_producto,
+      gruposPorProducto[item.id_producto]
+    )
     const sinDesc = Math.min(Number(item.cantidad_sin_descuento) || 0, item.cantidad)
 
     deltaStock[fuentes[0].idProd] = deltaStock[fuentes[0].idProd] || 0
@@ -85,7 +92,7 @@ function calcularConsumoOrden(items, convMap, ownConvs, lotesPorProducto) {
 
 /** Carga convMap con las mismas reglas de preferencia que procesarVenta — siempre por query directa. */
 async function cargarConversiones(conn, idsProductos, idGrupo) {
-  if (idsProductos.length === 0) return {}
+  if (idsProductos.length === 0) return { convMap: {}, allRows: [] }
   const ph = idsProductos.map(() => '?').join(',')
   const params = [...idsProductos]
   if (idGrupo != null) params.push(idGrupo)
@@ -116,7 +123,7 @@ async function cargarConversiones(conn, idsProductos, idGrupo) {
     allConvMap[Number(row.id_producto_derivado)] = { idBase: Number(row.id_producto_base), factor: parseFloat(String(row.factor)) }
   }
   resolverCadenas(convMap, allConvMap)
-  return convMap
+  return { convMap, allRows }
 }
 
 /**
@@ -132,11 +139,24 @@ async function consumirPepsParaOrden(conn, folioNumero, datosCarrito, idGrupo = 
   }
 
   const idsProductos = [...new Set(items.map(i => i.id_producto))]
-  const convMap = await cargarConversiones(conn, idsProductos, idGrupo)
+  const { convMap, allRows } = await cargarConversiones(conn, idsProductos, idGrupo)
+
+  // Grupo de equivalencia completo — respaldo para equivalencias mixtas
+  const vecinos = construirGrafoFactores(allRows.map(r => ({
+    id_producto_derivado: Number(r.id_producto_derivado),
+    id_producto_base:     Number(r.id_producto_base),
+    factor:               parseFloat(String(r.factor)),
+  })))
+  const gruposPorProducto = {}
+  for (const id of idsProductos) {
+    const g = factoresDesde(id, vecinos)
+    if (g.size > 1) gruposPorProducto[id] = g
+  }
 
   const idsParaPeps = [...new Set(idsProductos.flatMap(id => {
     const baseId = convMap[id]?.idBase
-    return (baseId && baseId !== id) ? [baseId, id] : [id]
+    const ids = (baseId && baseId !== id) ? [baseId, id] : [id]
+    return [...ids, ...(gruposPorProducto[id] ? [...gruposPorProducto[id].keys()] : [])]
   }))]
   const phProd = idsParaPeps.map(() => '?').join(',')
   const [loteRows] = await conn.execute(
@@ -170,7 +190,7 @@ async function consumirPepsParaOrden(conn, folioNumero, datosCarrito, idGrupo = 
     }
   }
 
-  const { consumos, deltaLotes, deltaStock, pendientes } = calcularConsumoOrden(items, convMap, ownConvs, lotesPorProducto)
+  const { consumos, deltaLotes, deltaStock, pendientes } = calcularConsumoOrden(items, convMap, ownConvs, lotesPorProducto, gruposPorProducto)
 
   if (consumos.length > 0) {
     const ph = consumos.map(() => '(?,?,?,?,?,?,?,?)').join(',')
