@@ -483,14 +483,18 @@ describe('DELETE /api/electron/ordenes/:folio — eliminar (H-5 Fase 4 restante)
     expect(pool.getConnection).not.toHaveBeenCalled()
   })
 
-  it('elimina la orden: revierte PEPS, cancela reservas legacy y borra la fila', async () => {
+  it('elimina la orden: revierte PEPS, cancela reservas legacy, la copia a la papelera y borra la fila', async () => {
     q.mockResolvedValueOnce([{ estado: 'guardada' }])
-    const conn = mockConn([[[], []]]) // revertirConsumoOrden: SELECT lotes → sin lotes que restaurar
+    const conn = mockConn([
+      [[{ folio_numero: 42, id_cliente: 7, total_estimado: '10.00', datos_carrito: {} }], []], // SELECT * FOR UPDATE
+      [[], []], // revertirConsumoOrden: SELECT lotes → sin lotes que restaurar
+    ])
     const res = await request(app).delete('/api/electron/ordenes/42')
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
     const sqlCalls = conn.execute.mock.calls.map(c => c[0])
     expect(sqlCalls.some(sql => sql.includes('reserva_inventario') && sql.includes('cancelada'))).toBe(true)
+    expect(sqlCalls.some(sql => sql.includes('INSERT INTO ordenes_eliminadas'))).toBe(true)
     expect(sqlCalls.some(sql => sql.includes('DELETE FROM ordenes_guardadas'))).toBe(true)
     expect(conn.commit).toHaveBeenCalled()
     expect(conn.rollback).not.toHaveBeenCalled()

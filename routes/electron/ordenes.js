@@ -883,15 +883,31 @@ router.delete('/notas-ceo/:folio/:index', ADMIN, async (req, res) => {
 })
 
 // ═══════════════════════════════════════════════════════════════
-// ELIMINAR (H-5 Fase 4 restante — primer canal, el más simple:
-// sin folio nuevo que asignar, sin UbicuoAI de por medio, sin
-// notificación a bodega. Reusa revertirConsumoOrden tal cual la usa
-// revertir-procesamiento. Sin gate de rol adicional — igual que hoy
-// en ordenes.handler.ts, el único control real es el estado.
+// ELIMINAR → papelera de 7 días (24 sep 2026)
+//
+// Antes era un DELETE real, sin rastro de quién ni cuándo. Ahora, en la misma
+// transacción que devuelve el consumo PEPS, la fila completa se copia a
+// ordenes_eliminadas y se puede restaurar durante DIAS_PAPELERA días
+// (POST /eliminadas/:id/restaurar). El cron de las 06:00 UTC borra las viejas.
+//
+// admin_usuario/admin_password (el AdminAuthModal de Electron) se re-verifican
+// aquí, como en procesar-venta. Opcionales por compatibilidad con Electron
+// ≤ 10.0.6, que no los manda: en ese caso autorizado_por queda NULL, pero
+// eliminado_por (del JWT) siempre se registra.
 // ═══════════════════════════════════════════════════════════════
+
+const DIAS_PAPELERA = 7
 
 router.delete('/:folio', async (req, res) => {
   const folio = req.params.folio
+  const { admin_usuario, admin_password } = req.body || {}
+  let autorizadoPor = null
+  if (admin_usuario || admin_password) {
+    const auth = await verificarAdminPassword(req, admin_usuario, admin_password)
+    if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error })
+    autorizadoPor = String(admin_usuario).trim()
+  }
+
   try {
     const check = await q('SELECT estado FROM ordenes_guardadas WHERE folio_numero = ?', [folio])
     if (check.length === 0) return res.json({ ok: false, error: 'Orden no encontrada' })
@@ -906,11 +922,20 @@ router.delete('/:folio', async (req, res) => {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [filas] = await conn.execute('SELECT * FROM ordenes_guardadas WHERE folio_numero = ? FOR UPDATE', [folio])
+    const orden = filas[0]
+    if (!orden) throw new Error('Orden no encontrada')
     await revertirConsumoOrden(conn, folio) // devuelve lotes PEPS y reconcilia stock
     await conn.execute(
       `UPDATE reserva_inventario SET estado = 'cancelada' WHERE folio_numero = ? AND estado = 'activa'`,
       [folio]
     ) // legacy: folios anteriores al cambio de flujo
+    await conn.execute(
+      `INSERT INTO ordenes_eliminadas (folio_numero, id_cliente, total_estimado, orden, eliminado_por, autorizado_por)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [orden.folio_numero, orden.id_cliente ?? null, orden.total_estimado ?? null,
+        JSON.stringify(orden), identidadEscritura(req), autorizadoPor]
+    )
     await conn.execute('DELETE FROM ordenes_guardadas WHERE folio_numero = ?', [folio])
     await conn.commit()
     res.json({ ok: true, data: { success: true } })
@@ -918,6 +943,92 @@ router.delete('/:folio', async (req, res) => {
     await conn.rollback()
     console.error('[ordenes] eliminar:', e.message)
     res.status(500).json({ ok: false, error: 'Error al eliminar la orden' })
+  } finally {
+    conn.release()
+  }
+})
+
+/** Notas eliminadas en los últimos DIAS_PAPELERA días (sin el carrito completo). */
+router.get('/eliminadas', async (req, res) => {
+  try {
+    const rows = await q(
+      `SELECT e.id, e.folio_numero, e.id_cliente, e.total_estimado, e.eliminado_por,
+              e.autorizado_por, e.fecha_eliminacion,
+              DATE_ADD(e.fecha_eliminacion, INTERVAL ${DIAS_PAPELERA} DAY) AS expira,
+              JSON_UNQUOTE(JSON_EXTRACT(e.orden, '$.usuario_creador')) AS usuario_creador,
+              JSON_UNQUOTE(JSON_EXTRACT(e.orden, '$.fecha_creacion'))  AS fecha_creacion,
+              c.nombre_cliente
+       FROM ordenes_eliminadas e
+       LEFT JOIN cliente c ON c.id_cliente = e.id_cliente
+       WHERE e.fecha_eliminacion >= DATE_SUB(NOW(), INTERVAL ${DIAS_PAPELERA} DAY)
+       ORDER BY e.fecha_eliminacion DESC`
+    )
+    res.json({ ok: true, data: rows })
+  } catch (e) {
+    console.error('[ordenes] eliminadas:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al cargar las notas eliminadas' })
+  }
+})
+
+/**
+ * Restaura una nota de la papelera con su mismo folio (los folios no se
+ * reutilizan) y vuelve a consumir PEPS, como si se hubiera guardado de nuevo.
+ * Exige admin/ceo con contraseña re-verificada, igual que eliminar.
+ */
+router.post('/eliminadas/:id/restaurar', async (req, res) => {
+  const { admin_usuario, admin_password } = req.body || {}
+  const auth = await verificarAdminPassword(req, admin_usuario, admin_password)
+  if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error })
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [rows] = await conn.execute(
+      `SELECT id, folio_numero, orden FROM ordenes_eliminadas
+       WHERE id = ? AND fecha_eliminacion >= DATE_SUB(NOW(), INTERVAL ${DIAS_PAPELERA} DAY)
+       FOR UPDATE`,
+      [req.params.id]
+    )
+    if (rows.length === 0) {
+      await conn.rollback()
+      return res.json({ ok: false, error: `La nota ya no está en la papelera (se guardan ${DIAS_PAPELERA} días)` })
+    }
+    const orden = typeof rows[0].orden === 'string' ? JSON.parse(rows[0].orden) : rows[0].orden
+    const folio = Number(rows[0].folio_numero)
+
+    const [existe] = await conn.execute('SELECT 1 FROM ordenes_guardadas WHERE folio_numero = ?', [folio])
+    if (existe.length > 0) {
+      await conn.rollback()
+      return res.json({ ok: false, error: `Ya existe una nota con el folio ${folio}` })
+    }
+
+    const carrito = typeof orden.datos_carrito === 'string' ? JSON.parse(orden.datos_carrito) : (orden.datos_carrito || {})
+    const historial = Array.isArray(carrito.__historial__) ? carrito.__historial__ : []
+    const carritoRestaurado = {
+      ...carrito,
+      __historial__: [...historial, { tipoEvento: 'restauracion', fecha: new Date().toISOString(), adminUsuario: String(admin_usuario).trim() }],
+    }
+
+    await conn.execute(
+      `INSERT INTO ordenes_guardadas
+         (id_orden, folio_numero, id_cliente, usuario_creador, datos_carrito, total_estimado,
+          estado, activo, fecha_creacion, fecha_modificacion, fecha_envio)
+       VALUES (?, ?, ?, ?, ?, ?, 'guardada', 1, ?, NOW(), ?)`,
+      [orden.id_orden, folio, orden.id_cliente ?? null, orden.usuario_creador ?? null,
+        JSON.stringify(carritoRestaurado), orden.total_estimado ?? 0,
+        orden.fecha_creacion ?? null, orden.fecha_envio ?? null]
+    )
+    if (folio > FOLIO_CORTE_INVENTARIO) {
+      const idGrupo = orden.id_cliente ? await obtenerIdGrupoCliente(conn, orden.id_cliente) : null
+      await consumirPepsParaOrden(conn, folio, carritoRestaurado, idGrupo)
+    }
+    await conn.execute('DELETE FROM ordenes_eliminadas WHERE id = ?', [rows[0].id])
+    await conn.commit()
+    res.json({ ok: true, data: { success: true, folio_numero: folio } })
+  } catch (e) {
+    await conn.rollback()
+    console.error('[ordenes] restaurar:', e.message)
+    res.status(500).json({ ok: false, error: 'Error al restaurar la nota' })
   } finally {
     conn.release()
   }

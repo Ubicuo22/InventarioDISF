@@ -26,7 +26,8 @@ export default {
 
   async scheduled(controller, env, ctx) {
     // 02:00 UTC = 20:00 en CDMX (CST, UTC-6) → resumen diario
-    // 06:00 UTC = limpieza de sesiones expiradas
+    // 06:00 UTC = limpieza de sesiones expiradas y de la papelera de notas
+    //             (ordenes_eliminadas: se pueden restaurar 7 días)
     const { enviarResumen } = await import('./utils/resumen-diario.js')
 
     switch (controller.cron) {
@@ -34,9 +35,10 @@ export default {
         ctx.waitUntil(conContextoDb(() => enviarResumen()))
         break
       case '0 6 * * *':
-        ctx.waitUntil(conContextoDb(() => q(
-          "DELETE FROM bodega_sesiones WHERE ultimo_uso < DATE_SUB(NOW(), INTERVAL 30 DAY)"
-        )))
+        ctx.waitUntil(conContextoDb(async () => {
+          await q("DELETE FROM bodega_sesiones WHERE ultimo_uso < DATE_SUB(NOW(), INTERVAL 30 DAY)")
+          await q("DELETE FROM ordenes_eliminadas WHERE fecha_eliminacion < DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        }))
         break
     }
   },
