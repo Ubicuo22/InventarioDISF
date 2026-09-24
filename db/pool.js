@@ -60,12 +60,42 @@ const RETRYABLE = new Set([
   'EPIPE', 'PROTOCOL_CONNECTION_LOST', 'ER_SERVER_LOST'
 ])
 
+// ── Perfil "electron": fechas con el mismo contrato que Electron ────────────
+// Las rutas /api/electron/* (H-5) sirven datos a disfruleg-electron, cuyo
+// código se escribió contra su conexión directa: timezone '+00:00' +
+// dateStrings (TiDB guarda NOW() en UTC y se entrega el texto tal cual).
+// Con el CONFIG de bodega-web (timezone '-06:00', objetos Date) cada DATETIME
+// salía 6 h adelantado en Electron — p. ej. el "último acceso" de Usuarios
+// (24 sep 2026). Las rutas de bodega-web conservan su comportamiento.
+const { AsyncLocalStorage: _ALS } = require('node:async_hooks')
+const perfilAls = new _ALS()
+const CONFIG_ELECTRON = { ...CONFIG, timezone: '+00:00', dateStrings: true }
+const esPerfilElectron = () => perfilAls.getStore() === 'electron'
+
+/** Middleware Express: las queries de esta request usan el perfil de Electron. */
+function perfilElectron (req, res, next) {
+  perfilAls.run('electron', next)
+}
+
 let pool
 let conContextoDb
 
 if (!esWorkers) {
-  // ── Node: pool global persistente ─────────────────────────
-  pool = mysql.createPool(CONFIG)
+  // ── Node: pool global persistente (uno por perfil) ────────
+  const poolWeb = mysql.createPool(CONFIG)
+  let poolElectron = null
+  const poolActual = () => {
+    if (!esPerfilElectron()) return poolWeb
+    if (!poolElectron) poolElectron = mysql.createPool(CONFIG_ELECTRON)
+    return poolElectron
+  }
+  pool = new Proxy({}, {
+    get(_, prop) {
+      const p = poolActual()
+      const valor = p[prop]
+      return typeof valor === 'function' ? valor.bind(p) : valor
+    }
+  })
   conContextoDb = (fn) => fn()
 } else {
   // ── Workers: pool por request ──────────────────────────────
@@ -75,11 +105,13 @@ if (!esWorkers) {
   const poolActual = () => {
     const store = als.getStore()
     if (!store) throw new Error('Query fuera de contexto de request (falta conContextoDb)')
-    if (!store.pool) {
+    const clave = esPerfilElectron() ? 'poolElectron' : 'pool'
+    if (!store[clave]) {
       // La config de config vive en process.env, poblado por los secrets del Worker
-      store.pool = mysql.createPool({ ...CONFIG, connectionLimit: 6, keepAliveInitialDelay: 5000 })
+      const base = clave === 'poolElectron' ? CONFIG_ELECTRON : CONFIG
+      store[clave] = mysql.createPool({ ...base, connectionLimit: 6, keepAliveInitialDelay: 5000 })
     }
-    return store.pool
+    return store[clave]
   }
 
   // Mismo API que el pool real — delega al pool del request en curso
@@ -101,6 +133,7 @@ if (!esWorkers) {
       return await als.run(store, fn)
     } finally {
       if (store.pool) store.pool.end().catch(() => {})
+      if (store.poolElectron) store.poolElectron.end().catch(() => {})
     }
   }
 }
@@ -141,8 +174,28 @@ const HTTP_DECODERS = {
   TIMESTAMP: (v) => new Date(v.replace(' ', 'T') + '-06:00'),
 }
 
+// Perfil electron por HTTP: fechas como texto plano (lo que ya entrega el
+// driver sin decoders = dateStrings de mysql2); BIGINT sigue como número.
+const HTTP_DECODERS_ELECTRON = {
+  BIGINT: Number,
+  'UNSIGNED BIGINT': Number,
+}
+
 let httpConn
+let httpConnElectron
 function conexionHttp() {
+  if (esPerfilElectron()) {
+    if (!httpConnElectron) {
+      httpConnElectron = connectHttp({
+        host: process.env.TIDB_HOST,
+        username: process.env.TIDB_USER,
+        password: process.env.TIDB_PASSWORD,
+        database: process.env.TIDB_DATABASE,
+        decoders: HTTP_DECODERS_ELECTRON,
+      })
+    }
+    return httpConnElectron
+  }
   // connect() no abre un socket — es config para fetch por-query, se puede
   // compartir entre requests de Workers sin el problema de "I/O de otro
   // request" que obliga al pool-por-request de mysql2.
@@ -229,4 +282,4 @@ if (!esWorkers) {
   }, 90_000)
 }
 
-module.exports = { pool, q, conContextoDb }
+module.exports = { pool, q, conContextoDb, perfilElectron }

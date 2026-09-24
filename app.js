@@ -38,6 +38,9 @@ app.use('/api/notificaciones', require('./routes/notificaciones'))
 // vocabulario de roles distinto (admin/supervisor/cajero/ceo) y tabla de
 // sesión propia (electron_sesiones). Ver plan en
 // disfruleg-electron/.claude/plans (H-5) para el resto de las fases.
+// Fechas con el contrato de Electron (timezone +00:00, dateStrings) en todas
+// las rutas /api/electron/* — ver perfilElectron en db/pool.js.
+app.use('/api/electron', require('./db/pool').perfilElectron || ((req, res, next) => next()))
 app.use('/api/electron/auth',          require('./routes/electron/auth'))
 app.use('/api/electron/tipos-cliente', requireAuthElectron, require('./routes/electron/tiposCliente'))
 app.use('/api/electron/geocoding',     requireAuthElectron, require('./routes/electron/geocoding'))
