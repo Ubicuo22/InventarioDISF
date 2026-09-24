@@ -67,6 +67,23 @@ const RETRYABLE = new Set([
 // Con el CONFIG de bodega-web (timezone '-06:00', objetos Date) cada DATETIME
 // salía 6 h adelantado en Electron — p. ej. el "último acceso" de Usuarios
 // (24 sep 2026). Las rutas de bodega-web conservan su comportamiento.
+// ── Perfil bodega-web: DATETIME/TIMESTAMP son UTC ──────────────────────────
+// timezone '-06:00' está bien para las columnas DATE (fecha_compra,
+// fecha_merma… → medianoche de México), pero TiDB guarda NOW() en UTC y ese
+// mismo timezone corría cada DATETIME 6 h hacia adelante: la hora de las
+// pantallas no concordaba con Electron, el bloqueo de 15 min por intentos
+// fallidos duraba 6 h 15 min y el candado de edición de 5 min, ~6 h
+// (24 sep 2026). Solo cambia la LECTURA: ninguna query manda objetos Date
+// como parámetro (todas usan NOW() o strings).
+const utcAFecha = (s) => (s == null ? s : new Date(s.replace(' ', 'T') + 'Z'))
+function fechasUtc (field, next) {
+  if (field.type === 'DATETIME' || field.type === 'TIMESTAMP') {
+    return utcAFecha(field.string())
+  }
+  return next()
+}
+const CONFIG_WEB = { ...CONFIG, typeCast: fechasUtc }
+
 const { AsyncLocalStorage: _ALS } = require('node:async_hooks')
 const perfilAls = new _ALS()
 const CONFIG_ELECTRON = { ...CONFIG, timezone: '+00:00', dateStrings: true }
@@ -82,7 +99,7 @@ let conContextoDb
 
 if (!esWorkers) {
   // ── Node: pool global persistente (uno por perfil) ────────
-  const poolWeb = mysql.createPool(CONFIG)
+  const poolWeb = mysql.createPool(CONFIG_WEB)
   let poolElectron = null
   const poolActual = () => {
     if (!esPerfilElectron()) return poolWeb
@@ -108,7 +125,7 @@ if (!esWorkers) {
     const clave = esPerfilElectron() ? 'poolElectron' : 'pool'
     if (!store[clave]) {
       // La config de config vive en process.env, poblado por los secrets del Worker
-      const base = clave === 'poolElectron' ? CONFIG_ELECTRON : CONFIG
+      const base = clave === 'poolElectron' ? CONFIG_ELECTRON : CONFIG_WEB
       store[clave] = mysql.createPool({ ...base, connectionLimit: 6, keepAliveInitialDelay: 5000 })
     }
     return store[clave]
@@ -161,7 +178,7 @@ async function qMysql(sql, params = []) {
 const READ_SQL = /^\s*(SELECT|WITH|SHOW|DESCRIBE|DESC|EXPLAIN)\b/i
 
 // Decoders para que la salida de q() sea idéntica byte a byte a la de
-// mysql2 con timezone:'-06:00' (verificado contra TiDB real en
+// mysql2 con CONFIG_WEB (timezone:'-06:00' + fechasUtc; verificado contra TiDB real en
 // scripts/parity-tidb.js), mientras este driver convive con `pool`
 // (mysql2, transacciones manuales, sin tocar en esta fase). Sin esto:
 // COUNT(*)/BIGINT llegan como string, no número, y las fechas llegan como
@@ -170,8 +187,8 @@ const HTTP_DECODERS = {
   BIGINT: Number,
   'UNSIGNED BIGINT': Number,
   DATE: (v) => new Date(v + 'T00:00:00-06:00'),
-  DATETIME: (v) => new Date(v.replace(' ', 'T') + '-06:00'),
-  TIMESTAMP: (v) => new Date(v.replace(' ', 'T') + '-06:00'),
+  DATETIME: utcAFecha,   // UTC, igual que fechasUtc de mysql2
+  TIMESTAMP: utcAFecha,
 }
 
 // Perfil electron por HTTP: fechas como texto plano (lo que ya entrega el

@@ -143,11 +143,15 @@ function historyModule() {
     // ── Formato de fecha ──────────────────────────────────────
     fmtFecha(f) {
       if (!f) return '—'
-      // Parsear YYYY-MM-DD al mediodía UTC para evitar el cambio de día
-      // al mostrar en timezone local (UTC-6 Mexico = 6h detrás de UTC midnight)
-      const s = typeof f === 'string' ? f : new Date(f).toISOString()
-      const ymd = s.slice(0, 10)
-      const d = new Date(ymd + 'T12:00:00Z')
+      // YYYY-MM-DD solo: parsear al mediodía UTC para no cambiar de día.
+      // Con hora (ISO de un DATETIME, o una columna DATE que llega como
+      // medianoche de México): el instante real, formateado en México — si
+      // se recortara el ISO, lo registrado después de las 18:00 saldría con
+      // el día siguiente.
+      const soloDia = (s) => new Date(String(s).slice(0, 10) + 'T12:00:00Z')
+      let d = typeof f === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(f) ? soloDia(f) : new Date(f)
+      if (isNaN(d.getTime())) d = soloDia(f)
+      if (isNaN(d.getTime())) return '—'
       return d.toLocaleDateString('es-MX', {
         day: '2-digit', month: 'short', year: 'numeric',
         timeZone: 'America/Mexico_City'
