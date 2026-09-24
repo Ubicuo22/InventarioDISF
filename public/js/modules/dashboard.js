@@ -205,17 +205,9 @@ function dashboardModule() {
         })
       }
 
-      // 4. Pedidos atrasados (medio)
-      if ((m.pedidos?.atrasados || 0) > 0) {
-        out.push({
-          tipo: 'atrasados',
-          color: 'amber',
-          mensaje: `${m.pedidos.atrasados} ${m.pedidos.atrasados === 1 ? 'pedido pendiente hace más de 1 día' : 'pedidos pendientes hace más de 1 día'}`,
-          monto: '',
-          accion: 'Ver',
-          onClick: () => { this.tab = 'pedidos'; this.pedidosTab = 'activos'; this.cargarOrdenes?.() }
-        })
-      }
+      // (Alerta de "pedidos pendientes hace más de 1 día" retirada el 23 sep
+      //  2026: por proceso interno las notas entregadas se procesan días
+      //  después, así que siempre marcaba ~2,400 — ruido, no alerta.)
 
       return out
     },

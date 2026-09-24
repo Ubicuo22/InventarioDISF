@@ -41,7 +41,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.2caceca6.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.4a0cfa71.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -472,7 +472,7 @@
           Merma
         </button>
         <button x-show="tienePermiso('pedidos')"
-          @click="tab = 'pedidos'; cargarOrdenes(); ordenesFiltroRevision = 'pendientes'"
+          @click="tab = 'pedidos'; pedidosTab = 'activos'; limpiarFiltrosPedidos(); cargarOrdenes()"
           class="qa-btn qa-btn--green tap">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -543,7 +543,7 @@
 
         <!-- ▸ POR REVISAR — hero principal del operador de bodega -->
         <button x-show="tienePermiso('pedidos')"
-          @click="tab = 'pedidos'; cargarOrdenes(); ordenesFiltroRevision = 'pendientes'"
+          @click="tab = 'pedidos'; pedidosTab = 'activos'; limpiarFiltrosPedidos(); cargarOrdenes()"
           class="bento-tile bento-col-4 tap"
           :class="(dashMetricas?.pedidos?.por_revisar ?? 0) > 0 ? 'bento-tile--accent' : ''"
           style="padding: 18px 20px;">
@@ -564,15 +564,13 @@
                 <p class="stat-num"
                   :class="(dashMetricas?.pedidos?.por_revisar ?? 0) > 0 ? 'text-green-400' : 'text-slate-500'"
                   x-text="dashAnimInt('pedidos_revisar')"></p>
-                <p class="text-sm text-slate-400" x-text="`/ ${dashMetricas?.pedidos?.activos ?? 0} activos`"></p>
+                <p class="text-sm text-slate-400" x-text="`/ ${dashMetricas?.pedidos?.guardados_hoy ?? 0} de hoy`"></p>
               </div>
               <p class="text-[11px] mt-1.5"
                 :class="(dashMetricas?.pedidos?.por_revisar ?? 0) === 0 ? 'text-green-400' : 'text-slate-500'"
                 x-text="(dashMetricas?.pedidos?.por_revisar ?? 0) === 0
-                  ? '✓ Todos los pedidos revisados'
-                  : ((dashMetricas?.pedidos?.atrasados ?? 0) > 0
-                      ? `${dashMetricas.pedidos.atrasados} atrasados +1 día`
-                      : 'Pendientes de revisar')"></p>
+                  ? '✓ Todos los pedidos de hoy revisados'
+                  : 'Pedidos de hoy pendientes de revisar'"></p>
             </div>
             <svg class="w-5 h-5 text-slate-600 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
@@ -6004,10 +6002,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.2caceca6.js agrupa todos los módulos en 1 request.
+     bodega-bundle.4a0cfa71.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.2caceca6.js"></script>
+<script src="/js/bodega-bundle.4a0cfa71.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 <script>

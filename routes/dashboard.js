@@ -147,13 +147,13 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
     const [
       pedidosHoy,
       pedidosAyer,
-      pedidosActivosRows,
+      pedidosHoyRows,
       compras,
       comprasAyer,
       stockStats,
       topCritico,
       inventarioStats,
-      pedidosAtrasados,
+      pedidosActivos,
       lotesAntiguos
     ] = await Promise.all([
 
@@ -169,10 +169,17 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
          WHERE fecha_creacion >= ? AND fecha_creacion < ? AND activo = 1`,
         [rangoAyer.inicio, rangoAyer.fin]),
 
-      // Pedidos activos con su carrito (para detectar revisados/no revisados)
+      // Pedidos guardados DE HOY con su carrito (revisados / por revisar).
+      // La revisión de surtido es del mismo día; las ~2,400 notas guardadas
+      // de días anteriores ya se entregaron y se procesan después por proceso
+      // interno (normal, 23 sep 2026). Antes se traían TODAS con su
+      // datos_carrito (~10 MB por carga del home) y "Por revisar" salía en
+      // cientos, sin relación con lo que muestra Pedidos (que abre en hoy).
       q(`SELECT folio_numero, datos_carrito, fecha_creacion
          FROM ordenes_guardadas
-         WHERE estado = 'guardada' AND activo = 1`),
+         WHERE estado = 'guardada' AND activo = 1
+           AND fecha_creacion >= ? AND fecha_creacion < ?`,
+        [rangoHoy.inicio, rangoHoy.fin]),
 
       // Compras del día
       q(`SELECT
@@ -270,11 +277,12 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
            WHERE p.activo = 1
          ) sv`),
 
-      // Pedidos atrasados (activos creados hace >24h)
+      // Total de guardadas activas (todas las fechas) — solo el conteo, sin
+      // traer el carrito. "Atrasados +1 día" se retiró: con el proceso normal
+      // casi todas las guardadas tienen más de un día, no es una alerta.
       q(`SELECT COUNT(*) AS total
          FROM ordenes_guardadas
-         WHERE estado = 'guardada' AND activo = 1
-           AND fecha_creacion < DATE_SUB(NOW(), INTERVAL 1 DAY)`),
+         WHERE estado = 'guardada' AND activo = 1`),
 
       // Lotes PEPS estancados: con stock restante > 0 y más de 60 días desde entrada
       q(`SELECT COUNT(DISTINCT ip.id_producto) AS total
@@ -385,7 +393,7 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
     //   3. Si tiene pendientes → cuenta como "por revisar" (necesita atención)
     let porRevisar = 0
     let revisados = 0
-    for (const orden of (pedidosActivosRows || [])) {
+    for (const orden of (pedidosHoyRows || [])) {
       try {
         const cart = typeof orden.datos_carrito === 'string'
           ? JSON.parse(orden.datos_carrito)
@@ -427,10 +435,10 @@ router.get('/metricas-hoy', requireAuth, async (req, res) => {
       pedidos: {
         total_hoy:  parseInt(pedidosHoy[0]?.total  || 0),
         total_ayer: parseInt(pedidosAyer[0]?.total || 0),
-        activos:    (pedidosActivosRows || []).length,
-        por_revisar: porRevisar,
-        revisados,
-        atrasados:  parseInt(pedidosAtrasados[0]?.total || 0)
+        activos:    parseInt(pedidosActivos[0]?.total || 0),
+        guardados_hoy: (pedidosHoyRows || []).length,
+        por_revisar: porRevisar,   // solo pedidos de hoy
+        revisados
       },
       ventas: {
         total_vendido:      parseFloat(ventas[0]?.total_vendido || 0),

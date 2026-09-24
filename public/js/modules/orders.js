@@ -13,7 +13,6 @@ function ordersModule() {
   return {
     ordenes: [],
     cargandoOrdenes: false,
-    ordenesFiltroRevision: 'todas',  // 'todas' | 'pendientes' | 'revisadas'
     filtroDesde: _sem.desde,
     filtroHasta: _sem.hasta,
     filtroClientePedidos: '',
