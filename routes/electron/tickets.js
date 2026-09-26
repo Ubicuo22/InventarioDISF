@@ -34,14 +34,16 @@ const SELECT_TICKET = `
          t.subido_por,     COALESCE(us.nombre_completo, t.subido_por)     AS subido_por_nombre,
          t.capturando_por, COALESCE(uc.nombre_completo, t.capturando_por) AS capturando_por_nombre,
          t.inicio_captura, t.id_proveedor, t.fecha_ticket, t.folio, t.total_ticket,
-         t.diferencia_aceptada, t.motivo_diferencia, t.capturado_por, t.fecha_captura,
+         t.diferencia_aceptada, t.motivo_diferencia,
+         t.capturado_por,  COALESCE(ucap.nombre_completo, t.capturado_por) AS capturado_por_nombre, t.fecha_captura,
          t.motivo_descarte,
          (SELECT COUNT(*) FROM ticket_compra_archivo a WHERE a.id_ticket = t.id) AS archivos,
          (SELECT MIN(a.id) FROM ticket_compra_archivo a WHERE a.id_ticket = t.id) AS id_primer_archivo,
          (SELECT COUNT(*) FROM compra c WHERE c.id_ticket = t.id) AS compras
     FROM ticket_compra t
     LEFT JOIN usuarios_sistema us ON us.username = t.subido_por     COLLATE utf8mb4_0900_ai_ci
-    LEFT JOIN usuarios_sistema uc ON uc.username = t.capturando_por COLLATE utf8mb4_0900_ai_ci`
+    LEFT JOIN usuarios_sistema uc ON uc.username = t.capturando_por COLLATE utf8mb4_0900_ai_ci
+    LEFT JOIN usuarios_sistema ucap ON ucap.username = t.capturado_por COLLATE utf8mb4_0900_ai_ci`
 
 async function comprasDelTicket(idTicket) {
   const compras = await q(
@@ -60,8 +62,20 @@ async function comprasDelTicket(idTicket) {
 
 // ─── GET / — bandeja ────────────────────────────────────────────
 // Los que tengo en captura van primero ("Continuar"), luego por antigüedad.
+// ?vista=capturados_hoy → los cerrados hoy (hora de México), para revisar lo
+// que salió de la bandeja sin ir a buscarlo al historial.
 router.get('/', async (req, res) => {
   try {
+    if (req.query.vista === 'capturados_hoy') {
+      const rows = await q(
+        `${SELECT_TICKET}
+          WHERE t.estado = 'capturado'
+            AND DATE(CONVERT_TZ(t.fecha_captura, '+00:00', '-06:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '-06:00'))
+          ORDER BY t.fecha_captura DESC
+          LIMIT 100`
+      )
+      return res.json({ ok: true, data: rows })
+    }
     const rows = await q(
       `${SELECT_TICKET}
         WHERE t.estado IN ('pendiente', 'en_captura')
@@ -197,13 +211,43 @@ router.post('/:id/liberar', SOLO_ADMIN, async (req, res) => {
   }
 })
 
+// ─── PUT /:id/datos — proveedor, fecha, folio y total al escribirlos ─
+// Se guardan en cuanto se capturan, no hasta terminar: al pausar y
+// continuar después, ya están ahí.
+router.put('/:id/datos', async (req, res) => {
+  try {
+    const u = usuario(req)
+    const { idProveedor = null, fechaTicket = null, folio = null, totalTicket = null } = req.body ?? {}
+    const total = totalTicket === null || totalTicket === '' ? null : Number(totalTicket)
+    if (total !== null && !(total >= 0)) return res.status(400).json({ ok: false, error: 'Total inválido' })
+    if (fechaTicket && !/^\d{4}-\d{2}-\d{2}$/.test(String(fechaTicket))) {
+      return res.status(400).json({ ok: false, error: 'Fecha inválida' })
+    }
+    const r = await q(
+      `UPDATE ticket_compra
+          SET id_proveedor = ?, fecha_ticket = ?, folio = ?, total_ticket = ?
+        WHERE id = ? AND estado = 'en_captura' AND capturando_por = ?`,
+      [idProveedor || null, fechaTicket || null, String(folio ?? '').trim().slice(0, 50) || null, total,
+       req.params.id, u]
+    )
+    if (r.affectedRows !== 1) return res.status(409).json({ ok: false, error: 'No tienes este ticket en captura' })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[electron/tickets] PUT /:id/datos:', err.message)
+    res.status(500).json({ ok: false, error: 'Error interno' })
+  }
+})
+
 // ─── POST /:id/terminar — cerrar con cuadre ─────────────────────
+// soloSiCuadra: lo manda Electron después de cada compra registrada. Si la
+// suma ya llegó al total, cierra; si no, responde { cerrado: false } sin
+// error — faltar productos es lo normal a media captura.
 // La suma se calcula aquí desde `compra`, nunca se toma del renderer: es
 // justo el número que tiene que ser confiable.
 router.post('/:id/terminar', async (req, res) => {
   try {
     const u = usuario(req)
-    const { idProveedor = null, fechaTicket = null, folio = null, totalTicket, motivoDiferencia } = req.body ?? {}
+    const { idProveedor = null, fechaTicket = null, folio = null, totalTicket, motivoDiferencia, soloSiCuadra = false } = req.body ?? {}
 
     const total = Number(totalTicket)
     if (!(total > 0)) return res.status(400).json({ ok: false, error: 'Captura el total del ticket' })
@@ -219,6 +263,9 @@ router.post('/:id/terminar', async (req, res) => {
     const diferencia = Math.round((suma - total) * 100) / 100
     const descuadrado = Math.abs(diferencia) > T.TOLERANCIA_CUADRE
     const motivo = String(motivoDiferencia ?? '').trim().slice(0, 255)
+    if (descuadrado && soloSiCuadra) {
+      return res.json({ ok: true, data: { id: t.id, cerrado: false, suma, total, diferencia } })
+    }
     if (descuadrado && !motivo) {
       return res.status(409).json({
         ok: false,
@@ -239,7 +286,7 @@ router.post('/:id/terminar', async (req, res) => {
        t.id, u]
     )
     if (r.affectedRows !== 1) return res.status(409).json({ ok: false, error: 'No tienes este ticket en captura' })
-    res.json({ ok: true, data: { id: t.id, suma, total, diferencia: descuadrado ? diferencia : 0 } })
+    res.json({ ok: true, data: { id: t.id, cerrado: true, suma, total, diferencia: descuadrado ? diferencia : 0 } })
   } catch (err) {
     console.error('[electron/tickets] POST /:id/terminar:', err.message)
     res.status(500).json({ ok: false, error: 'Error interno' })

@@ -288,3 +288,65 @@ describe('GET /api/electron/tickets/:id/archivos/:idArchivo', () => {
     expect(q.mock.calls[0][1]).toEqual(['3', '7'])
   })
 })
+
+// ═══ Cierre (26 sep 2026): datos al escribir, cierre automático, capturados hoy ═══
+describe('PUT /api/electron/tickets/:id/datos', () => {
+  it('guarda proveedor, fecha, folio y total del ticket propio en captura', async () => {
+    q.mockResolvedValueOnce({ affectedRows: 1 })
+    const res = await request(app).put('/api/electron/tickets/7/datos')
+      .send({ idProveedor: 4, fechaTicket: '2026-09-26', folio: ' A-1 ', totalTicket: '41' })
+    expect(res.status).toBe(200)
+    expect(q.mock.calls[0][1]).toEqual([4, '2026-09-26', 'A-1', 41, '7', 'CAPT'])
+    expect(q.mock.calls[0][0]).toMatch(/estado = 'en_captura' AND capturando_por = \?/)
+  })
+
+  it('total vacío se guarda como NULL (aún no lo capturan)', async () => {
+    q.mockResolvedValueOnce({ affectedRows: 1 })
+    await request(app).put('/api/electron/tickets/7/datos').send({ totalTicket: '' })
+    expect(q.mock.calls[0][1][3]).toBeNull()
+  })
+
+  it('rechaza total negativo y fecha mal formada', async () => {
+    expect((await request(app).put('/api/electron/tickets/7/datos').send({ totalTicket: -5 })).status).toBe(400)
+    expect((await request(app).put('/api/electron/tickets/7/datos').send({ fechaTicket: '26/09/2026' })).status).toBe(400)
+    expect(q).not.toHaveBeenCalled()
+  })
+
+  it('409 si no es mío o ya se cerró', async () => {
+    q.mockResolvedValueOnce({ affectedRows: 0 })
+    expect((await request(app).put('/api/electron/tickets/7/datos').send({ totalTicket: 41 })).status).toBe(409)
+  })
+})
+
+describe('POST /api/electron/tickets/:id/terminar con soloSiCuadra', () => {
+  const enCaptura = [{ id: 7, estado: 'en_captura', capturando_por: 'CAPT' }]
+
+  it('si todavía no cuadra responde cerrado:false, sin error y sin cerrar', async () => {
+    q.mockResolvedValueOnce(enCaptura).mockResolvedValueOnce([{ id_compra: 1, total_con_impuestos: '41.00' }])
+    const res = await request(app).post('/api/electron/tickets/7/terminar').send({ totalTicket: 100, soloSiCuadra: true })
+    expect(res.status).toBe(200)
+    expect(res.body.data).toMatchObject({ cerrado: false, suma: 41, total: 100 })
+    expect(q).toHaveBeenCalledTimes(2)   // nada de UPDATE
+  })
+
+  it('si cuadra, cierra', async () => {
+    q.mockResolvedValueOnce(enCaptura)
+      .mockResolvedValueOnce([{ id_compra: 1, total_con_impuestos: '41.00' }])
+      .mockResolvedValueOnce({ affectedRows: 1 })
+    const res = await request(app).post('/api/electron/tickets/7/terminar').send({ totalTicket: 41, soloSiCuadra: true })
+    expect(res.status).toBe(200)
+    expect(res.body.data.cerrado).toBe(true)
+    expect(q.mock.calls[2][0]).toMatch(/estado = 'capturado'/)
+  })
+})
+
+describe('GET /api/electron/tickets?vista=capturados_hoy', () => {
+  it('lista los cerrados hoy en hora de México', async () => {
+    q.mockResolvedValueOnce([{ id: 3, estado: 'capturado' }])
+    const res = await request(app).get('/api/electron/tickets?vista=capturados_hoy')
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(1)
+    expect(q.mock.calls[0][0]).toMatch(/estado = 'capturado'/)
+    expect(q.mock.calls[0][0]).toMatch(/CONVERT_TZ\(t\.fecha_captura, '\+00:00', '-06:00'\)/)
+  })
+})
