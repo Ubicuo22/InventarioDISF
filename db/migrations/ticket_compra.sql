@@ -13,6 +13,11 @@
 --   capturado  → cerrado con cuadre contra `total_ticket`
 --   descartado → duplicado, ilegible o no era compra (el archivo se conserva)
 --
+-- Collation: en producción estas tablas quedaron con utf8mb4_unicode_ci
+-- (default del editor de TiDB), distinta de usuarios_sistema.username
+-- (utf8mb4_0900_ai_ci). Todo JOIN de texto contra tablas viejas necesita
+-- COLLATE utf8mb4_0900_ai_ci — ver routes/electron/tickets.js.
+--
 -- El Worker no corre bootstrap de tablas: crear a mano en producción antes
 -- del deploy, un statement por Run en el editor de TiDB.
 

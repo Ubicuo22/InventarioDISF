@@ -25,6 +25,10 @@ const SOLO_ADMIN = requireRoleElectron(['admin', 'ceo'])
 
 const usuario = (req) => req.user.username
 
+// COLLATE en los JOIN: ticket_compra se creó con utf8mb4_unicode_ci (default
+// del editor de TiDB) y usuarios_sistema.username es utf8mb4_0900_ai_ci. Sin
+// forzarla, TiDB rechaza la comparación (ER_CANT_AGGREGATE_2COLLATIONS) y la
+// bandeja respondía 500 — el contador no hace JOIN y por eso sí funcionaba.
 const SELECT_TICKET = `
   SELECT t.id, t.estado, t.nota, t.fecha_subida,
          t.subido_por,     COALESCE(us.nombre_completo, t.subido_por)     AS subido_por_nombre,
@@ -36,8 +40,8 @@ const SELECT_TICKET = `
          (SELECT MIN(a.id) FROM ticket_compra_archivo a WHERE a.id_ticket = t.id) AS id_primer_archivo,
          (SELECT COUNT(*) FROM compra c WHERE c.id_ticket = t.id) AS compras
     FROM ticket_compra t
-    LEFT JOIN usuarios_sistema us ON us.username = t.subido_por
-    LEFT JOIN usuarios_sistema uc ON uc.username = t.capturando_por`
+    LEFT JOIN usuarios_sistema us ON us.username = t.subido_por     COLLATE utf8mb4_0900_ai_ci
+    LEFT JOIN usuarios_sistema uc ON uc.username = t.capturando_por COLLATE utf8mb4_0900_ai_ci`
 
 async function comprasDelTicket(idTicket) {
   const compras = await q(
