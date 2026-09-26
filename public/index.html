@@ -41,7 +41,7 @@
   </script>
 
   <!-- Preload de assets críticos — descarga en paralelo mientras se parsea el HTML -->
-  <link rel="preload" href="/js/bodega-bundle.7ab19197.js" as="script">
+  <link rel="preload" href="/js/bodega-bundle.54aa4799.js" as="script">
   <link rel="preload" href="/js/alpine.min.js" as="script">
   <link rel="preload" href="/css/tailwind.min.css" as="style">
   <link rel="preload" href="/css/style.css?v=3" as="style">
@@ -5268,6 +5268,47 @@
 <!-- ══════════════════════════════════════════════════════════
      MODAL: REGISTRAR MERMA
 ══════════════════════════════════════════════════════════ -->
+<!-- ═══ RECORTAR FOTO DEL TICKET — quitar la mesa/fondo antes de subir ═══ -->
+<div x-show="recorteAbierto" x-cloak class="fixed inset-0 z-[60] flex flex-col" style="background:#0b0b0c">
+  <div class="flex items-center justify-between px-4 py-3 flex-shrink-0" style="padding-top:max(.75rem, env(safe-area-inset-top))">
+    <button @click="recorteOmitir()" class="text-sm text-slate-300 px-2 py-1">Sin recortar</button>
+    <p class="text-sm font-semibold text-white">Recorta el ticket</p>
+    <button @click="recorteAplicar()" :disabled="recorteProcesando || !recortePreview"
+      class="text-sm font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40" style="background:#22c55e;color:#06200f"
+      x-text="recorteProcesando ? 'Aplicando…' : 'Listo'"></button>
+  </div>
+
+  <p class="text-center text-xs text-slate-400 px-6 pb-2 flex-shrink-0">Arrastra las esquinas para dejar solo el ticket, sin la mesa.</p>
+
+  <!-- Imagen + recuadro. touch-action:none: el dedo mueve el recuadro, no la página -->
+  <div class="flex-1 min-h-0 flex items-center justify-center p-6" style="touch-action:none">
+    <div x-ref="recorteMarco" class="relative inline-block overflow-hidden select-none" x-show="recortePreview">
+      <img :src="recortePreview" alt="" draggable="false" class="block" style="max-width:calc(100vw - 3rem);max-height:calc(100dvh - 13rem)">
+      <!-- Todo el estilo va en :style: Alpine reemplaza el style fijo al aplicarlo -->
+      <div class="absolute" :style="recorteEstilo() + ';box-shadow:0 0 0 9999px rgba(0,0,0,.6);outline:2px solid #fff;cursor:move;touch-action:none'"
+        @pointerdown="recorteInicio($event, 'mover')">
+        <template x-for="esq in ['nw','ne','sw','se']" :key="esq">
+          <div class="absolute w-7 h-7 rounded-full"
+            :style="'background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);touch-action:none;' + { nw: 'left:-14px;top:-14px;cursor:nwse-resize', ne: 'right:-14px;top:-14px;cursor:nesw-resize',
+                      sw: 'left:-14px;bottom:-14px;cursor:nesw-resize', se: 'right:-14px;bottom:-14px;cursor:nwse-resize' }[esq]"
+            @pointerdown.stop="recorteInicio($event, esq)"></div>
+        </template>
+      </div>
+    </div>
+    <p x-show="!recortePreview" class="text-sm text-slate-400">Preparando foto…</p>
+  </div>
+
+  <div class="flex items-center justify-center gap-3 px-4 py-4 flex-shrink-0" style="padding-bottom:max(1rem, env(safe-area-inset-bottom))">
+    <button @click="recorteGirar()" :disabled="recorteProcesando" class="flex items-center gap-1.5 text-sm text-white px-4 py-2 rounded-lg" style="background:rgba(255,255,255,.1)">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Girar
+    </button>
+    <button @click="recorteTodo()" :disabled="recorteProcesando" class="text-sm text-white px-4 py-2 rounded-lg" style="background:rgba(255,255,255,.1)">Usar toda</button>
+  </div>
+</div>
+
 <!-- ═══ SUBIR TICKET DE COMPRA (solo CEO) — ver docs/PLAN-TICKETS-COMPRA.md ═══ -->
 <div x-show="ticketsAbierto" x-cloak
   class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
@@ -5338,6 +5379,13 @@
             <div class="absolute inset-x-0 bottom-0 px-1.5 py-1 text-[10px] text-center"
               :style="`background:rgba(0,0,0,.6); color:${ { listo: '#e2e8f0', subiendo: '#fde68a', ok: '#86efac', error: '#fca5a5' }[a.estado] }`"
               x-text="a.estado === 'subiendo' ? 'Subiendo…' : a.estado === 'ok' ? 'Subido' : ticketDuplicado?.idx === idx ? 'Repetido' : a.estado === 'error' ? 'Error' : ticketTamano(a.blob.size)"></div>
+            <button x-show="a.original && a.estado !== 'ok' && !ticketEnviando" @click="abrirRecorte(a.id)"
+              class="absolute top-1 left-1 w-6 h-6 rounded-full flex items-center justify-center text-white"
+              style="background:rgba(0,0,0,.55)" aria-label="Recortar" title="Recortar">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 2v14a2 2 0 002 2h14M2 6h14a2 2 0 012 2v14"/>
+              </svg>
+            </button>
             <button x-show="a.estado !== 'ok' && !ticketEnviando" @click="ticketQuitar(idx)"
               class="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-white"
               style="background:rgba(0,0,0,.55)" aria-label="Quitar">
@@ -6150,10 +6198,10 @@
 
 <!-- ══════════════════════════════════════════════════════════
      SCRIPTS — bundle único + Alpine
-     bodega-bundle.7ab19197.js agrupa todos los módulos en 1 request.
+     bodega-bundle.54aa4799.js agrupa todos los módulos en 1 request.
      Alpine va DESPUÉS del bundle para que bodega() ya esté definido.
 ══════════════════════════════════════════════════════════ -->
-<script src="/js/bodega-bundle.7ab19197.js"></script>
+<script src="/js/bodega-bundle.54aa4799.js"></script>
 <script defer src="/js/alpine.min.js"></script>
 
 <script>
