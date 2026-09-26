@@ -49,6 +49,7 @@ app.use('/api/electron/usuarios',      requireAuthElectron, require('./routes/el
 app.use('/api/electron/dispositivos',  requireAuthElectron, require('./routes/electron/dispositivos'))
 app.use('/api/electron/ordenes',       requireAuthElectron, require('./routes/electron/ordenes'))
 app.use('/api/electron/pagos',         requireAuthElectron, require('./routes/electron/pagos'))
+app.use('/api/electron/tickets',       requireAuthElectron, require('./routes/electron/tickets'))
 
 // ─── Rutas protegidas — acceso general (cualquier rol válido) ─
 app.use('/api/productos',  requireAuth, require('./routes/productos'))
@@ -57,6 +58,8 @@ app.use('/api/ordenes',    requireAuth, requireModulo('pedidos'),    require('./
 app.use('/api/entradas',   requireAuth, requireModulo('inventario'), require('./routes/entradas'))
 app.use('/api/mermas',     requireAuth, requireModulo('mermas'),     require('./routes/mermas'))
 app.use('/api/compras',    requireAuth, requireModulo('compras'),    require('./routes/compras'))
+// Tickets de compra: solo el CEO sube (el gate de rol vive en la ruta)
+app.use('/api/tickets',    requireAuth, require('./routes/tickets'))
 app.use('/api/analytics',  requireAuth, requireModulo('analytics'),  require('./routes/analytics'))
 
 // ─── Cobranza (requiere módulo 'cobranza') ───────────────────

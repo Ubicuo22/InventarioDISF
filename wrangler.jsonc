@@ -37,7 +37,15 @@
   // Chromium de Cloudflare (Browser Rendering) — genera el PDF de la nota
   // con el mismo HTML que Electron imprime (utils/nota-pdf.js). Plan gratis:
   // 3 navegadores a la vez, 10 min de navegador al día.
-  "browser": { "binding": "BROWSER" }
+  "browser": { "binding": "BROWSER" },
+
+  // Tickets de compra (fotos/PDF). Bucket PRIVADO y aparte del de avatares,
+  // que es público: los tickets traen precios de proveedores. Sin dominio
+  // público — se sirven solo por /api/tickets y /api/electron/tickets.
+  // Crear antes del primer deploy: npx wrangler r2 bucket create disfruleg-tickets
+  "r2_buckets": [
+    { "binding": "R2_TICKETS", "bucket_name": "disfruleg-tickets" }
+  ]
 
   // Secrets (TIDB_*, JWT_SECRET, VAPID_*, NOTIF_SECRET, DASHBOARD_TOKEN, R2_PUBLIC_URL)
   // se suben con: npx wrangler secret put <NOMBRE>

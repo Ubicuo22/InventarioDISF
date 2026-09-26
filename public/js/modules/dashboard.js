@@ -20,6 +20,7 @@ function dashboardModule() {
     // ── Carga ─────────────────────────────────────────────
     async cargarDashboard() {
       this.dashCargando = true
+      this.cargarTicketsMios()   // solo CEO; en paralelo, no bloquea las métricas
       try {
         const r = await API.get('/api/dashboard/metricas-hoy')
         if (r.ok) {

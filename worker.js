@@ -26,9 +26,12 @@ export default {
 
   async scheduled(controller, env, ctx) {
     // 02:00 UTC = 20:00 en CDMX (CST, UTC-6) → resumen diario
-    // 06:00 UTC = limpieza de sesiones expiradas y de la papelera de notas
-    //             (ordenes_eliminadas: se pueden restaurar 7 días)
+    // 06:00 UTC = limpieza de sesiones expiradas, de la papelera de notas
+    //             (ordenes_eliminadas: se pueden restaurar 7 días) y de los
+    //             tickets de compra que se quedaron en borrador
+    //             (subidas abandonadas)
     const { enviarResumen } = await import('./utils/resumen-diario.js')
+    const { limpiarTicketsBorrador } = await import('./utils/tickets-limpieza.js')
 
     switch (controller.cron) {
       case '0 2 * * *':
@@ -38,6 +41,7 @@ export default {
         ctx.waitUntil(conContextoDb(async () => {
           await q("DELETE FROM bodega_sesiones WHERE ultimo_uso < DATE_SUB(NOW(), INTERVAL 30 DAY)")
           await q("DELETE FROM ordenes_eliminadas WHERE fecha_eliminacion < DATE_SUB(NOW(), INTERVAL 7 DAY)")
+          await limpiarTicketsBorrador()
         }))
         break
     }
